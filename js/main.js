@@ -38,6 +38,11 @@ const TEST = Object.assign({ on: false, god: false, oneHit: false, powers: false
 const progKey = () => (TEST.on ? 'lumenfall_progress_test' : 'lumenfall_progress');
 let prog = Object.assign({ f: [], s: [false, false, false, false], end: false, boss: false, boss2: false, boss3: false, realm: false, earth: false, weapon: 'spear', kills: {}, seen: {}, broken: {}, rescued: {}, beacons: {} }, store.get(progKey(), {}));
 if (!prog.rescued) prog.rescued = {}; if (!prog.beacons) prog.beacons = {};
+// weapons are found in the world now; a journey that already beat Ophiel keeps the greatsword it was given
+if (!prog.weapons) prog.weapons = { spear: true, greatsword: !!prog.boss };
+if (prog.hellBlade) prog.weapons.tianshu = true;
+if (!prog.talk) prog.talk = {}; if (!prog.clues) prog.clues = {};
+const holyBlade = () => !!prog.hellBlade && prog.weapon === 'tianshu';
 const nRescued = () => Object.keys(prog.rescued).length, nBeacons = () => Object.keys(prog.beacons).length;
 const save = () => store.set(progKey(), prog);
 let Q = QUAL[settings.quality] || QUAL.mid;
@@ -123,16 +128,46 @@ P.atk = { kind: null, t: 0, dur: 0, hitsDone: 0, queued: false, mult: 1, combo: 
 let enemyScale = 1, slowT = 0, boss = null;
 // light combo (4 hits), charged heavy, perfect-dodge counter
 const ATK = {
-  l0: { dur: 0.46, hits: [0.09], dmg: [30, 36], reach: 3.2, cone: -0.1, lunge: 3.6, poise: 6, arc: { t0: 2.2, len: 3.5, rev: 0, tilt: [-0.22, 0, -0.55] }, sfx: 'swing' },
-  l1: { dur: 0.44, hits: [0.09], dmg: [30, 36], reach: 3.2, cone: -0.1, lunge: 3.6, poise: 6, arc: { t0: 2.2, len: 3.5, rev: 1, tilt: [-0.22, 0, 0.58] }, sfx: 'swing' },
+  // the holy lance pierces: two quick thrusts with long reach, a sweeping spin, then a lunging drive
+  l0: { dur: 0.4, hits: [0.09], dmg: [28, 34], reach: 3.8, cone: 0.35, lunge: 4.4, poise: 6, thrust: true, lanceS: 0.72, sfx: 'thrust' },
+  l1: { dur: 0.42, hits: [0.1], dmg: [28, 34], reach: 3.8, cone: 0.35, lunge: 4.4, poise: 6, thrust: true, lanceS: 0.72, sfx: 'thrust' },
   l2: { dur: 0.62, hits: [0.13, 0.27], dmg: [22, 27], reach: 3.5, cone: -2, lunge: 1.8, poise: 7, spin: true, arc: { t0: 0, len: 6.2, rev: 0, tilt: [0, 0, 0] }, sfx: 'swing' },
   l3: { dur: 0.66, hits: [0.13], dmg: [52, 60], reach: 4.1, cone: 0.5, lunge: 9, poise: 14, thrust: true, sfx: 'thrust' },
   heavy: { dur: 0.72, hits: [0.1, 0.2], dmg: [70, 82], reach: 4.8, cone: 0.45, lunge: 16, poise: 25, thrust: true, sfx: 'thrust' },
   counter: { dur: 0.78, hits: [0.3], dmg: [125, 145], reach: 4.8, cone: -0.45, lunge: 5, poise: 40, arc: { t0: 2.0, len: 3.9, rev: 0, tilt: [-1.0, 0, 0.25] }, sfx: 'skill' },
 };
-// the Warden's greatsword: slower, heavier, longer reach, breaks guard
-const ATK_GS = Object.fromEntries(Object.entries(ATK).map(([k, a]) => [k, { ...a, dur: a.dur * 1.22, hits: a.hits.map((h) => h * 1.22), dmg: a.dmg.map((d) => d * 1.6), reach: a.reach + 0.8, lunge: a.lunge * 0.85, poise: a.poise * 1.8 }]));
-const atkT = () => (prog.weapon === 'greatsword' ? ATK_GS : ATK);
+// the Warden's greatsword: wide two-handed cleaves, a slow spin, and an overhead slam that cracks the ground
+const ATK_GS = {
+  l0: { dur: 0.7, hits: [0.27], dmg: [52, 60], reach: 4.3, cone: -0.35, lunge: 2.6, poise: 16, heavyHit: true, arc: { t0: 2.5, len: 4.1, rev: 0, tilt: [-0.55, 0, -0.75] }, sfx: 'cleave' },
+  l1: { dur: 0.68, hits: [0.26], dmg: [52, 60], reach: 4.3, cone: -0.35, lunge: 2.6, poise: 16, heavyHit: true, arc: { t0: 2.5, len: 4.1, rev: 1, tilt: [-0.45, 0, 0.7] }, sfx: 'cleave' },
+  l2: { dur: 0.95, hits: [0.25, 0.47], dmg: [38, 44], reach: 4.7, cone: -2, lunge: 1.2, poise: 14, heavyHit: true, spin: true, arc: { t0: 0, len: 6.2, rev: 0, tilt: [0, 0, 0] }, sfx: 'cleave' },
+  l3: { dur: 1.0, hits: [0.42], dmg: [96, 110], reach: 2.2, cone: -2, lunge: 3.5, poise: 42, slam: 4.6, sfx: 'cleave' },
+  heavy: { dur: 1.05, hits: [0.38], dmg: [130, 150], reach: 2.4, cone: -2, lunge: 12, poise: 60, slam: 6.2, sfx: 'cleave' },
+  counter: { dur: 0.95, hits: [0.38], dmg: [190, 215], reach: 5.4, cone: -0.45, lunge: 5, poise: 60, heavyHit: true, arc: { t0: 2.0, len: 3.9, rev: 0, tilt: [-1.0, 0, 0.25] }, sfx: 'skill' },
+};
+// 天樞 · the Lord's sword: quick sweeping slashes, the only blade that truly cuts what lives in hell
+const ATK_TS = {
+  l0: { dur: 0.42, hits: [0.09], dmg: [34, 40], reach: 3.4, cone: -0.1, lunge: 3.8, poise: 8, arc: { t0: 2.2, len: 3.5, rev: 0, tilt: [-0.22, 0, -0.55] }, sfx: 'slash' },
+  l1: { dur: 0.4, hits: [0.09], dmg: [34, 40], reach: 3.4, cone: -0.1, lunge: 3.8, poise: 8, arc: { t0: 2.2, len: 3.5, rev: 1, tilt: [-0.22, 0, 0.58] }, sfx: 'slash' },
+  l2: { ...ATK.l2, dmg: [26, 32], poise: 9, sfx: 'slash' },
+  l3: { ...ATK.l3, dmg: [62, 70], poise: 18 },
+  heavy: { ...ATK.heavy, dmg: [84, 96] },
+  counter: { ...ATK.counter, dmg: [150, 170] },
+};
+const atkT = () => (prog.weapon === 'greatsword' ? ATK_GS : prog.weapon === 'tianshu' ? ATK_TS : ATK);
+// how each weapon looks and lands: slash light, trail, thrust streak, impact sparks, hit-stop
+const WLOOK = {
+  spear: { a: [0.95, 0.66, 0.26], b: [2.2, 1.9, 1.35], lance: [2.2, 1.7, 0.95], spark: [1.9, 1.6, 1.0], stop: 0.035, shake: 0.06 },
+  greatsword: { a: [1.4, 0.42, 0.06], b: [2.8, 1.55, 0.45], lance: [2.6, 1.2, 0.4], spark: [2.6, 1.3, 0.35], stop: 0.075, shake: 0.24 },
+  tianshu: { a: [0.42, 0.68, 1.35], b: [1.9, 2.25, 2.7], lance: [1.4, 1.8, 2.6], spark: [1.5, 1.9, 2.7], stop: 0.045, shake: 0.1 },
+};
+const wlook = () => WLOOK[prog.weapon] || WLOOK.spear;
+function applyWeaponLook() {
+  const L = wlook();
+  if (FX.arc) { FX.arc.mat.uniforms.uA.value.set(...L.a); FX.arc.mat.uniforms.uB.value.set(...L.b); }
+  if (FX.trail) { FX.trail.mesh.material.uniforms.uA.value.set(...L.a); FX.trail.mesh.material.uniforms.uB.value.set(...L.b); }
+  if (FX.lance) FX.lance.m.material.color.setRGB(...L.lance);
+}
 // powers granted by the purified
 const POWERS = {
   shield: { key: 'boss', glyph: '盾', name: '守衛之盾', en: "WARDEN'S AEGIS", desc: '原地按「閃避」舉盾格擋，時機啱可反擊 · 衝刺可擊碎黑晶封印' },
@@ -222,6 +257,9 @@ const Audio = {
     switch (name) {
       case 'swing': this.noise(0.22, 600, 2600, 0.16, 0.9); break;
       case 'thrust': this.noise(0.18, 900, 3400, 0.18, 1.4); break;
+      case 'cleave': this.noise(0.42, 240, 1200, 0.22, 0.7); this.thud(64, 0.1); break;
+      case 'slash': this.noise(0.2, 1500, 4600, 0.15, 1.7); this.bell(m(96), 0.025, 0.5); break;
+      case 'hitHeavy': this.thud(55, 0.42); this.noise(0.3, 500, 140, 0.18, 0.8); break;
       case 'hit': this.bell(m(88), 0.08, 0.5); this.thud(120, 0.18); break;
       case 'lvup': [60, 67, 72, 76, 79, 84, 88, 91].forEach((x, i) => this.bell(m(x), 0.1, 4, i * 0.075)); this.noise(1.6, 400, 5000, 0.06, 0.6); break;
       case 'pickup': [76, 81, 88].forEach((x, i) => this.bell(m(x), 0.1, 1.8, i * 0.08)); break;
@@ -259,14 +297,14 @@ const FX = {};
 function buildFX() {
   // slash arc
   const arcMat = new THREE.ShaderMaterial({
-    uniforms: { uProg: { value: 0 }, uAlpha: { value: 0 }, uT0: { value: 0 }, uLen: { value: 3.14 }, uRev: { value: 0 } },
+    uniforms: { uProg: { value: 0 }, uAlpha: { value: 0 }, uT0: { value: 0 }, uLen: { value: 3.14 }, uRev: { value: 0 }, uA: { value: new THREE.Vector3(0.95, 0.66, 0.26) }, uB: { value: new THREE.Vector3(2.2, 1.9, 1.35) } },
     vertexShader: `varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
-    fragmentShader: `uniform float uProg, uAlpha, uT0, uLen, uRev; varying vec2 vP;
+    fragmentShader: `uniform float uProg, uAlpha, uT0, uLen, uRev; uniform vec3 uA, uB; varying vec2 vP;
       void main(){ float a = atan(vP.y, vP.x); float u = mod(a - uT0 + 25.1327, 6.28318)/uLen; if (u > 1.0) discard; if (uRev > 0.5) u = 1.0 - u;
         float r = length(vP); float v = (r - 0.7)/2.0;
         float m = smoothstep(uProg - 0.6, uProg, u)*step(u, uProg);
         float edge = smoothstep(0.12, 0.9, v)*(1.0 - smoothstep(0.93, 1.0, v));
-        vec3 col = mix(vec3(0.95, 0.66, 0.26), vec3(2.2, 1.9, 1.35), smoothstep(0.6, 0.96, v));
+        vec3 col = mix(uA, uB, smoothstep(0.6, 0.96, v));
         gl_FragColor = vec4(col, clamp(m*edge*uAlpha*1.4, 0.0, 1.0)); }`,
     transparent: true, depthWrite: false, side: THREE.DoubleSide,
   });
@@ -312,8 +350,9 @@ function buildFX() {
   for (let i = 0; i < TN; i++) { ts[i * 2] = 0; ts[i * 2 + 1] = 1; if (i < TN - 1) tidx.push(i * 2, i * 2 + 1, i * 2 + 2, i * 2 + 1, i * 2 + 3, i * 2 + 2); }
   tg.setAttribute('position', new THREE.BufferAttribute(tpos, 3)); tg.setAttribute('aA', new THREE.BufferAttribute(ta, 1)); tg.setAttribute('aS', new THREE.BufferAttribute(ts, 1)); tg.setIndex(tidx);
   const tmat = new THREE.ShaderMaterial({
+    uniforms: { uA: { value: new THREE.Vector3(1.1, 0.72, 0.3) }, uB: { value: new THREE.Vector3(2.6, 2.2, 1.6) } },
     vertexShader: `attribute float aA; attribute float aS; varying float vA; varying float vS; void main(){ vA = aA; vS = aS; gl_Position = projectionMatrix*viewMatrix*vec4(position,1.); }`,
-    fragmentShader: `varying float vA; varying float vS; void main(){ vec3 c = mix(vec3(1.1,0.72,0.3), vec3(2.6,2.2,1.6), smoothstep(0.55, 1.0, vS)); gl_FragColor = vec4(c, vA*smoothstep(0.0, 0.5, vS)*0.95); }`,
+    fragmentShader: `uniform vec3 uA, uB; varying float vA; varying float vS; void main(){ vec3 c = mix(uA * 1.15, uB * 1.15, smoothstep(0.55, 1.0, vS)); gl_FragColor = vec4(c, vA*smoothstep(0.0, 0.5, vS)*0.95); }`,
     transparent: true, depthWrite: false, side: THREE.DoubleSide,
   });
   const trail = new THREE.Mesh(tg, tmat); trail.frustumCulled = false; scene.add(trail); noReflect(trail);
@@ -438,7 +477,7 @@ function updateFX(dt) {
   const Wv = FX.wave; Wv.t += dt;
   if (Wv.t < 0.9) {
     const k = Wv.t / 0.9;
-    Wv.m.scale.setScalar(1 + easeOut(k) * 8.5); Wv.m.material.opacity = 1 - k;
+    Wv.m.scale.setScalar(1 + easeOut(k) * (Wv.r || 8.5)); Wv.m.material.opacity = 1 - k;
     Wv.p.scale.set(1 + k, 1 - k * 0.3, 1 + k); Wv.p.material.opacity = (1 - k) * 0.9;
   } else { Wv.m.visible = false; Wv.p.visible = false; }
   for (const r of FX.ripples) {
@@ -1013,7 +1052,6 @@ function renderCodex() {
   const lore = c.lore.map((t, i) => (st > i ? `<p>${t}</p>` : `<p class="lock">${i ? (c.key ? '淨化後解鎖' : '討伐 8 隻後解鎖') : c.key ? '交戰後解鎖' : '討伐 1 隻後解鎖'}</p>`)).join('');
   let extra = '';
   if (c.key && st === 2) extra = `<div class="rw"><b>獎勵</b><span>${c.reward}</span></div>`;
-  if (c.id === 'ophiel' && st === 2) extra += `<button class="lbtn" id="cxWeapon"><span>${prog.weapon === 'greatsword' ? '改回聖槍' : '裝備墮光大劍'}</span><small>${prog.weapon === 'greatsword' ? 'SPEAR' : 'GREATSWORD'}</small></button>`;
   $('codexDetail').innerHTML = `<div class="em">${codexEmblem(c, st)}</div><div class="tx">
     <h3>${st ? c.name : '？？？'}</h3><small>${st ? c.en : 'UNKNOWN'}</small>
     <dl><dt>出沒</dt><dd>${st ? c.where : '？'}</dd><dt>危險</dt><dd class="st">${stars}</dd><dt>弱點</dt><dd>${st ? c.weak : '？'}</dd><dt>招式</dt><dd>${st ? c.moves : '？'}</dd></dl>
@@ -1091,7 +1129,7 @@ function buildBoss() {
       setTimeout(() => toast('<i class="dia"></i>獲得「光之結晶」· 生命上限 +25', true), 1200);
       setTimeout(() => regionCard('墮光守衛已淨化', 'THE WARDEN RESTS'), 2600);
       setTimeout(() => showPower('shield'), 5200);
-      setTimeout(() => toast('<i class="dia"></i>獲得武器「墮光大劍」· 可在墮天錄中裝備', true), 11800);
+      setTimeout(() => toast('<i class="dia"></i>石像前，插著一把大劍……', true), 11800);
       updateQuest();
     },
   };
@@ -1250,7 +1288,7 @@ function quake() {
   CAM.shake = Math.max(CAM.shake, 0.8); hitstop = Math.max(hitstop, 0.1);
   burst(FX.smoke, cx, gy + 0.4, cz, 40, { speed: 9, up: 2, life: 1.2, size: 2.8, c: [0.9, 0.82, 0.7] });
   burst(FX.sparks, cx, gy + 0.6, cz, 60, { speed: 10, up: 4, life: 1, size: 1.2, c: [2, 1.4, 0.7] });
-  const Wv = FX.wave; Wv.t = 0.35; Wv.m.visible = true; Wv.m.position.set(cx, gy + 0.1, cz);
+  const Wv = FX.wave; Wv.t = 0.35; Wv.r = 0; Wv.m.visible = true; Wv.m.position.set(cx, gy + 0.1, cz);
   for (const e of enemyList()) { const d = Math.hypot(e.pos.x - cx, e.pos.z - cz); if (d < 7 + (e.r || 0.6) && Math.abs(e.pos.y - gy) < 4) hitEnemy(e, 90 * P.atkMul, 40, 'crit'); }
   for (const b of breakables) if (!b.broken && b.kind === 'rock' && Math.hypot(b.x - cx, b.z - cz) < 7.5 && Math.abs(b.y - gy) < 6) breakIt(b);
   Audio.sfx('thrust');
@@ -1315,13 +1353,13 @@ function showPower(k) {
   clearTimeout(lvUpT); lvUpT = setTimeout(() => el.classList.add('hidden'), window.__lvHold || 6200);
   Audio.sfx('lvup'); flashScreen(0.5); featherBurst(P.pos.x, P.pos.y + 1.2, P.pos.z, 20, 4);
 }
-function equipWeapon(w) { prog.weapon = w; save(); hero.setWeapon(w); }
+function equipWeapon(w) { if (!prog.weapons[w]) return; prog.weapon = w; save(); hero.setWeapon(w); applyWeaponLook(); updateQuest(); }
 function perfectDodge() {
   slowT = 0.8; P.inv = Math.max(P.inv, 0.95); P.counterT = 1.8; P.perfectCd = 1.1;
   bigText('完美閃避', 'PERFECT DODGE');
   featherBurst(P.pos.x, P.pos.y + 1.2, P.pos.z, 14, 3.5);
   burst(FX.sparks, P.pos.x, P.pos.y + 1, P.pos.z, 40, { speed: 6, up: 1, life: 0.8, size: 1, c: [1.9, 1.6, 1.0] });
-  const Wv = FX.wave; Wv.t = 0.35; Wv.m.visible = true; Wv.m.position.set(P.pos.x, support(P.pos.x, P.pos.z, P.pos.y).h + 0.08, P.pos.z);
+  const Wv = FX.wave; Wv.t = 0.35; Wv.r = 0; Wv.m.visible = true; Wv.m.position.set(P.pos.x, support(P.pos.x, P.pos.z, P.pos.y).h + 0.08, P.pos.z);
   Audio.sfx('perfect');
   const w = $('witch'); w.classList.remove('on'); void w.offsetWidth; w.classList.add('on');
 }
@@ -1346,12 +1384,14 @@ function nearestEnemy(maxD, cone, camPref) {
 }
 function hitEnemy(e, dmg, poise, kind) {
   // nothing of hell is harmed by mortal light until the seraph carries the Empyrean lord's weapon
-  if ((e.hell || (e.isBoss && e.cfg.hell)) && !prog.hellBlade) { dmg *= 0.08; poise *= 0.15; kind = 'resist'; resistHint(); }
+  if ((e.hell || (e.isBoss && e.cfg.hell)) && !holyBlade()) { dmg *= 0.08; poise *= 0.15; kind = 'resist'; resistHint(); }
   if (TEST.oneHit) { dmg *= e.isBoss ? 12 : 60; poise *= 4; }
   if (e.isBoss) e.damage(dmg, poise, P.pos, kind); else damageShade(e, dmg, P.pos, kind);
 }
 function doHit(A) {
-  const fx = Math.sin(P.yaw + P.spin), fz = Math.cos(P.yaw + P.spin);
+  if (A.slam) { slam(A); return; }
+  const fx = Math.sin(P.yaw + P.spin), fz = Math.cos(P.yaw + P.spin), L = wlook();
+  let n = 0;
   for (const e of enemyList()) {
     const dx = e.pos.x - P.pos.x, dz = e.pos.z - P.pos.z, d = Math.hypot(dx, dz), er = e.r || 0.6;
     if (d - er > A.reach) continue;
@@ -1359,7 +1399,27 @@ function doHit(A) {
     if (A.cone > -1.5 && d > er + 0.8 && (dx * fx + dz * fz) / (d + 1e-5) < A.cone) continue;
     const dmg = (A.dmg[0] + Math.random() * (A.dmg[1] - A.dmg[0])) * P.atk.mult * P.atkMul;
     hitEnemy(e, dmg, A.poise * P.atk.mult, P.atk.kind === 'counter' || P.atk.kind === 'heavy' ? 'crit' : '');
+    burst(FX.sparks, e.pos.x, e.pos.y + 1.3 * (e.sc || 1), e.pos.z, A.heavyHit ? 26 : 12, { speed: A.heavyHit ? 7 : 5, up: 1.5, life: 0.5, size: A.heavyHit ? 1.3 : 0.9, c: L.spark });
+    n++;
   }
+  if (n) { hitstop = Math.max(hitstop, L.stop); CAM.shake = Math.max(CAM.shake, L.shake); if (A.heavyHit) Audio.sfx('hitHeavy'); }
+}
+// the greatsword comes down: everything around the point of impact is struck
+function slam(A) {
+  const fx = Math.sin(P.yaw), fz = Math.cos(P.yaw), R = A.slam * (0.85 + (P.atk.mult - 1) * 0.4);
+  const cx = P.pos.x + fx * 2.2, cz = P.pos.z + fz * 2.2, gy = support(cx, cz, P.pos.y + 1).h, L = wlook();
+  CAM.shake = Math.max(CAM.shake, 0.55); hitstop = Math.max(hitstop, 0.09);
+  burst(FX.smoke, cx, gy + 0.4, cz, 34, { speed: R * 1.4, up: 1.6, life: 1.0, size: 2.4, c: [0.85, 0.74, 0.62] });
+  burst(FX.sparks, cx, gy + 0.5, cz, 70, { speed: R * 1.8, up: 4, life: 0.9, size: 1.2, c: L.spark });
+  const Wv = FX.wave; Wv.t = 0.42; Wv.m.visible = true; Wv.m.position.set(cx, gy + 0.12, cz); Wv.r = R;
+  for (const e of enemyList()) {
+    const d = Math.hypot(e.pos.x - cx, e.pos.z - cz);
+    if (d - (e.r || 0.6) > R || Math.abs(e.pos.y - gy) > 4) continue;
+    const dmg = (A.dmg[0] + Math.random() * (A.dmg[1] - A.dmg[0])) * P.atk.mult * P.atkMul * (d < R * 0.5 ? 1 : 0.7);
+    hitEnemy(e, dmg, A.poise * P.atk.mult, 'crit');
+  }
+  for (const b of breakables) if (!b.broken && b.kind === 'rock' && P.atk.kind === 'heavy' && P.atk.mult >= 1.6 && Math.hypot(b.x - cx, b.z - cz) < R + 1.5 && Math.abs(b.y - gy) < 6) breakIt(b);
+  Audio.sfx('slam');
 }
 function startAttack(kind, mult = 1) {
   const A = atkT()[kind];
@@ -1379,9 +1439,10 @@ function startAttack(kind, mult = 1) {
   if (A.arc) {
     Ar.t = 0; Ar.g.visible = true; Ar.g.rotation.y = P.yaw; Ar.tilt.rotation.set(...A.arc.tilt);
     Ar.mat.uniforms.uT0.value = A.arc.t0; Ar.mat.uniforms.uLen.value = A.arc.len; Ar.mat.uniforms.uRev.value = A.arc.rev;
-    Ar.g.scale.setScalar((kind === 'counter' ? 1.45 : kind === 'l2' ? 1.1 : 1) * (prog.weapon === 'greatsword' ? 1.25 : 1));
+    Ar.g.scale.setScalar((kind === 'counter' ? 1.45 : kind === 'l2' ? 1.1 : 1) * (prog.weapon === 'greatsword' ? 1.4 : 1));
   }
-  if (A.thrust) { const L = FX.lance; L.t = 0; L.g.visible = true; L.g.rotation.y = P.yaw; L.g.scale.setScalar(kind === 'heavy' ? 1.5 + (mult - 1) : 1); }
+  if (A.thrust) { const L = FX.lance; L.t = 0; L.g.visible = true; L.g.rotation.y = P.yaw; L.g.scale.setScalar(kind === 'heavy' ? 1.5 + (mult - 1) : A.lanceS || 1); }
+  if (A.slam) { featherBurst(P.pos.x, P.pos.y + 2.2, P.pos.z, 4, 1.5); CAM.shake = Math.max(CAM.shake, 0.06); }
   Audio.sfx(A.sfx);
   if (kind === 'heavy') { featherBurst(P.pos.x, P.pos.y + 1.2, P.pos.z, 6, 2.5); CAM.shake = Math.max(CAM.shake, 0.12); }
   if (kind === 'counter') { bigText('聖裁', 'JUDGEMENT'); burst(FX.sparks, P.pos.x, P.pos.y + 1.2, P.pos.z, 50, { speed: 7, up: 2, life: 0.9, size: 1.1 }); }
@@ -1427,7 +1488,7 @@ function doSkill() {
 }
 function skillImpact() {
   const Wv = FX.wave;
-  Wv.t = 0; Wv.m.visible = true; Wv.p.visible = true;
+  Wv.t = 0; Wv.r = 0; Wv.m.visible = true; Wv.p.visible = true;
   const gy = support(P.pos.x, P.pos.z, P.pos.y).h;
   Wv.m.position.set(P.pos.x, gy + 0.08, P.pos.z);
   Wv.p.position.set(P.pos.x, gy + 8, P.pos.z);
@@ -1448,7 +1509,7 @@ function hurtPlayer(dmg, from) {
     if (parry) { perfectDodge(); bigText('聖盾', 'PARRY'); } else Audio.sfx('hit');
     return;
   }
-  if (P.inHell && !prog.hellBlade) dmg *= 3;
+  if (P.inHell && !holyBlade()) dmg *= 3;
   P.hp -= dmg; P.inv = 0.9; P.hurtT = 0.35; P.lastHurt = time;
   const d = _p.copy(P.pos).sub(from); d.y = 0; d.normalize();
   P.vel.x = d.x * 9; P.vel.z = d.z * 9; P.vel.y = 3.5; P.grounded = false; P.glide = false; P.atk.kind = null; P.charge = -1; P.healT = -1; P.spin = 0;
@@ -1650,7 +1711,7 @@ function lavaBurn() {
 let resistHintT = -99;
 function resistHint() {
   if (time - resistHintT < 25) return; resistHintT = time;
-  toast('<i class="dia"></i>凡光無法傷及地獄之物……需要神域之主的武器', true);
+  toast(prog.hellBlade ? '<i class="dia"></i>凡光無法傷及地獄之物……在聖匣裡換上天樞之劍' : '<i class="dia"></i>凡光無法傷及地獄之物……需要神域之主的武器', true);
 }
 function riftRepel() {
   // the seal holds: the dark throws the seraph back up to the rim (no harm done — the way down isn't open yet)
@@ -1860,12 +1921,13 @@ function updateInteract() {
       if (Math.hypot(P.pos.x - HELL.pillar.x, P.pos.z - HELL.pillar.z) < 6 && Math.abs(P.pos.y - HELL.pillar.y) < 5) t = { kind: 'riseHell' };
       else if (Math.hypot(P.pos.x - HELL.gate.x, P.pos.z - HELL.gate.z) < 12 && Math.abs(P.pos.y - HELL.gate.y) < 8) t = { kind: 'hellGate' };
     }
+    if (!t) t = storyTarget();
     if (!t && P.inEarth) {
       for (const c of captives) if (!c.done && Math.hypot(P.pos.x - c.x, P.pos.z - c.z) < 4.8 && Math.abs(P.pos.y - c.y) < 4) { const n = c.guards.filter((g) => !g.dead).length; t = n ? { kind: 'crystalSealed', n, c } : { kind: 'purify', c }; }
       for (const b of beacons) if (b.st === 'won' && Math.hypot(P.pos.x - b.x, P.pos.z - b.z) < 6 && Math.abs(P.pos.y - b.y) < 4) t = { kind: 'kindle', b };
     }
   }
-  const key = (o) => JSON.stringify(o && { k: o.kind, n: o.n, i: o.s?.i ?? o.c?.id ?? o.b?.id });
+  const key = (o) => JSON.stringify(o && { k: o.kind, n: o.n, i: o.s?.i ?? o.c?.id ?? o.b?.id ?? o.k });
   if (key(t) !== key(interactTarget)) {
     interactTarget = t;
     const el = $('bInteract');
@@ -1878,8 +1940,9 @@ function updateInteract() {
         core: ['觸碰聖核', 'TOUCH THE SACRED CORE'], coreLocked: [`聖核沉睡中 <em>${t.n}/4</em>`, 'LIGHT ALL FOUR SHRINES'],
         ascend: ['升往天上神域', 'ASCEND TO THE EMPYREAN'], ascendLocked: [`光羽之力不足 <em>Lv${t.n}/3</em>`, 'REACH LV 3 TO ASCEND'],
         descend: ['返回人間之島', 'RETURN TO THE ISLE'], rise: ['返回天上之島', 'RETURN TO THE ISLE ABOVE'],
-        riseHell: ['返回人間', 'RETURN TO THE MORTAL WORLD'], hellGate: ['冥門被封印', 'THE GATE OF THE ABYSS IS SEALED'],
+        riseHell: ['返回人間', 'RETURN TO THE MORTAL WORLD'], hellGate: [prog.boss4 ? '查看冥門' : '冥門被封印', 'THE GATE OF THE ABYSS'],
         purify: ['淨化蝕晶', 'PURIFY THE CRYSTAL'], crystalSealed: [`擊退看守的瘴獸 <em>${t.n}</em>`, 'GUARDED BY BEASTS'], kindle: ['點亮燈火', 'KINDLE THE BEACON'],
+        story: t.sp && (typeof t.sp.label === 'function' ? t.sp.label() : t.sp.label),
       }[t.kind];
       $('intLbl').innerHTML = L[0]; $('intSub').textContent = L[1];
     }
@@ -1894,7 +1957,8 @@ function doInteract() {
   else if (t.kind === 'descend') startTrip(false);
   else if (t.kind === 'rise') startTrip('rise');
   else if (t.kind === 'riseHell') startTrip('riseHell');
-  else if (t.kind === 'hellGate') { toast('<i class="dia"></i>冥門紋絲不動 · 門後傳來低沉的心跳……需要神域之主的武器', true); Audio.sfx('ui'); }
+  else if (t.kind === 'hellGate') talk('gate');
+  else if (t.kind === 'story') runSpot(t.sp);
   else if (t.kind === 'purify') { rescue(t.c); interactTarget = null; $('bInteract').classList.add('hidden'); }
   else if (t.kind === 'kindle') { kindle(t.b); interactTarget = null; $('bInteract').classList.add('hidden'); }
   else if (t.kind === 'ascendLocked') { toast(`<i class="dia"></i>需要 Lv3 才能踏上天梯 · 目前 Lv${P.lv}`); Audio.sfx('ui'); }
@@ -1962,7 +2026,8 @@ function lightShrine(s) {
   refreshSockets();
   const n = prog.s.filter(Boolean).length;
   setTimeout(() => regionCard(s.def.name + ' · 已點亮', `SHRINE KINDLED  ${n} / 4`), 900);
-  if (n === 4) setTimeout(() => toast('<i class="dia"></i>四座聖壇俱已點亮 · 前往環光聖所', true), 3600);
+  const mem = 'mem' + (n - 1);
+  setTimeout(() => { if (state === 'play' && !prog.talk[mem]) talk(mem, () => { if (n === 4) toast('<i class="dia"></i>四座聖壇俱已點亮 · 前往環光聖所', true); }); }, 2300);
   updateQuest(); interactTarget = null; $('bInteract').classList.add('hidden');
 }
 function refreshSockets() {
@@ -2160,33 +2225,49 @@ function nearestShrine() {
 }
 function questState() {
   const task = (t, done, n = '') => ({ k: 'task', t, done: !!done, n: done ? '' : n });
-  const feathersRow = (L, name) => { const c = fCount(L); return c.all ? { k: 'col', t: '收集光羽', n: `${c.got}/${c.all}`, done: c.got >= c.all } : null; };
+  const feathersRow = (L) => { const c = fCount(L); return c.all ? { k: 'col', t: '收集光羽', n: `${c.got}/${c.all}`, done: c.got >= c.all } : null; };
+  const at = (v, kind = 'core') => () => qT(v.x, v.z, kind);
+  // Ophiel and his greatsword are optional, but the colossus will ask for his seal later
+  const ophielRow = () => (!prog.boss ? { ...task('挑戰墮翼之丘的守衛', false, '支線'), side: true } : !prog.weapons.greatsword ? { ...task('拔出歐菲爾的大劍', false, '支線'), side: true } : null);
   let ch, en, main, rows = [];
   if (P.inHell) {
     ch = '第三章 · 地獄'; en = 'CHAPTER III';
-    main = prog.boss4 ? { t: '冥門依然緊閉 · 待續' } : { t: '擊倒冥門守衛 · 亞巴頓', tag: prog.hellBlade ? '' : '極度危險', tgt: () => qT(HELL.bossHome.x, HELL.bossHome.z, 'boss') };
-    rows.push(task('取得神域之主的武器', prog.hellBlade, '未取得'));
+    if (!prog.boss4) {
+      main = { t: '擊倒冥門守衛 · 亞巴頓', tag: holyBlade() ? '' : '極度危險', tgt: at(HELL.bossHome, 'boss') };
+      rows.push(task('取得神域之主的武器', prog.hellBlade, '未取得'));
+      if (prog.hellBlade) rows.push(task('在聖匣裡換上天樞之劍', prog.weapon === 'tianshu'));
+    } else if (!prog.talk.abaddon) main = { t: '聆聽亞巴頓的殘響', tgt: at(HELL.bossHome) };
+    else if (!prog.talk.gate) main = { t: '前往冥門', tgt: at(HELL.gate) };
+    else main = { t: '冥門依然緊閉 · 待續' };
     rows.push({ k: 'hint', t: '墜落之地的光柱可返回人間' });
   } else if (P.inEarth) {
     ch = '第二章 · 人間'; en = 'CHAPTER II';
     const r = nRescued(), b = nBeacons(), R = captives.length, B = beacons.length, left = r < R || b < B;
     if (left) main = { t: '解救受困的人 · 守住燈火', n: `${r + b}/${R + B}`, tgt: nearestOpen };
-    else if (!prog.boss3) main = { t: '挑戰傾城遺跡的墮天騎士', tgt: () => qT(EARTH.bossHome.x, EARTH.bossHome.z, 'boss') };
-    else main = { t: prog.hell ? '再次墜入墮天裂谷' : '墜入墮天裂谷的深處', tgt: () => qT(EARTH.colossus.x, EARTH.colossus.z, 'core') };
-    rows.push(task('解救被蝕晶封住的人', r >= R, `${r}/${R}`), task('守住人們的燈火', b >= B, `${b}/${B}`));
-    if (left) rows.push(task('挑戰墮天騎士', prog.boss3, '未挑戰'));
-    rows.push(feathersRow('earth', '人間'));
+    else if (!prog.boss3) main = { t: '挑戰傾城遺跡的墮天騎士', tgt: at(EARTH.bossHome, 'boss') };
+    else if (!prog.talk.camael) main = { t: '聆聽墮天騎士的殘響', tgt: at(EARTH.bossHome) };
+    else if (!prog.hellBlade && !prog.talk.seals) main = { t: '前往墮天巨像', tgt: at(EARTH.riftRim) };
+    else if (!prog.hellBlade && nSeals() < 3) main = { t: '讓巨像的三個紋章亮起', n: `${nSeals()}/3` };
+    else if (!prog.hellBlade) main = { t: '回到墮天巨像', tgt: at(EARTH.riftRim) };
+    else main = { t: prog.hell ? '再次墜入墮天裂谷' : '墜入墮天裂谷的深處', tgt: at(EARTH.colossus) };
+    if (main.t === '讓巨像的三個紋章亮起') {
+      rows.push(task('盾 · 墮翼之丘的守衛', prog.boss), task('翼 · 審判之環的審判者', prog.boss2), task('誓 · 傾城遺跡的騎士', prog.boss3));
+    } else {
+      rows.push(task('解救被蝕晶封住的人', r >= R, `${r}/${R}`), task('守住人們的燈火', b >= B, `${b}/${B}`));
+      if (left) rows.push(task('挑戰墮天騎士', prog.boss3, '未挑戰'));
+    }
+    rows.push(feathersRow('earth'));
   } else if (P.inRealm) {
     ch = '第一章 · 天上神域'; en = 'CHAPTER I';
-    if (!prog.boss2) main = { t: '挑戰審判之環的審判者', tgt: () => qT(REALM.bossHome.x, REALM.bossHome.z, 'boss') };
+    if (!prog.boss2) main = { t: '挑戰審判之環的審判者', tgt: at(REALM.bossHome, 'boss') };
+    else if (!prog.talk.astraea) main = { t: '聆聽審判者的殘響', tgt: at(REALM.bossHome) };
     else main = { t: prog.earth ? '從天緣躍下，返回人間' : '從天緣躍下，前往人間' };
-    rows.push(feathersRow('realm', '神域'));
+    rows.push(feathersRow('realm'));
   } else if (!prog.end) {
     ch = '序章 · 光羽降臨'; en = 'PROLOGUE';
     const lit = prog.s.filter(Boolean).length;
     main = lit < 4 ? { t: '點亮四座聖壇', n: `${lit}/4`, tgt: nearestShrine } : { t: '前往環光聖所，觸碰聖核', tgt: () => qT(TEMPLE.x, TEMPLE.z) };
-    rows.push({ ...task('挑戰墮翼之丘的守衛', prog.boss, '支線'), side: true });
-    rows.push(feathersRow('isle', '光羽之境'));
+    rows.push(ophielRow(), feathersRow('isle'));
   } else {
     // the isle after the prologue is the hub: the tracker follows the story's next step
     if (!prog.realm || !prog.boss2) {
@@ -2194,8 +2275,9 @@ function questState() {
       main = P.lv < 3 && !prog.realm ? { t: '收集光羽，升到 Lv3', n: `Lv ${P.lv}/3` } : { t: prog.realm ? '經環光聖所的天梯，返回神域' : '回到環光聖所，踏上天梯', tgt: () => qT(TEMPLE.x, TEMPLE.z) };
     } else if (!prog.hell) { ch = '第二章 · 人間'; en = 'CHAPTER II'; main = { t: prog.earth ? '從天緣躍下，返回人間' : '從天緣躍下，前往人間' }; }
     else { ch = '第三章 · 地獄'; en = 'CHAPTER III'; main = { t: '經人間的墮天裂谷，返回地獄' }; }
-    if (!prog.boss) rows.push({ ...task('挑戰墮翼之丘的守衛', false, '支線'), side: true });
-    rows.push(feathersRow('isle', '光羽之境'));
+    if (prog.boss && !prog.weapons.greatsword) main = { t: '拔出歐菲爾的大劍', tgt: () => qT(swordPlanted.position.x, swordPlanted.position.z) };
+    else rows.push(ophielRow());
+    rows.push(feathersRow('isle'));
   }
   return { ch, en, main, rows: rows.filter(Boolean) };
 }
@@ -2463,7 +2545,7 @@ function openMap() {
   Audio.sfx('ui');
 }
 function closeOverlays() {
-  for (const id of ['mapOv', 'setOv', 'howOv', 'codexOv', 'testOv']) $(id).classList.add('hidden');
+  for (const id of ['mapOv', 'setOv', 'howOv', 'codexOv', 'testOv', 'bagOv']) $(id).classList.add('hidden');
   paused = false;
 }
 
@@ -2606,6 +2688,8 @@ function setupInput() {
       return;
     }
     if (k === 'Escape') { if (performance.now() - ML.exitAt < 300) return; if (paused) closeOverlays(); else if (state === 'play') openSettings(); return; }
+    if (DLG) { if (['KeyE', 'KeyF', 'Space', 'Enter', 'KeyJ', 'NumpadEnter'].includes(k)) { e.preventDefault(); dlgNext(); } return; }
+    if (k === 'KeyI' && state === 'play') { if (!$('bagOv').classList.contains('hidden')) closeOverlays(); else openBag(); return; }
     if (k === 'F2' || k === 'Backquote') { e.preventDefault(); if (!$('testOv').classList.contains('hidden')) closeOverlays(); else openTest(); return; }
     if (k === 'KeyH' && state === 'play') { document.documentElement.classList.toggle('nohud'); return; }
     if (paused) return;
@@ -2693,6 +2777,7 @@ function setupMenus() {
   $('quest').classList.toggle('min', !!settings.qMin);
   $('qHead').addEventListener('click', (e) => { e.stopPropagation(); settings.qMin = !settings.qMin; store.set('lumenfall_settings', settings); $('quest').classList.toggle('min', settings.qMin); Audio.sfx('ui'); });
   initTestMode();
+  initBag();
   document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => { closeOverlays(); Audio.sfx('ui'); }));
   $('reviveBtn').addEventListener('click', revive);
   $('endStay').addEventListener('click', () => finishEnding(false));
@@ -2723,6 +2808,244 @@ function beginJourney() {
   flashScreen(0.7);
   Audio.sfx('glide');
 }
+// ------------------------------------------------------------------ story: dialogue, clues, story spots
+// The marker says where to go; when you get there, a voice, an echo or an inscription tells you what to do.
+const STORY = {
+  intro: { who: ['遙遠的聲音', 'A DISTANT VOICE'], lines: ['你醒了。', '這片大地太暗了——點亮四座聖壇。'] },
+  mem0: { who: ['光的記憶', 'A MEMORY OF LIGHT'], lines: ['……一位手持大劍的守衛，擋在聖所的門前。', '他身後的光，一天比一天微弱。'], clue: ['光的記憶 · 一', '一位手持大劍的守衛，擋在聖所的門前。他身後的光，一天比一天微弱。'] },
+  mem1: { who: ['光的記憶', 'A MEMORY OF LIGHT'], lines: ['影子從四面八方湧來。', '守衛一步也沒有退。'], clue: ['光的記憶 · 二', '影子從四面八方湧來，守衛一步也沒有退。'] },
+  mem2: { who: ['光的記憶', 'A MEMORY OF LIGHT'], lines: ['「搖籃不能熄。」', '他把自己的光，按進了聖核。'], clue: ['光的記憶 · 三', '「搖籃不能熄。」他把自己的光，按進了聖核。'] },
+  mem3: { who: ['光的記憶', 'A MEMORY OF LIGHT'], lines: ['光一點一點回到聖核……', '守衛的劍，卻再也沒有舉起來。', '——去環光聖所吧。'], clue: ['光的記憶 · 四', '光回到了聖核，守衛的劍卻再也沒有舉起來。他後來去了哪裡？'] },
+  stele: { who: ['環光聖所 · 石刻', 'THE SANCTUM'], lines: ['石刻：「天梯為攜三重光者而開。」', '（三重光……也許是指光羽的力量。）'], clue: ['天梯的石刻', '「天梯為攜三重光者而開。」——收集光羽，升到 Lv3。'] },
+  cradle: { who: ['環光聖所 · 聖核', 'THE SACRED CORE'], lines: ['聖核的中心是空的，只留下一個人形的凹痕。', '……你就是從這裡出生的。', '這裡曾經是新天使誕生的搖籃。你是最後一個。'], clue: ['空的搖籃', '聖核的中心是空的，只留下一個人形的凹痕。你是搖籃裡最後一個天使。'] },
+  ophiel: { who: ['歐菲爾的殘響', 'ECHO OF OPHIEL'], lines: ['……你身上，有我的光。', '這把劍已經守不住任何東西了。', '帶走它，去守你要守的。'], clue: ['墮光守衛的大劍', '歐菲爾把自己的光給了搖籃。他的大劍，留給了從搖籃出生的你。'] },
+  throne: { who: ['穹頂聖庭 · 空玉座', 'THE EMPTY THRONE'], lines: ['玉座上只有灰塵。', '扶手上刻著一行字：「吾在下方。」'], clue: ['空玉座', '神域之主的玉座是空的。扶手上刻著：「吾在下方。」'] },
+  vault: { who: ['星淵寶庫 · 刻文', 'THE STARDEEP VAULT'], lines: ['審判衛士盾背上被刮掉的那一行，在這裡完整地刻著——', '「封印以光為食。」'], clue: ['被刮掉的那一行', '「封印以光為食。」——刻在星淵寶庫，也曾刻在每一面審判衛士的盾背上。'] },
+  astraea: { who: ['阿斯特萊亞的殘響', 'ECHO OF ASTRAEA'], lines: ['我判了祂有罪。', '然後，判了我自己。', '祂不在這裡。去下面找祂——在那道裂縫的上方。'], clue: ['審判者最後的判決', '阿斯特萊亞判了神域之主有罪，然後判了自己。「去下面找祂——在那道裂縫的上方。」'] },
+  camael: { who: ['卡麥爾的殘響', 'ECHO OF CAMAEL'], lines: ['我守的城，建在鎖鏈上。', '那心跳……不是我的。', '別讓祂一個人跪著。'], clue: ['騎士長的遺言', '「我守的城，建在鎖鏈上。那心跳不是我的。別讓祂一個人跪著。」'] },
+  seals: { who: ['墮天巨像', 'THE FALLEN COLOSSUS'], lines: () => ['巨像雙手握著一把劍，劍柄上有三個紋章：盾、翼、誓。', ...SEALS.filter((q) => !prog[q.key]).map((q) => q.dark), SEALS.every((q) => prog[q.key]) ? '三個紋章都在發光。' : '也許要讓三個紋章都亮起來。'], clue: ['巨像的三個紋章', '巨像手中的劍柄上有三個紋章：盾、翼、誓。分別由墮翼之丘的守衛、天上的審判者、傾城遺跡的騎士守著。'] },
+  colossus: { who: ['神域之主', 'THE LORD OF THE EMPYREAN'], lines: ['（盾、翼、誓——三個紋章逐一亮起。）', '……你終於來了。', '門後面，是一切瘴氣的源頭。', '拿我的劍去。打開它，結束這一切。', '（巨像的手鬆開了。一把劍落在你面前。）'], clue: ['天樞之劍', '神域之主交給你的劍。「天樞」——天的樞紐。只有它能真正傷及地獄之物。'] },
+  colossusAfter: { who: ['墮天巨像', 'THE FALLEN COLOSSUS'], lines: ['巨像一動也不動。', '胸口多了一道細細的裂縫，正微微發光。', '「……不要回頭。」'] },
+  abaddon: { who: ['亞巴頓的殘響', 'ECHO OF ABADDON'], lines: ['天樞……祂終於把它交出來了。', '你知道打開這扇門，會發生什麼嗎？', '……不，你不知道。祂沒有告訴你。', '去吧。我守了一千年，就是在等一個敢打開它的人。'], clue: ['守門者的話', '「你知道打開這扇門會發生什麼嗎？……祂沒有告訴你。」'] },
+  gate: { who: ['冥門', 'THE ABYSSAL GATE'], lines: () => (prog.boss4 ? ['門上的鎖孔，正好是一把劍的形狀。', '——第一部 · 完。', '第二部「人間煉獄」製作中。'] : ['冥門紋絲不動。門後傳來低沉的心跳……', prog.hellBlade ? '門前的守衛還在。' : '凡光打不開它。需要神域之主的武器。']) },
+};
+const SEALS = [
+  { key: 'boss', g: '盾', dark: '「盾」是暗的。墮翼之丘的守衛，也許還守著它。' },
+  { key: 'boss2', g: '翼', dark: '「翼」是暗的。天上的審判者，也許還握著它。' },
+  { key: 'boss3', g: '誓', dark: '「誓」是暗的。傾城遺跡的騎士，還沒有安息。' },
+];
+const nSeals = () => SEALS.filter((q) => prog[q.key]).length;
+// ---- the dialogue box
+let DLG = null;
+function talk(id, done) {
+  const S = STORY[id]; if (!S) { done && done(); return; }
+  const lines = (typeof S.lines === 'function' ? S.lines() : S.lines).filter(Boolean).map((l) => tr(l));
+  DLG = { id, lines, i: 0, n: 0, done, t0: performance.now() };
+  if (state === 'play') paused = true;
+  freeMouse(); interactTarget = null; $('bInteract').classList.add('hidden');
+  $('dlgWho').textContent = tr(S.who[0]); $('dlgEn').textContent = S.who[1];
+  $('dlg').classList.remove('hidden'); $('hud').classList.add('cine');
+  dlgShow(); Audio.sfx('ui');
+}
+function dlgShow() { const D = DLG; D.n = 0; D.lineT = performance.now(); $('dlgText').textContent = ''; $('dlg').classList.remove('full'); }
+function dlgTick() {
+  const D = DLG; if (!D) return;
+  const L = D.lines[D.i], n = Math.min(L.length, Math.floor((performance.now() - D.lineT) / 34));
+  if (n !== D.n) { D.n = n; $('dlgText').textContent = L.slice(0, n); }
+  if (n >= L.length) $('dlg').classList.add('full');
+}
+function dlgNext() {
+  const D = DLG; if (!D || performance.now() - D.t0 < 250) return;
+  const L = D.lines[D.i];
+  if (D.n < L.length) { D.lineT = -1e9; dlgTick(); return; } // first tap finishes the line
+  if (++D.i < D.lines.length) { dlgShow(); Audio.sfx('ui'); return; }
+  dlgClose();
+}
+function dlgClose() {
+  const D = DLG; if (!D) return; DLG = null;
+  $('dlg').classList.add('hidden'); $('hud').classList.remove('cine');
+  if (state === 'play') paused = false;
+  const S = STORY[D.id];
+  if (!prog.talk[D.id]) { prog.talk[D.id] = true; if (S.clue && !prog.clues[D.id]) { prog.clues[D.id] = Date.now(); setTimeout(() => toast('<i class="dia"></i>新的線索 · 已收進聖匣', false), 300); } save(); }
+  updateQuest();
+  if (D.done) D.done();
+}
+// ---- places that speak: steles, echoes of the purified, the colossus
+const STORY_SPOTS = [];
+let swordPlanted = null;
+function buildStory() {
+  const marble = new THREE.MeshStandardMaterial({ color: '#efe9de', map: TEX.marble, roughness: 0.55 });
+  const runeM = new THREE.MeshBasicMaterial({ map: TEX.rune, color: new THREE.Color(1.8, 1.4, 0.7), transparent: true, depthWrite: false });
+  const stele = (x, z, y, yaw, parent = scene) => {
+    const g = new THREE.Group();
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2.3, 0.34), marble); slab.position.y = 1.15; slab.castShadow = slab.receiveShadow = true; g.add(slab);
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.22, 0.5), marble); cap.position.y = 2.38; g.add(cap);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.24, 0.7), marble); base.position.y = 0.12; g.add(base);
+    const rn = new THREE.Mesh(new THREE.CircleGeometry(0.5, 32), runeM); rn.position.set(0, 1.45, 0.18); g.add(rn);
+    g.position.set(x, y, z); g.rotation.y = yaw; parent.add(g); return g;
+  };
+  const isle = (id) => REALM.isles.find((i) => i.id === id);
+  const T = W.temple, court = isle('court'), vault = isle('vault');
+  // the sanctum: a stele by the door, readable before and after the core wakes
+  { const x = T.x + 7, z = T.z + 15; stele(x, z, Math.max(0, groundAt(x, z)), Math.PI); STORY_SPOTS.push({ L: 'isle', x, z, y: () => Math.max(0, groundAt(x, z)), r: 4.2, key: () => (prog.end ? 'cradle' : 'stele'), label: ['閱讀石刻', 'READ THE INSCRIPTION'] }); }
+  // the empty throne and the vault's inscription, up in the Empyrean
+  if (court) { const x = court.x + 6, z = court.z - 8; stele(x, z, court.top, 0); STORY_SPOTS.push({ L: 'realm', x, z, y: () => court.top, r: 4.5, key: () => 'throne', label: ['查看空玉座', 'THE EMPTY THRONE'] }); }
+  if (vault) { const x = vault.x, z = vault.z; stele(x, z, vault.top, Math.PI / 4); STORY_SPOTS.push({ L: 'realm', x, z, y: () => vault.top, r: 4.5, key: () => 'vault', label: ['閱讀刻文', 'READ THE INSCRIPTION'] }); }
+  // echoes of the purified, at their statues
+  const echo = (L, home, key, flag) => STORY_SPOTS.push({ L, x: home.x, z: home.z, y: () => home.y, r: 8, show: () => prog[flag], key: () => key, label: ['聆聽殘響', 'LISTEN TO THE ECHO'] });
+  echo('realm', REALM.bossHome, 'astraea', 'boss2');
+  echo('earth', EARTH.bossHome, 'camael', 'boss3');
+  echo('hell', HELL.bossHome, 'abaddon', 'boss4');
+  // Ophiel's greatsword, planted before his statue once he rests
+  {
+    const keep = hero.tipLocal, gsw = hero.buildGreatsword(); hero.tipLocal = keep;
+    const dx = -BOSS_HOME.x, dz = -BOSS_HOME.z, dl = Math.hypot(dx, dz), x = BOSS_HOME.x + (dx / dl) * 4.2, z = BOSS_HOME.z + (dz / dl) * 4.2, gy = Math.max(0, groundAt(x, z));
+    const g = new THREE.Group(); gsw.scale.multiplyScalar(2.1); gsw.rotation.set(Math.PI / 2 - 0.08, 0, 0.12); g.add(gsw);
+    g.updateMatrixWorld(true); const bb = new THREE.Box3().setFromObject(gsw); g.position.set(x, gy - bb.min.y - 0.45, z);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.glow, color: new THREE.Color(1.6, 1.15, 0.55), transparent: true, opacity: 0.7, depthWrite: false })); glow.scale.setScalar(4); glow.position.y = (bb.max.y - bb.min.y) * 0.75; g.add(glow);
+    scene.add(g); g.visible = false; swordPlanted = g;
+    STORY_SPOTS.push({ L: 'isle', x, z, y: () => gy, r: 4, show: () => prog.boss && !prog.weapons.greatsword, key: () => 'ophiel', label: ['拔出墮光大劍', 'DRAW THE GREATSWORD'], run: drawGreatsword, always: true });
+  }
+  // the colossus over the rift
+  { const R = EARTH.riftRim; STORY_SPOTS.push({ L: 'earth', x: R.x, z: R.z, y: () => R.y, r: 9, key: () => (prog.hellBlade ? 'colossusAfter' : nSeals() === 3 ? 'colossus' : 'seals'), label: () => (prog.hellBlade ? ['仰望巨像', 'THE FALLEN COLOSSUS'] : ['觸碰巨像的劍', "TOUCH THE COLOSSUS' SWORD"]), run: touchColossus, always: true }); }
+  // a soft gold mark over every place that still has something to say
+  const mk = new THREE.SpriteMaterial({ map: TEX.spark, color: new THREE.Color(2.4, 1.8, 0.9), transparent: true, depthWrite: false, depthTest: true });
+  for (const sp of STORY_SPOTS) { sp.mark = new THREE.Sprite(mk); sp.mark.scale.setScalar(1.6); noReflect(sp.mark); (sp.L === 'earth' ? EARTH.root : sp.L === 'hell' ? HELL.root : scene).add(sp.mark); }
+}
+const spotLayer = (L) => (L === 'hell' ? 2 : L === 'earth' ? 1 : 0);
+const spotOn = (sp) => (!sp.show || sp.show()) && spotLayer(sp.L) === C.LAYER.cur && (sp.L !== 'realm' || P.inRealm) && (sp.L !== 'isle' || !P.inRealm);
+function updateStory() {
+  if (swordPlanted) swordPlanted.visible = !!prog.boss && !prog.weapons.greatsword;
+  for (const sp of STORY_SPOTS) {
+    const fresh = spotOn(sp) && (!prog.talk[sp.key()] || (sp.key() === 'colossus' && !prog.hellBlade));
+    sp.mark.visible = fresh;
+    if (fresh) { sp.mark.position.set(sp.x, sp.y() + 3.6 + Math.sin(time * 2 + sp.x) * 0.25, sp.z); sp.mark.material.opacity = 0.75 + Math.sin(time * 3) * 0.25; }
+  }
+  if (DLG) dlgTick();
+}
+function storyTarget() {
+  for (const sp of STORY_SPOTS) {
+    if (!spotOn(sp)) continue;
+    if (Math.hypot(P.pos.x - sp.x, P.pos.z - sp.z) < sp.r && Math.abs(P.pos.y - sp.y()) < 6) return { kind: 'story', sp, k: sp.key() };
+  }
+  return null;
+}
+function runSpot(sp) { if (sp.run) sp.run(); else talk(sp.key()); }
+function drawGreatsword() {
+  talk('ophiel', () => {
+    prog.weapons.greatsword = true; save();
+    burst(FX.sparks, swordPlanted.position.x, swordPlanted.position.y + 2, swordPlanted.position.z, 90, { speed: 7, up: 4, life: 1.2, size: 1.2, c: [2.4, 1.4, 0.5] });
+    flashScreen(0.5); CAM.shake = Math.max(CAM.shake, 0.3);
+    showWeapon('greatsword');
+    setTimeout(() => toast('<i class="dia"></i>打開聖匣，可以換上墮光大劍', true), 2600);
+    updateQuest();
+  });
+}
+function touchColossus() {
+  if (prog.hellBlade) { talk('colossusAfter'); return; }
+  if (nSeals() < 3) { prog.talk.colossus = false; talk('seals'); return; }
+  talk('colossus', () => {
+    prog.hellBlade = true; prog.weapons.tianshu = true; save();
+    const s = EARTH.colossus.sword;
+    flashScreen(1); CAM.shake = Math.max(CAM.shake, 0.9); Audio.sfx('roar');
+    burst(FX.sparks, P.pos.x, P.pos.y + 2, P.pos.z, 120, { speed: 9, up: 5, life: 1.4, size: 1.3, c: [1.5, 1.9, 2.7] });
+    if (s) burst(FX.sparks, s.x, s.y, s.z, 160, { speed: 14, up: 4, life: 1.8, size: 2, c: [2.2, 2.3, 2.6] });
+    equipWeapon('tianshu');
+    showWeapon('tianshu');
+    setTimeout(() => talk('colossusAfter'), 6800);
+  });
+}
+function showWeapon(w) {
+  const I = WEAPON_INFO[w];
+  $('lvK').textContent = 'NEW WEAPON'; $('lvSmall').textContent = 'WEAPON'; $('lvNum').textContent = I.glyph; $('lvFromRow').style.display = 'none';
+  $('lvT').textContent = I.name; $('lvStats').innerHTML = `<li class="en" style="--d:.9s">${I.en}</li>`;
+  $('lvPerk').textContent = I.short; $('lvPerk').classList.remove('hidden');
+  const el = $('lvUp'); el.classList.remove('hidden', 'on'); void el.offsetWidth; el.classList.add('on');
+  clearTimeout(lvUpT); lvUpT = setTimeout(() => el.classList.add('hidden'), window.__lvHold || 6200);
+  Audio.sfx('lvup'); featherBurst(P.pos.x, P.pos.y + 1.2, P.pos.z, 20, 4);
+}
+
+// ------------------------------------------------------------------ the reliquary (聖匣): the small light-casket the seraph carries
+const WEAPON_INFO = {
+  spear: { glyph: '槍', name: '聖槍', en: 'THE HOLY LANCE', stats: [3, 3, 3], how: '醒來時就握在手中',
+    moves: '突刺 · 突刺 · 旋身橫掃 · 衝刺突擊', short: '刺擊快、距離長',
+    desc: '你醒來時就握在手中的槍。兩下快速突刺，距離最長；第三擊旋身橫掃，可以應付圍攻。' },
+  greatsword: { glyph: '劍', name: '墮光大劍', en: "OPHIEL'S GREATSWORD", stats: [5, 1, 4], how: '墮翼之丘 · 歐菲爾的石像前',
+    moves: '斜劈 · 回劈 · 迴旋斬 · 砸地', short: '雙手重劈 · 第四擊砸向地面',
+    desc: '歐菲爾守護搖籃時用的大劍。出手慢，但每一下都很重；第四擊和蓄力重擊會砸向地面，震傷周圍所有敵人，也能擊破守衛的盾。' },
+  tianshu: { glyph: '樞', name: '天樞之劍', en: 'TIANSHU · PIVOT OF HEAVEN', stats: [4, 4, 3], how: '墮天巨像 · 集齊盾、翼、誓三道紋章',
+    moves: '斬擊 · 斬擊 · 迴旋斬 · 突擊', short: '唯一能真正傷及地獄之物',
+    desc: '神域之主交給你的劍。「天樞」——天的樞紐。只有它能真正傷及地獄之物；在地獄裡不拿著它，敵人幾乎打不動，你也會受到三倍傷害。' },
+};
+const POWER_HOW = { shield: '墮翼之丘 · 墮光守衛', wings: '審判之環 · 審判者', oath: '傾城遺跡 · 墮天騎士' };
+const POWER_GIFT = { shield: '光之結晶 · 生命上限 +25', wings: '審判之羽 · 生命上限 +25 · 聖瓶 +1', oath: '騎士之誓 · 生命上限 +25 · 攻擊 +10%' };
+const BAG = { tab: 'weapons', sel: 0 };
+const ICON = {
+  spear: '<path d="M18 102 92 28"/><path d="M92 28c4-10 12-16 18-18c-2 6-8 14-18 18z" class="f"/><circle cx="84" cy="36" r="5"/><path d="M26 94l-6-6"/>',
+  greatsword: '<path d="M30 90 96 24l4 14-52 52z" class="f"/><path d="M96 24l8-4-4 8"/><path d="M26 74l20 20"/><path d="M18 102l14-14"/>',
+  tianshu: '<path d="M26 94 94 26l3 6-65 65z" class="f"/><path d="M94 26l9-5-5 9"/><path d="M24 80c6 0 12 6 12 12M40 72c-6 0-12-6-12-12"/><path d="M16 104l10-10"/><circle cx="16" cy="104" r="3"/>',
+  feather: '<path d="M30 98C40 60 64 32 98 22c-4 30-26 60-62 70z" class="f"/><path d="M30 98 86 38"/>',
+  person: '<circle cx="60" cy="34" r="12"/><path d="M38 100c0-26 10-42 22-42s22 16 22 42z" class="f"/>',
+  flame: '<path d="M60 100c-20 0-30-14-26-30c4-14 16-18 18-38c12 12 26 26 26 44c0 14-8 24-18 24z" class="f"/><path d="M60 100c-8 0-12-6-10-14c2-6 8-8 10-16c6 6 10 12 10 20c0 6-4 10-10 10z"/>',
+  book: '<path d="M24 26h50a12 12 0 0 1 12 12v58H36a12 12 0 0 1-12-12z" class="f"/><path d="M24 84a12 12 0 0 1 12-12h50"/>',
+  scroll: '<path d="M32 28h52v60a10 10 0 0 1-10 10H34" class="f"/><path d="M32 28a8 8 0 0 0-8 8v4h16v-4a8 8 0 0 0-8-8zM42 48h30M42 60h30M42 72h20"/>',
+};
+const glyphIcon = (g) => `<circle cx="60" cy="60" r="34" class="f"/><text x="60" y="72" text-anchor="middle">${g}</text>`;
+function bagItems() {
+  if (BAG.tab === 'weapons') return ['spear', 'greatsword', 'tianshu'].map((w) => {
+    const I = WEAPON_INFO[w], own = !!prog.weapons[w];
+    return { own, icon: ICON[w], name: own ? I.name : '？？？', en: own ? I.en : 'UNKNOWN', badge: prog.weapon === w ? '裝備中' : '', w,
+      body: own ? `<p>${I.desc}</p><dl><dt>招式</dt><dd>${I.moves}</dd><dt>取得</dt><dd>${I.how}</dd></dl>${statBars(I.stats)}` : `<p class="hint">線索：${I.how}</p>` };
+  });
+  if (BAG.tab === 'powers') return Object.keys(POWERS).map((k) => {
+    const pw = POWERS[k], own = !!prog[pw.key] || TEST.powers;
+    return { own, icon: glyphIcon(pw.glyph), name: own ? pw.name : '？？？', en: own ? pw.en : 'UNKNOWN',
+      body: own ? `<p>${pw.desc}</p><dl><dt>信物</dt><dd>${POWER_GIFT[k]}</dd><dt>來自</dt><dd>${POWER_HOW[k]}</dd></dl>` : `<p class="hint">線索：${POWER_HOW[k]}</p>` };
+  });
+  if (BAG.tab === 'collect') {
+    const rows = [['isle', '光羽 · 光羽之境', 'FEATHERS · THE ISLE'], ['realm', '光羽 · 天上神域', 'FEATHERS · THE EMPYREAN'], ['earth', '光羽 · 人間', 'FEATHERS · THE MORTAL WORLD'], ['hell', '光羽 · 地獄', 'FEATHERS · THE ABYSS']].map(([L, n, en]) => {
+      const c = fCount(L); return { own: true, icon: ICON.feather, name: n, en, n: `${c.got}/${c.all}`, k: c.all ? c.got / c.all : 0, body: `<p>散落各地的光羽。每一根都曾經屬於某位天使。</p>${meter(c.got, c.all)}` };
+    });
+    const seen = CODEX.filter((c) => codexState(c) > 0).length;
+    rows.push({ own: true, icon: ICON.person, name: '救出的人', en: 'THE RESCUED', n: `${nRescued()}/${captives.length}`, k: nRescued() / Math.max(1, captives.length), body: `<p>被蝕晶封住的人。救出的人會回到晨鐘堡，點亮更多燈火。</p>${meter(nRescued(), captives.length)}` });
+    rows.push({ own: true, icon: ICON.flame, name: '守住的燈火', en: 'BEACONS HELD', n: `${nBeacons()}/${beacons.length}`, k: nBeacons() / Math.max(1, beacons.length), body: `<p>人們最後的燈火。每守住一座，生命上限 +10。</p>${meter(nBeacons(), beacons.length)}` });
+    rows.push({ own: true, icon: ICON.book, name: '墮天錄', en: 'CODEX OF THE FALLEN', n: `${seen}/${CODEX.length}`, k: seen / CODEX.length, body: `<p>遇過的敵人與首領。按 B 打開墮天錄。</p>${meter(seen, CODEX.length)}` });
+    return rows;
+  }
+  const ids = Object.keys(STORY).filter((id) => STORY[id].clue && prog.clues[id]);
+  if (!ids.length) return [{ own: false, icon: ICON.scroll, name: '還沒有線索', en: 'NO CLUES YET', body: '<p class="hint">石刻、殘響和人們說的話，會記在這裡。</p>' }];
+  return ids.map((id) => ({ own: true, icon: ICON.scroll, name: STORY[id].clue[0], en: STORY[id].who[1], body: `<p>${STORY[id].clue[1]}</p><dl><dt>來自</dt><dd>${STORY[id].who[0]}</dd></dl>` }));
+}
+const meter = (a, b) => `<div class="meter"><i style="width:${b ? (a / b) * 100 : 0}%"></i></div>`;
+const statBars = (s) => `<div class="stats">${['攻擊', '速度', '範圍'].map((k, i) => `<div><span>${k}</span><b>${'<i class="on"></i>'.repeat(s[i])}${'<i></i>'.repeat(5 - s[i])}</b></div>`).join('')}</div>`;
+function renderBag() {
+  document.querySelectorAll('#bagTabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === BAG.tab));
+  const items = bagItems(); BAG.sel = Math.min(BAG.sel, items.length - 1);
+  $('bagGrid').innerHTML = items.map((it, i) => `<button class="slot${it.own ? '' : ' lock'}${i === BAG.sel ? ' sel' : ''}" data-i="${i}">
+      <svg viewBox="0 0 120 120">${it.icon}</svg>${it.badge ? `<em>${it.badge}</em>` : ''}${it.n ? `<b>${it.n}</b>` : ''}${it.k !== undefined ? `<i class="bar" style="--k:${it.k}"></i>` : ''}</button>`).join('') + '<i class="slot empty"></i>'.repeat(Math.max(8, Math.ceil(items.length / 4) * 4) - items.length);
+  const it = items[BAG.sel];
+  const act = BAG.tab === 'weapons' && it.own ? (prog.weapon === it.w ? '<button class="lbtn on" disabled><span>裝備中</span><small>EQUIPPED</small></button>' : '<button class="lbtn" id="bagEquip"><span>裝備</span><small>EQUIP</small></button>') : '';
+  $('bagDetail').innerHTML = `<div class="bigi${it.own ? '' : ' lock'}"><svg viewBox="0 0 120 120">${it.icon}</svg></div><h3>${it.name}</h3><small>${it.en}</small>${it.body}${act}`;
+  const eq = $('bagEquip'); if (eq) eq.addEventListener('click', () => { equipWeapon(it.w); Audio.sfx('pickup'); renderBag(); });
+  document.querySelectorAll('#bagGrid button.slot').forEach((b) => b.addEventListener('click', () => {
+    const i = +b.dataset.i;
+    if (i === BAG.sel && BAG.tab === 'weapons' && items[i].own && prog.weapon !== items[i].w) { equipWeapon(items[i].w); Audio.sfx('pickup'); }
+    else Audio.sfx('ui');
+    BAG.sel = i; renderBag();
+  }));
+}
+function openBag(tab) {
+  if (state !== 'play') return;
+  if (tab) { BAG.tab = tab; BAG.sel = 0; }
+  paused = true; freeMouse(); closeOverlays(); paused = true;
+  $('bagOv').classList.remove('hidden'); renderBag(); Audio.sfx('ui');
+}
+function initBag() {
+  $('bBag').addEventListener('click', (e) => { e.stopPropagation(); openBag(); });
+  document.querySelectorAll('#bagTabs button').forEach((b) => b.addEventListener('click', () => { BAG.tab = b.dataset.tab; BAG.sel = 0; Audio.sfx('ui'); renderBag(); }));
+  $('dlg').addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); dlgNext(); });
+}
+
 // ------------------------------------------------------------------ test mode
 // Jump straight to each chapter's key places and bosses. Everything done here lands in its own save slot.
 let pendingWarp = null;
@@ -2784,7 +3107,7 @@ const CHEATS = {
   heal: () => { applyStats(true); toast('<i class="dia"></i>生命與聖瓶已補滿'); },
   clear: () => { let n = 0; for (const s of shades) if (!s.dead && s.g.position.distanceTo(P.pos) < 45) { killShade(s); n++; } toast(`<i class="dia"></i>附近敵人已清除 · ${n}`); },
   codex: () => { for (const k of new Set(Object.values(KILL_KEY))) prog.kills[k] = Math.max(prog.kills[k] || 0, 8); for (const b of bosses) prog.seen[b.cfg.key] = true; save(); toast('<i class="dia"></i>圖鑑已全部解鎖'); },
-  gs: () => { const w = prog.weapon === 'greatsword' ? 'spear' : 'greatsword'; equipWeapon(w); toast(w === 'greatsword' ? '<i class="dia"></i>已換上墮光大劍' : '<i class="dia"></i>已換回聖槍'); },
+  gs: () => { const order = ['spear', 'greatsword', 'tianshu'], w = order[(order.indexOf(prog.weapon) + 1) % 3]; prog.weapons[w] = true; if (w === 'tianshu') prog.hellBlade = true; equipWeapon(w); toast(`<i class="dia"></i>${WEAPON_INFO[w].name}`); },
 };
 function syncTestUI() {
   const st = $('testStat');
@@ -2815,7 +3138,7 @@ function initTestMode() {
   document.querySelectorAll('#testOv [data-warp]').forEach((b) => b.addEventListener('click', () => { Audio.sfx('ui'); warpTo(b.dataset.warp); }));
   document.querySelectorAll('#testOv [data-tog]').forEach((b) => b.addEventListener('click', () => {
     enterTest(); const k = b.dataset.tog;
-    if (k === 'hellBlade') { prog.hellBlade = !prog.hellBlade; save(); updateQuest(); } else { TEST[k] = !TEST[k]; store.set('lumenfall_test', TEST); }
+    if (k === 'hellBlade') { prog.hellBlade = !prog.hellBlade; prog.weapons.tianshu = prog.hellBlade; equipWeapon(prog.hellBlade ? 'tianshu' : 'spear'); save(); updateQuest(); } else { TEST[k] = !TEST[k]; store.set('lumenfall_test', TEST); }
     Audio.sfx('ui'); syncTestUI();
   }));
   document.querySelectorAll('#testOv [data-cheat]').forEach((b) => b.addEventListener('click', () => {
@@ -2838,6 +3161,7 @@ function onEnterPlay() {
   layoutMinimap();
   currentRegion = '';
   updateQuest();
+  if (!prog.talk.intro && !prog.end && !pendingWarp) setTimeout(() => { if (state === 'play' && !DLG) talk('intro'); }, 1400);
   if (!store.get('lumenfall_seenTip', false)) {
     setTimeout(() => toast(isTouch ? '<i class="dia"></i>左側拖曳移動 · 右側拖曳轉視角' : '<i class="dia"></i>WASD 移動 · 滑鼠轉視角 · 左鍵攻擊 · 右鍵閃避'), 3800);
     setTimeout(() => toast('<i class="dia"></i>空中再按「展翼」即可滑翔'), 6600);
@@ -2979,6 +3303,7 @@ function frame() {
   updateLvFx(dt);
   if (state === 'play') updateQuestDist(realDt);
   updateTestInfo(realDt);
+  updateStory();
   updateFeathers(dt);
   updateFX(dt);
   // seraph pose
@@ -2986,7 +3311,7 @@ function frame() {
   hero.root.position.copy(P.pos);
   hero.root.rotation.y = P.yaw + P.spin;
   hero.setVisible(!(P.inv > 0 && P.hurtT < 0 && state === 'play' && Math.floor(time * 20) % 2 === 0 && P.inv < 0.85 && P.lastHurt > time - 1));
-  hero.update(dt, { mode, speed: P.speed, phase: P.phase, grounded: P.grounded, vy: P.vel.y, glide: P.glide, dash: P.dashT, atk: P.atk, cast: P.castT, hurt: P.hurtT, charge: P.charge, lock: !!P.lock, heal: P.healT >= 0 ? 1 : 0 });
+  hero.update(dt, { wpn: prog.weapon, mode, speed: P.speed, phase: P.phase, grounded: P.grounded, vy: P.vel.y, glide: P.glide, dash: P.dashT, atk: P.atk, cast: P.castT, hurt: P.hurtT, charge: P.charge, lock: !!P.lock, heal: P.healT >= 0 ? 1 : 0 });
   updateTrail(dt, !!(P.atk.kind && P.atk.t < P.atk.dur * 0.75) || (P.dashT > 0 && P.atk.kind));
   updateDmgNums(realDt);
   const gy = support(P.pos.x, P.pos.z, P.pos.y + 0.1).h;
@@ -3039,7 +3364,9 @@ async function init() {
   buildBoss();
   buildBreakables();
   buildFeathers();
-  if (prog.weapon === 'greatsword' && prog.boss) hero.setWeapon('greatsword'); else prog.weapon = 'spear';
+  buildStory();
+  if (prog.weapon !== 'spear' && prog.weapons[prog.weapon]) hero.setWeapon(prog.weapon); else prog.weapon = 'spear';
+  applyWeaponLook();
   buildMinimapBase();
   sanitizeNormals(scene);
   hookCloudClock(scene);
@@ -3074,4 +3401,4 @@ addEventListener('resize', resize);
 addEventListener('orientationchange', () => setTimeout(resize, 250));
 document.addEventListener('visibilitychange', () => { if (Audio.ctx) { if (document.hidden) Audio.ctx.suspend(); else Audio.ctx.resume(); } });
 init().catch((e) => { console.error(e); $('loadMsg').textContent = '載入失敗：' + e.message; });
-window.__LF = { warp: (id) => warpTo(id), test: TEST, quest: () => QS, layer: () => C.LAYER.cur, hell: () => HELL, sites: () => ({ captives, beacons, folk }), kill: (sh) => killShade(sh), interact: () => doInteract(), dyn: () => ({ ...dyn, pr: renderer.getPixelRatio() }), levelUp: (n) => levelUp(n), showPower: (k) => showPower(k), breakables, equipWeapon: (w) => equipWeapon(w), calls: () => { renderer.info.autoReset = false; renderer.info.reset(); composer.render(0.016); const r = { ...renderer.info.render }; renderer.info.autoReset = true; return r; }, pause: (b) => (paused = b), FX, slow: () => (DT_MAX = 0.05), act: { attackDown, attackUp, lightAttack, doLock, doHeal, startAttack, perfectDodge, doAttack, doJump, doSkill, doDodge, doInteract, openMap, openSettings, damageShade, regionCard, toast }, fast: () => (DT_MAX = 0.25), THREE, scene, composer, q: (o) => { Object.assign(QUAL[settings.quality], o); applyQuality(); }, P, CAM, W, hero: () => hero, boss: () => boss, state: () => state, prog, shades, feathers, setState: (s) => (state = s), camera, renderer };
+window.__LF = { talk: (id) => talk(id), dlg: () => DLG, dlgNext: () => dlgNext(), bag: (t) => openBag(t), spots: () => STORY_SPOTS, warp: (id) => warpTo(id), test: TEST, quest: () => QS, layer: () => C.LAYER.cur, hell: () => HELL, sites: () => ({ captives, beacons, folk }), kill: (sh) => killShade(sh), interact: () => doInteract(), dyn: () => ({ ...dyn, pr: renderer.getPixelRatio() }), levelUp: (n) => levelUp(n), showPower: (k) => showPower(k), breakables, equipWeapon: (w) => equipWeapon(w), calls: () => { renderer.info.autoReset = false; renderer.info.reset(); composer.render(0.016); const r = { ...renderer.info.render }; renderer.info.autoReset = true; return r; }, pause: (b) => (paused = b), FX, slow: () => (DT_MAX = 0.05), act: { attackDown, attackUp, lightAttack, doLock, doHeal, startAttack, perfectDodge, doAttack, doJump, doSkill, doDodge, doInteract, openMap, openSettings, damageShade, regionCard, toast }, fast: () => (DT_MAX = 0.25), THREE, scene, composer, q: (o) => { Object.assign(QUAL[settings.quality], o); applyQuality(); }, P, CAM, W, hero: () => hero, boss: () => boss, state: () => state, prog, shades, feathers, setState: (s) => (state = s), camera, renderer };

@@ -404,6 +404,65 @@ body.boss #lvUp{top:calc(var(--st) + 56px)}
 @keyframes lvRise{0%{opacity:0;transform:translateY(8px)}8%{opacity:1;transform:none}82%{opacity:1}100%{opacity:0}}
 @keyframes lvFade{0%{opacity:0}10%{opacity:1}82%{opacity:1}100%{opacity:0}}
 
+/* dialogue */
+#dlg{position:fixed;inset:0;z-index:28;display:flex;align-items:flex-end;justify-content:center;padding:0 calc(var(--sr) + 16px) calc(var(--sb) + 28px) calc(var(--sl) + 16px);cursor:pointer;
+  background:linear-gradient(0deg,rgba(40,30,12,.28),rgba(40,30,12,0) 46%)}
+#dlg .dbox{position:relative;width:min(680px,100%);padding:20px 30px 22px;animation:fin .3s ease;
+  background:linear-gradient(180deg,rgba(253,251,246,.95),rgba(246,241,232,.94));box-shadow:inset 0 0 0 1px var(--hair),inset 0 0 0 5px rgba(255,255,255,.55),inset 0 0 0 6px rgba(198,162,90,.3),0 18px 50px rgba(60,44,16,.28)}
+#dlg .who{position:absolute;left:22px;top:0;transform:translateY(-55%);display:flex;align-items:baseline;gap:10px;padding:6px 16px 6px 12px;
+  background:linear-gradient(90deg,#fbf6e8,#f1e3bd);box-shadow:inset 0 0 0 1px rgba(198,162,90,.6),0 4px 12px rgba(80,60,25,.15)}
+#dlg .who span{font:600 13px var(--serif);letter-spacing:.26em;color:var(--ink)}
+#dlg .who small{font:500 8px var(--cin);letter-spacing:.28em;color:var(--gold-d)}
+#dlgText{margin:8px 0 0;min-height:3.4em;font:500 16px/1.75 var(--serif);letter-spacing:.1em;color:var(--ink)}
+#dlg .nx{position:absolute;right:20px;bottom:14px;width:8px;height:8px;border-right:1.5px solid var(--gold-d);border-bottom:1.5px solid var(--gold-d);transform:rotate(45deg);opacity:0}
+#dlg.full .nx{opacity:1;animation:nxb 1s ease-in-out infinite}
+@keyframes nxb{0%,100%{transform:translateY(0) rotate(45deg)}50%{transform:translateY(4px) rotate(45deg)}}
+@media (max-height:420px){#dlg{padding-bottom:calc(var(--sb) + 14px)} #dlg .dbox{padding:16px 24px 16px} #dlgText{font-size:14px;min-height:3.2em}}
+/* bag */
+#bagOv .panel{width:min(820px,96vw);height:min(100%,560px);display:flex;flex-direction:column}
+#bagOv .bhead{display:flex;align-items:center;gap:22px;padding-right:44px;flex-wrap:wrap}
+#bagTabs{display:flex;gap:4px;margin-left:auto}
+#bagTabs button{border:0;background:none;display:flex;align-items:center;gap:7px;padding:7px 13px;font:500 13px var(--serif);letter-spacing:.2em;color:var(--ink-s);box-shadow:inset 0 -1px 0 transparent;transition:color .2s,box-shadow .2s}
+#bagTabs button svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+#bagTabs button.on{color:var(--ink);box-shadow:inset 0 -2px 0 var(--gold)}
+#bagOv .bbody{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:24px;margin-top:4px}
+#bagGrid{align-content:start;display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:10px;overflow:auto;padding:4px}
+#bagGrid .slot{position:relative;aspect-ratio:1;border:0;padding:0;display:grid;place-items:center;cursor:pointer;
+  background:radial-gradient(circle at 50% 40%,rgba(255,253,246,.95),rgba(240,232,214,.9));box-shadow:inset 0 0 0 1px rgba(198,162,90,.45),0 2px 6px rgba(80,60,25,.08);transition:box-shadow .2s,transform .15s}
+#bagGrid .slot:hover{transform:translateY(-1px)}
+#bagGrid .slot.empty{cursor:default;background:rgba(255,252,244,.35);box-shadow:inset 0 0 0 1px rgba(198,162,90,.18)}
+#bagGrid .slot.empty:hover{transform:none}
+#bagGrid .slot.sel{box-shadow:inset 0 0 0 1.5px var(--gold),inset 0 0 18px rgba(232,196,120,.45),0 0 14px rgba(232,196,120,.55)}
+#bagGrid .slot svg{width:62%;height:62%}
+#bagOv svg .f{fill:rgba(214,178,104,.22)}
+#bagOv .slot svg *,#bagDetail .bigi svg *{stroke:#a07c3a;stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round}
+#bagOv .slot svg .f,#bagDetail .bigi svg .f{fill:rgba(214,178,104,.22)}
+#bagOv .slot svg text,#bagDetail .bigi svg text{stroke:none;fill:#8a6a2c;font:600 34px var(--serif)}
+#bagGrid .slot.lock svg{opacity:.22;filter:grayscale(1)}
+#bagGrid .slot em{position:absolute;left:50%;top:-7px;transform:translateX(-50%);padding:1px 7px;font:500 9.5px var(--serif);font-style:normal;letter-spacing:.14em;color:#fff8ea;white-space:nowrap;background:linear-gradient(90deg,#d7b06a,#b88a3c)}
+#bagGrid .slot b{position:absolute;right:7px;bottom:6px;font:600 10.5px var(--cin);color:var(--gold-d)}
+#bagGrid .slot .bar{position:absolute;left:8px;right:8px;bottom:2px;height:2px;background:rgba(198,162,90,.25)}
+#bagGrid .slot .bar:after{content:'';position:absolute;left:0;top:0;bottom:0;width:calc(var(--k)*100%);background:var(--gold)}
+#bagDetail{overflow:auto;padding:4px 6px 4px 22px;border-left:1px solid rgba(198,162,90,.25)}
+#bagDetail .bigi{width:120px;height:120px;margin:4px 0 8px;display:grid;place-items:center;border-radius:50%;background:radial-gradient(circle,rgba(255,246,222,.95),rgba(255,246,222,0) 70%)}
+#bagDetail .bigi svg{width:104px;height:104px}
+#bagDetail .bigi.lock svg{opacity:.2;filter:grayscale(1)}
+#bagDetail h3{margin:0;font:600 18px var(--serif);letter-spacing:.24em;color:var(--ink)}
+#bagDetail small{display:block;margin:4px 0 10px;font:500 8.5px var(--cin);letter-spacing:.28em;color:var(--gold-d)}
+#bagDetail p{margin:6px 0 10px;font:400 12.5px/1.8 var(--serif);letter-spacing:.06em;color:var(--ink)}
+#bagDetail p.hint{color:var(--gold-d)}
+#bagDetail dl{display:grid;grid-template-columns:36px 1fr;gap:4px 10px;margin:0 0 10px;font:400 12px/1.6 var(--serif)}
+#bagDetail dt{color:var(--gold-d);letter-spacing:.1em}#bagDetail dd{margin:0;color:var(--ink-s)}
+#bagDetail .stats{display:grid;gap:5px;margin:4px 0 14px}
+#bagDetail .stats div{display:flex;align-items:center;gap:10px;font:400 11.5px var(--serif);letter-spacing:.14em;color:var(--ink-s)}
+#bagDetail .stats b{display:flex;gap:3px}
+#bagDetail .stats i{width:18px;height:5px;background:rgba(198,162,90,.2)}
+#bagDetail .stats i.on{background:linear-gradient(90deg,#e6c47e,#c39a48)}
+#bagDetail .meter{height:4px;margin:2px 0 12px;background:rgba(198,162,90,.2)}
+#bagDetail .meter i{display:block;height:100%;background:linear-gradient(90deg,#e6c47e,#c39a48)}
+#bagDetail .lbtn.on{opacity:.6}
+@media (max-height:420px){#bagOv .panel{height:100%} #bagOv .bbody{grid-template-columns:minmax(0,1fr) 250px;gap:14px} #bagGrid{grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:8px} #bagDetail .bigi{width:80px;height:80px} #bagDetail .bigi svg{width:70px;height:70px}}
+
 /* test mode */
 #testOv .panel{width:min(720px,96vw)}
 .tstat{display:flex;align-items:center;gap:9px;font:500 12px var(--serif);color:var(--ink-s);letter-spacing:.08em}
@@ -667,6 +726,7 @@ html.desk #codexList{max-height:calc(var(--vh)*62)}
   <div id="quest" class="ctl"><button class="qt" id="qHead" aria-label="任務"><i class="dia"></i><span id="qTitle">序章 · 光羽降臨</span><small id="qEn">PROLOGUE</small><i class="chev"></i></button><div id="qObj"></div></div>
   <button id="testChip" class="ctl hidden">TEST<small id="testInfo"></small></button>
   <div id="topr" class="ctl">
+    <button class="ic" id="bBag" aria-label="聖匣" data-key="I"><svg viewBox="0 0 24 24"><path d="M5 10.5h14v8.5H5z"/><path d="M4.5 10.5c0-3 3.4-5 7.5-5s7.5 2 7.5 5"/><path d="M12 12.5v4.5M10 14.5h4"/></svg></button>
     <button class="ic" id="bCodex" aria-label="墮天錄" data-key="B"><svg viewBox="0 0 24 24"><path d="M5 4.5h10.5a3 3 0 0 1 3 3v12H8a3 3 0 0 1-3-3z"/><path d="M5 16.5a3 3 0 0 1 3-3h10.5"/><path d="M11.8 6.8c1.2 1 1.2 2.6 0 3.6c-1.2-1-1.2-2.6 0-3.6z"/></svg></button>
     <button class="ic" id="bMap" aria-label="地圖" data-key="M"><svg viewBox="0 0 24 24"><path d="M3.5 6.5 9 4.5l6 2 5.5-2v13L15 19.5l-6-2-5.5 2z"/><path d="M9 4.5v13M15 6.5v13"/></svg></button>
     <button class="ic" id="bSnd" aria-label="聲音"><svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path class="on" d="M15.5 9a4.5 4.5 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11"/><path class="off" d="M16 9.5l5 5M21 9.5l-5 5"/></svg></button>
@@ -724,7 +784,7 @@ html.desk #codexList{max-height:calc(var(--vh)*62)}
     </nav>
   </div>
   <div id="tapHint"><span class="c t-only">觸碰開始</span><span class="e t-only">TAP TO BEGIN</span><span class="c d-only">點擊或按任意鍵開始</span><span class="e d-only">PRESS ANY KEY</span></div>
-  <div class="corner bl">PROTOTYPE · v0.8.1 · 地獄</div>
+  <div class="corner bl">PROTOTYPE · v0.9 · 聖匣</div>
   <div class="corner br t-only">MOBILE · LANDSCAPE</div><div class="corner br d-only">DESKTOP · KEYBOARD &amp; MOUSE</div>
 </div>
 
@@ -766,6 +826,17 @@ html.desk #codexList{max-height:calc(var(--vh)*62)}
       <button class="lbtn" id="resetProg"><span>重置旅程進度</span><small>RESET</small></button>
       <button class="lbtn" id="setTitle"><span>回到標題</span><small>TITLE</small></button>
     </div>
+    <button class="ic x" data-close aria-label="關閉"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+</div>
+<div id="dlg" class="hidden"><div class="dbox"><div class="who"><i class="dia"></i><span id="dlgWho"></span><small id="dlgEn"></small></div><p id="dlgText" data-raw></p><i class="nx"></i></div></div>
+<div id="bagOv" class="ov hidden">
+  <div class="panel">
+    <div class="bhead"><h2>聖匣<small>THE RELIQUARY</small></h2>
+      <div id="bagTabs"><button data-tab="weapons"><svg viewBox="0 0 24 24"><path d="M5 19 17 7M17 7l2-2 .5 2.5L17 7M7 15l2 2"/></svg><span>武器</span></button><button data-tab="powers"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3 8-7 10c-4-2-7-5-7-10V6z"/></svg><span>力量</span></button><button data-tab="collect"><svg viewBox="0 0 24 24"><path d="M6 19c2-8 6-12 13-14c-1 7-5 11-13 14zM6 19l9-9"/></svg><span>收集</span></button><button data-tab="clues"><svg viewBox="0 0 24 24"><path d="M7 4h11v14a2 2 0 0 1-2 2H7M7 4a2 2 0 0 0-2 2v1h4V6a2 2 0 0 0-2-2zM10 9h5M10 12h5M10 15h3"/></svg><span>線索</span></button></div>
+    </div>
+    <div class="sep"></div>
+    <div class="bbody"><div id="bagGrid"></div><div id="bagDetail"></div></div>
     <button class="ic x" data-close aria-label="關閉"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
   </div>
 </div>

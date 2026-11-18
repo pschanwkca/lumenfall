@@ -57,6 +57,32 @@ three.js r160 and fonts load from CDNs.
 - Feather levels, 墮天錄 codex (19 entries in four groups, with lore, weak points and moves), 繁中 / 日本語
 - Cloud shadows, god rays, height fog, colour grade, lake reflections
 
+## Story and guidance
+
+The full story (two parts, the turning point, both endings) lives in a separate doc. In game, the system only says where to go;
+when you get there a voice, an echo or an inscription tells you what to do:
+
+- A distant voice wakes you; each shrine you light plays a memory of the warden who guarded the cradle
+- Steles at the Sanctum (the empty cradle), the Empyrean Court (the empty throne) and the Stardeep Vault (the scratched-out line)
+- Echoes at the statues of the purified: Astraea, Camael, Abaddon
+- Ophiel's greatsword stays planted before his statue; you draw it yourself
+- The colossus over the rift holds a sword with three seals (shield, wings, oath); with all three lit, the Lord of the Empyrean
+  gives you 天樞之劍, the only blade that truly cuts what lives in hell
+- Every clue lands in the 聖匣 under 線索
+
+## 聖匣 · The Reliquary (I)
+
+The small casket of light the seraph carries. Four tabs: weapons (equip here), powers, collection (feathers per world,
+people, beacons, codex) and clues. Locked slots show where to look.
+
+## Weapons
+
+| Weapon | Found | Feel |
+|---|---|---|
+| 聖槍 Holy lance | from the start | two quick long thrusts, spin sweep, lunge; white-gold light |
+| 墮光大劍 Ophiel's greatsword | before Ophiel's statue | two-handed cleaves, slow spin, overhead slam that hits everything around the impact; molten orange light, heavy hit-stop |
+| 天樞之劍 Tianshu | the colossus, all three seals | quick slashes; needed to hurt anything in hell; silver-blue light |
+
 ## Test mode
 
 Settings → 測試模式, or **F2** (also <code>`</code>) on desktop. A red **TEST** chip stays on the HUD while it is on; tap it to reopen the panel.

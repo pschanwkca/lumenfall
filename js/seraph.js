@@ -374,11 +374,33 @@ export class SeraphAnimator {
     }
     const A = S.atk;
     if (A && A.kind) {
-      const k = A.kind, a = easeOut(A.t / (A.kind === 'heavy' ? 0.14 : 0.2)), rec = clamp((A.t - A.dur * 0.62) / (A.dur * 0.38), 0, 1);
+      const wp = S.wpn || 'spear', gs = wp === 'greatsword';
+      const k = A.kind, a = easeOut(A.t / ((A.kind === 'heavy' ? 0.14 : 0.2) * (gs ? 1.7 : 1))), rec = clamp((A.t - A.dur * 0.62) / (A.dur * 0.38), 0, 1);
       const W = (x, y) => lerp(x, y, a);
       T.thL = -0.45; T.thR = 0.32; T.knL = 0.25; T.knR = 0.35; T.hipY = 0.9; T.hipX = 0;
       spMode = 'arm'; T.fold = 0.7; T.wScale = 0.82; rate = 34;
-      if (k === 'l0') { T.tY = W(-0.85, 0.75); T.sRx = W(-0.9, -1.45); T.sRz = W(-1.2, 0.15); T.eR = W(-0.9, -0.1); T.tX = 0.18; T.sLz = 0.55; T.sLx = -0.2; T.eL = -0.6; }
+      if (gs && (k === 'l0' || k === 'l1')) {
+        // the greatsword: two-handed diagonal cleaves, the whole body turning into it
+        const f = k === 'l0';
+        T.tY = f ? W(-1.0, 0.95) : W(0.9, -0.9); T.tX = f ? W(-0.15, 0.4) : W(0.3, -0.05);
+        T.sRx = f ? W(-2.6, -0.7) : W(-0.5, -2.1); T.sRz = f ? W(-0.7, 0.35) : W(0.5, -0.6); T.eR = W(-0.5, -0.1);
+        T.sLx = f ? W(-2.3, -0.9) : W(-0.6, -1.9); T.sLz = f ? W(0.2, 0.75) : W(0.8, 0.2); T.eL = -0.7;
+        T.thL = -0.65; T.knL = 0.65; T.thR = 0.5; T.knR = 0.55; T.hipY = 0.86;
+      } else if (gs && (k === 'l3' || k === 'heavy')) {
+        // overhead slam: lift it high, hang there, then bring it down into the ground
+        const T0 = A.dur * 0.38, up = clamp(A.t / T0, 0, 1), dn = clamp((A.t - T0) / (A.dur * 0.1), 0, 1);
+        T.sRx = lerp(lerp(-1.0, -3.0, up), -0.55, dn); T.sLx = lerp(lerp(-1.0, -2.9, up), -0.6, dn);
+        T.sRz = -0.15; T.sLz = 0.2; T.eR = lerp(-0.6, -0.05, dn); T.eL = lerp(-0.6, -0.1, dn);
+        T.tX = lerp(-0.3, 0.55, dn); T.hX = lerp(-0.35, 0.3, dn); T.hipY = lerp(0.96, 0.78, dn);
+        T.thL = lerp(-0.4, -0.9, dn); T.knL = lerp(0.3, 0.9, dn); T.thR = 0.55; T.knR = lerp(0.3, 0.8, dn);
+        T.fold = k === 'heavy' ? -0.1 : 0.25; T.wScale = k === 'heavy' ? 1.2 : 0.95; T.wLift = k === 'heavy' ? 0.3 : 0;
+      } else if (wp === 'spear' && (k === 'l0' || k === 'l1')) {
+        // the lance pierces: draw back, then drive straight through (the second thrust comes in higher)
+        const hi = k === 'l1';
+        T.tY = W(hi ? 0.35 : -0.5, hi ? -0.1 : 0.15); T.tX = W(0.0, 0.3);
+        T.sRx = W(hi ? -1.3 : -1.0, hi ? -1.85 : -1.6); T.sRz = W(-0.45, -0.1); T.eR = W(-1.7, -0.02);
+        T.thL = -0.7; T.knL = 0.5; T.thR = 0.45; T.sLz = 0.6; T.sLx = 0.25; T.eL = -0.4;
+      } else if (k === 'l0') { T.tY = W(-0.85, 0.75); T.sRx = W(-0.9, -1.45); T.sRz = W(-1.2, 0.15); T.eR = W(-0.9, -0.1); T.tX = 0.18; T.sLz = 0.55; T.sLx = -0.2; T.eL = -0.6; }
       else if (k === 'l1') { T.tY = W(0.7, -0.85); T.sRx = W(-1.6, -1.25); T.sRz = W(0.35, -1.3); T.eR = W(-0.25, -0.05); T.tX = 0.16; T.sLz = 0.6; T.sLx = 0.1; T.eL = -0.5; }
       else if (k === 'l2') { T.tY = -0.2; T.sRx = -0.15; T.sRz = -1.45; T.eR = -0.05; T.tX = 0.12; T.sLz = 1.3; T.sLx = 0.1; T.eL = -0.2; T.thL = -0.3; T.thR = 0.2; T.fold = 0.15; T.wScale = 1.0; }
       else if (k === 'l3' || k === 'heavy') { T.tY = W(-0.45, 0.12); T.sRx = W(-1.0, -1.62); T.sRz = W(-0.4, -0.05); T.eR = W(-1.6, 0.0); T.tX = W(0.0, 0.34); T.thL = -0.8; T.knL = 0.55; T.thR = 0.5; T.sLz = 0.7; T.sLx = 0.3; T.eL = -0.3; T.fold = k === 'heavy' ? -0.05 : 0.2; T.wScale = k === 'heavy' ? 1.1 : 0.9; }
@@ -518,7 +540,7 @@ export class SeraphActor {
     this.halo = halo;
     this.socket('Head', new V3(0, 0.25, -0.17)).add(halo);
     // weapon
-    this.weapon = this.opt.weapon === 'greatsword' ? this.buildGreatsword() : this.buildSpear();
+    this.weapon = this.buildWeapon(this.opt.weapon);
     this.weaponHolder = new THREE.Group(); this.weaponHolder.add(this.weapon);
     this.root.add(this.weaponHolder);
     // cloth: long hair + two sashes
@@ -562,7 +584,26 @@ export class SeraphActor {
     this.tipLocal = [new V3(0, 0, 2.0), new V3(0, 0, 0.5)];
     return g;
   }
-  setWeapon(kind) { this.weaponHolder.remove(this.weapon); this.opt.weapon = kind; this.weapon = kind === 'greatsword' ? this.buildGreatsword() : this.buildSpear(); this.weaponHolder.add(this.weapon); }
+  buildWeapon(kind) { return kind === 'greatsword' ? this.buildGreatsword() : kind === 'tianshu' ? this.buildLongsword() : this.buildSpear(); }
+  // 天樞 · the Lord's own sword: slender, silver-white, a cold blue light down its core
+  buildLongsword() {
+    const M = this.M, g = new THREE.Group();
+    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.024, 0.34, 8), M.gold); grip.rotation.x = Math.PI / 2; grip.position.z = -0.02; g.add(grip);
+    const pommel = new THREE.Mesh(new THREE.OctahedronGeometry(0.05, 0), M.gem); pommel.position.z = -0.22; g.add(pommel);
+    for (const s of [1, -1]) { const w = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.013, 6, 16, 1.7), M.gold); w.position.set(s * 0.02, 0, 0.16); w.rotation.set(Math.PI / 2, 0, s > 0 ? -0.25 : Math.PI + 0.25); g.add(w); }
+    const shape = new THREE.Shape();
+    shape.moveTo(-0.048, 0); shape.lineTo(0.048, 0); shape.lineTo(0.036, 1.3); shape.lineTo(0, 1.5); shape.lineTo(-0.036, 1.3); shape.closePath();
+    const bg = new THREE.ExtrudeGeometry(shape, { depth: 0.014, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 1 });
+    bg.translate(0, 0, -0.007); bg.rotateX(Math.PI / 2); bg.translate(0, 0, 0.19);
+    g.add(new THREE.Mesh(bg, new THREE.MeshStandardMaterial({ color: '#eef3fb', metalness: 0.85, roughness: 0.18, emissive: '#8fb8ff', emissiveIntensity: 0.35 })));
+    const core = new THREE.Mesh(new THREE.BoxGeometry(0.009, 0.022, 1.2), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.5, 1.9, 2.6) })); core.position.z = 0.8; g.add(core);
+    g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    bakeStatic(g);
+    g.scale.setScalar(this.scale * 0.95);
+    this.tipLocal = [new V3(0, 0, 1.68), new V3(0, 0, 0.45)];
+    return g;
+  }
+  setWeapon(kind) { this.weaponHolder.remove(this.weapon); this.opt.weapon = kind; this.weapon = this.buildWeapon(kind); this.weaponHolder.add(this.weapon); }
   tipWorld(i, out) { return out.copy(this.tipLocal[i]).applyMatrix4(this.weapon.matrixWorld); }
   update(dt, S, params) {
     const c = params || this.anim.update(dt, S);
