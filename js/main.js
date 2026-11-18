@@ -33,10 +33,13 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
 };
 const settings = Object.assign({ quality: isTouch ? 'mid' : 'high', sound: true, autoCam: false, lang: 'zh', sens: 1 }, store.get('lumenfall_settings', {}));
-let prog = Object.assign({ f: [], s: [false, false, false, false], end: false, boss: false, boss2: false, boss3: false, realm: false, earth: false, weapon: 'spear', kills: {}, seen: {}, broken: {}, rescued: {}, beacons: {} }, store.get('lumenfall_progress', {}));
+// test mode plays on its own save slot, so jumping around never touches the real journey
+const TEST = Object.assign({ on: false, god: false, oneHit: false, powers: false, coords: false }, store.get('lumenfall_test', {}));
+const progKey = () => (TEST.on ? 'lumenfall_progress_test' : 'lumenfall_progress');
+let prog = Object.assign({ f: [], s: [false, false, false, false], end: false, boss: false, boss2: false, boss3: false, realm: false, earth: false, weapon: 'spear', kills: {}, seen: {}, broken: {}, rescued: {}, beacons: {} }, store.get(progKey(), {}));
 if (!prog.rescued) prog.rescued = {}; if (!prog.beacons) prog.beacons = {};
 const nRescued = () => Object.keys(prog.rescued).length, nBeacons = () => Object.keys(prog.beacons).length;
-const save = () => store.set('lumenfall_progress', prog);
+const save = () => store.set(progKey(), prog);
 let Q = QUAL[settings.quality] || QUAL.mid;
 
 // ------------------------------------------------------------------ renderer
@@ -136,7 +139,7 @@ const POWERS = {
   wings: { key: 'boss2', glyph: '翼', name: '審判之翼', en: "ARBITER'S WINGS", desc: '空中按「閃避」向前衝刺 · 滑翔更省力，振翼更有力' },
   oath: { key: 'boss3', glyph: '誓', name: '騎士之誓', en: "KNIGHT'S OATH", desc: '蓄滿力的重擊會震地 · 擊碎裂石，震飛周圍敵人' },
 };
-const has = (k) => !!prog[POWERS[k].key];
+const has = (k) => TEST.powers || !!prog[POWERS[k].key];
 
 const COMBO = ['l0', 'l1', 'l2', 'l3'];
 
@@ -467,6 +470,8 @@ function updateFX(dt) {
 // ------------------------------------------------------------------ light feathers (collectibles)
 const feathers = [];
 let REALM_F0 = 999, EARTH_F0 = 999, EARTH_F1 = 999, EARTH_F2 = 999;
+const FLAY = []; // which world each feather belongs to
+const fCount = (L) => ({ got: prog.f.filter((id) => FLAY[id] === L).length, all: FLAY.filter((l) => l === L).length });
 function buildFeathers() {
   const spots = [];
   const g = (x, z, dy = 1.4) => [x, Math.max(0, groundAt(x, z)) + dy, z];
@@ -481,16 +486,24 @@ function buildFeathers() {
   for (const [x, z] of [[-62, -70], [92, -112], [-176, -36], [134, 96], [-84, 150]]) spots.push(g(x + 2.5, z + 2.5));
   spots.push(g(SHRINES[0].x + 9, SHRINES[0].z + 7), g(SHRINES[2].x - 8, SHRINES[2].z + 7));
   spots.push(g(LANDMARKS[0].x, LANDMARKS[0].z - 5, 1.8), g(LANDMARKS[1].x + 10, LANDMARKS[1].z - 3, 1.8));
+  const mark = (L) => { while (FLAY.length < spots.length) FLAY.push(L); };
+  mark('isle');
   REALM_F0 = spots.length;
   for (const f of REALM.feathers) spots.push(f);
+  mark('realm');
   EARTH_F0 = spots.length;
   for (const f of EARTH.feathers) spots.push(f);
+  mark('earth');
   EARTH_F1 = spots.length;
   for (const f of BREAK_F) spots.push(f);
+  mark('isle');
   for (const f of REALM.extraFeathers) spots.push(f);
+  mark('realm');
   EARTH_F2 = spots.length;
   for (const f of EARTH.moreFeathers) spots.push(f);
+  mark('earth');
   for (const f of HELL.feathers) spots.push(f);
+  mark('hell');
   const fMat = new THREE.MeshStandardMaterial({ map: TEX.feather, transparent: true, side: THREE.DoubleSide, depthWrite: false, color: '#fff8e8', emissive: '#ffe6a8', emissiveMap: TEX.feather, emissiveIntensity: 2.4 });
   const glowMat = new THREE.SpriteMaterial({ map: TEX.glow, color: new THREE.Color(1.5, 1.1, 0.55), transparent: true, opacity: 0.75, depthWrite: false });
   const beamMat = new THREE.MeshBasicMaterial({ map: TEX.beam, color: new THREE.Color(1.25, 0.95, 0.5), transparent: true, opacity: 0.42, depthWrite: false, side: THREE.DoubleSide });
@@ -1334,6 +1347,7 @@ function nearestEnemy(maxD, cone, camPref) {
 function hitEnemy(e, dmg, poise, kind) {
   // nothing of hell is harmed by mortal light until the seraph carries the Empyrean lord's weapon
   if ((e.hell || (e.isBoss && e.cfg.hell)) && !prog.hellBlade) { dmg *= 0.08; poise *= 0.15; kind = 'resist'; resistHint(); }
+  if (TEST.oneHit) { dmg *= e.isBoss ? 12 : 60; poise *= 4; }
   if (e.isBoss) e.damage(dmg, poise, P.pos, kind); else damageShade(e, dmg, P.pos, kind);
 }
 function doHit(A) {
@@ -1425,7 +1439,7 @@ function skillImpact() {
   if (P.onWater) for (let k = 0; k < 3; k++) ripple(P.pos.x, P.pos.z, 3 + k * 2, 1.6 + k * 0.3);
 }
 function hurtPlayer(dmg, from) {
-  if (P.inv > 0 || state !== 'play') return;
+  if (P.inv > 0 || state !== 'play' || TEST.god) return;
   if (P.guardT > 0) {
     const parry = P.guardT > 0.38; P.guardT = 0.12; P.inv = 0.3;
     const d = _p.copy(P.pos).sub(from); d.y = 0; d.normalize(); P.vel.x = d.x * 4; P.vel.z = d.z * 4;
@@ -2130,29 +2144,82 @@ function regionAt(x, z, y) {
   if (Math.hypot(x, z) > edgeR(Math.atan2(z, x)) - 34) return ['天緣', "THE SKY'S EDGE"];
   return ['澄光原野', 'FIELDS OF CLEAR LIGHT'];
 }
-function updateQuest() {
-  const lit = prog.s.filter(Boolean).length, f = prog.f.length;
-  let title, rows;
+// ---------- quest tracker: one clear story objective (with distance), then this world's tasks, then its feathers
+let QS = null, qHtml = '', qDistT = 0, qDistS = '';
+const qT = (x, z, kind = 'core') => ({ x, z, kind });
+function nearestOpen() {
+  let best = null, bd = 1e9;
+  for (const c of captives) if (!c.done) { const d = Math.hypot(c.x - P.pos.x, c.z - P.pos.z); if (d < bd) { bd = d; best = qT(c.x, c.z, 'shrine'); } }
+  for (const b of beacons) if (b.st !== 'lit') { const d = Math.hypot(b.x - P.pos.x, b.z - P.pos.z); if (d < bd) { bd = d; best = qT(b.x, b.z, 'shrine'); } }
+  return best;
+}
+function nearestShrine() {
+  let best = null, bd = 1e9;
+  SHRINES.forEach((s, i) => { if (prog.s[i]) return; const d = Math.hypot(s.x - P.pos.x, s.z - P.pos.z); if (d < bd) { bd = d; best = qT(s.x, s.z, 'shrine'); } });
+  return best;
+}
+function questState() {
+  const task = (t, done, n = '') => ({ k: 'task', t, done: !!done, n: done ? '' : n });
+  const feathersRow = (L, name) => { const c = fCount(L); return c.all ? { k: 'col', t: '收集光羽', n: `${c.got}/${c.all}`, done: c.got >= c.all } : null; };
+  let ch, en, main, rows = [];
   if (P.inHell) {
-    title = '第三章 · 地獄';
-    rows = [[prog.boss4 ? '冥門守衛 · 已淨化' : '冥門守衛 · 亞巴頓', prog.boss4 ? '✓' : '極度危險'], ['冥門被封印', ''], ['取得能傷及地獄之物的武器', prog.hellBlade ? '✓' : '未取得'], ['回到墜落之地的光柱，返回人間', '']];
+    ch = '第三章 · 地獄'; en = 'CHAPTER III';
+    main = prog.boss4 ? { t: '冥門依然緊閉 · 待續' } : { t: '擊倒冥門守衛 · 亞巴頓', tag: prog.hellBlade ? '' : '極度危險', tgt: () => qT(HELL.bossHome.x, HELL.bossHome.z, 'boss') };
+    rows.push(task('取得神域之主的武器', prog.hellBlade, '未取得'));
+    rows.push({ k: 'hint', t: '墜落之地的光柱可返回人間' });
   } else if (P.inEarth) {
-    const ef = prog.f.filter((id) => (id >= EARTH_F0 && id < EARTH_F1) || (id >= EARTH_F2 && id < EARTH_F2 + EARTH.moreFeathers.length)).length;
-    title = '第二章 · 人間';
-    rows = [['解救被蝕晶封住的人', `${nRescued()}/${EARTH.captives.length}`], ['守住人們的燈火', `${nBeacons()}/${EARTH.beacons.length}`],
-      ['探索人間，收集光羽', `${ef}/${EARTH.feathers.length + EARTH.moreFeathers.length}`], prog.boss3 ? ['墮天騎士 · 已淨化', '✓'] : ['挑戰：傾城遺跡的墮天騎士', '']];
-  } else if (prog.end || P.inRealm) {
-    title = '第一章 · 天上神域';
-    const rf = prog.f.filter((id) => id >= REALM_F0 && id < EARTH_F0).length;
-    if (!prog.realm) rows = [[P.lv >= 3 ? '回到環光聖所，踏上天梯' : '收集光羽，升到 Lv3', P.lv >= 3 ? '' : `Lv${P.lv}/3`], ['收集光羽', `${f}/${feathers.length}`]];
-    else rows = [['探索神域，收集光羽', `${rf}/${REALM.feathers.length}`], prog.boss2 ? ['審判者 · 已淨化', '✓'] : ['挑戰：審判之環的審判者', ''], ['收集光羽', `${f}/${feathers.length}`]];
-    if (!P.inRealm && !prog.earth) rows.push(['從天緣躍下，前往人間', '']);
+    ch = '第二章 · 人間'; en = 'CHAPTER II';
+    const r = nRescued(), b = nBeacons(), R = captives.length, B = beacons.length, left = r < R || b < B;
+    if (left) main = { t: '解救受困的人 · 守住燈火', n: `${r + b}/${R + B}`, tgt: nearestOpen };
+    else if (!prog.boss3) main = { t: '挑戰傾城遺跡的墮天騎士', tgt: () => qT(EARTH.bossHome.x, EARTH.bossHome.z, 'boss') };
+    else main = { t: prog.hell ? '再次墜入墮天裂谷' : '墜入墮天裂谷的深處', tgt: () => qT(EARTH.colossus.x, EARTH.colossus.z, 'core') };
+    rows.push(task('解救被蝕晶封住的人', r >= R, `${r}/${R}`), task('守住人們的燈火', b >= B, `${b}/${B}`));
+    if (left) rows.push(task('挑戰墮天騎士', prog.boss3, '未挑戰'));
+    rows.push(feathersRow('earth', '人間'));
+  } else if (P.inRealm) {
+    ch = '第一章 · 天上神域'; en = 'CHAPTER I';
+    if (!prog.boss2) main = { t: '挑戰審判之環的審判者', tgt: () => qT(REALM.bossHome.x, REALM.bossHome.z, 'boss') };
+    else main = { t: prog.earth ? '從天緣躍下，返回人間' : '從天緣躍下，前往人間' };
+    rows.push(feathersRow('realm', '神域'));
+  } else if (!prog.end) {
+    ch = '序章 · 光羽降臨'; en = 'PROLOGUE';
+    const lit = prog.s.filter(Boolean).length;
+    main = lit < 4 ? { t: '點亮四座聖壇', n: `${lit}/4`, tgt: nearestShrine } : { t: '前往環光聖所，觸碰聖核', tgt: () => qT(TEMPLE.x, TEMPLE.z) };
+    rows.push({ ...task('挑戰墮翼之丘的守衛', prog.boss, '支線'), side: true });
+    rows.push(feathersRow('isle', '光羽之境'));
+  } else {
+    // the isle after the prologue is the hub: the tracker follows the story's next step
+    if (!prog.realm || !prog.boss2) {
+      ch = '第一章 · 天上神域'; en = 'CHAPTER I';
+      main = P.lv < 3 && !prog.realm ? { t: '收集光羽，升到 Lv3', n: `Lv ${P.lv}/3` } : { t: prog.realm ? '經環光聖所的天梯，返回神域' : '回到環光聖所，踏上天梯', tgt: () => qT(TEMPLE.x, TEMPLE.z) };
+    } else if (!prog.hell) { ch = '第二章 · 人間'; en = 'CHAPTER II'; main = { t: prog.earth ? '從天緣躍下，返回人間' : '從天緣躍下，前往人間' }; }
+    else { ch = '第三章 · 地獄'; en = 'CHAPTER III'; main = { t: '經人間的墮天裂谷，返回地獄' }; }
+    if (!prog.boss) rows.push({ ...task('挑戰墮翼之丘的守衛', false, '支線'), side: true });
+    rows.push(feathersRow('isle', '光羽之境'));
   }
-  else if (lit < 4) { title = '序章 · 光羽降臨'; rows = [['點亮四座聖壇', `${lit}/4`], ['收集光羽', `${f}/${feathers.length}`]]; }
-  else { title = '序章 · 環光甦醒'; rows = [['前往環光聖所，觸碰聖核', ''], ['收集光羽', `${f}/${feathers.length}`]]; }
-  if (!prog.end) rows.push(prog.boss ? ['墮光守衛 · 已淨化', '✓'] : ['挑戰：墮翼之丘的守衛', '']);
-  $('qTitle').textContent = title;
-  $('qObj').innerHTML = rows.map(([a, b], i) => `<div class="qrow${i === 0 ? ' main' : ''}"><i class="box"></i><span>${a}</span>${b ? `<b>${b}</b>` : ''}</div>`).join('');
+  return { ch, en, main, rows: rows.filter(Boolean) };
+}
+function updateQuest() {
+  QS = questState();
+  const { ch, en, main, rows } = QS;
+  const row = (r) => r.k === 'hint'
+    ? `<div class="qrow hint"><i class="up"></i><span>${r.t}</span></div>`
+    : `<div class="qrow ${r.k}${r.done ? ' done' : ''}${r.side ? ' side' : ''}"><i class="${r.k === 'col' ? 'fe' : 'box'}"></i><span>${r.t}</span>${r.n ? `<b>${r.n}</b>` : ''}</div>`;
+  const meta = main.tag || main.tgt ? `<div class="meta">${main.tag ? `<em class="qtag">${main.tag}</em>` : ''}${main.tgt ? '<em class="qd" id="qDist"></em>' : ''}</div>` : '';
+  const html = `<div class="qmain"><i class="qm"></i><span class="t">${main.t}</span>${main.n ? `<b>${main.n}</b>` : ''}${meta}</div>` +
+    (rows.length ? `<div class="qlist">${rows.map(row).join('')}</div>` : '');
+  $('qTitle').textContent = ch; $('qEn').textContent = en;
+  if (html !== qHtml) { qHtml = html; qDistS = ''; $('qObj').innerHTML = html; }
+}
+let qTick = 0;
+function updateQuestDist(dt) {
+  if ((qDistT -= dt) > 0) return; qDistT = 0.25;
+  if (++qTick % 4 === 0) updateQuest(); // picks up layer changes and counts without every caller remembering to
+  const el = $('qDist'); if (!el) return;
+  const t = questTarget(); if (!t) { if (qDistS) { el.textContent = ''; qDistS = ''; } return; }
+  const d = Math.hypot(t.x - P.pos.x, t.z - P.pos.z);
+  const s = d < 8 ? '' : d < 1000 ? `${Math.round(d / 5) * 5}m` : `${(d / 1000).toFixed(1)}km`;
+  if (s !== qDistS) { qDistS = s; el.textContent = s; }
 }
 function pulse(el) { el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse'); }
 function flashScreen(a) { const f = $('flash'); f.style.transition = 'none'; f.style.opacity = a; void f.offsetWidth; f.style.transition = 'opacity 1.1s ease'; f.style.opacity = 0; }
@@ -2224,23 +2291,8 @@ function layoutMinimap() {
 }
 function drawDiamond(g, x, y, r, fill, stroke) { g.beginPath(); g.moveTo(x, y - r); g.lineTo(x + r * 0.75, y); g.lineTo(x, y + r); g.lineTo(x - r * 0.75, y); g.closePath(); if (fill) { g.fillStyle = fill; g.fill(); } if (stroke) { g.strokeStyle = stroke; g.lineWidth = 1.4; g.stroke(); } }
 function questTarget() {
-  if (P.inHell) return { x: HELL.pillar.x, z: HELL.pillar.z, kind: 'core' };
-  if (P.inEarth) {
-    let best = null, bd = 1e9;
-    for (const c of captives) if (!c.done) { const d = Math.hypot(c.x - P.pos.x, c.z - P.pos.z); if (d < bd) { bd = d; best = { x: c.x, z: c.z, kind: 'shrine' }; } }
-    for (const b of beacons) if (b.st !== 'lit') { const d = Math.hypot(b.x - P.pos.x, b.z - P.pos.z); if (d < bd) { bd = d; best = { x: b.x, z: b.z, kind: 'shrine' }; } }
-    if (best) return best;
-    return prog.boss3 ? { x: EARTH.pillar.x, z: EARTH.pillar.z, kind: 'core' } : { x: EARTH.bossHome.x, z: EARTH.bossHome.z, kind: 'boss' };
-  }
-  if (prog.end) {
-    if (!P.inRealm) return P.lv >= 3 && !prog.boss2 ? { x: TEMPLE.x, z: TEMPLE.z, kind: 'core' } : null;
-    return prog.boss2 ? null : { x: REALM.bossHome.x, z: REALM.bossHome.z, kind: 'boss' };
-  }
-  const lit = prog.s.filter(Boolean).length;
-  if (lit === 4) return { x: TEMPLE.x, z: TEMPLE.z, kind: 'core' };
-  let best = null, bd = 1e9;
-  SHRINES.forEach((s, i) => { if (prog.s[i]) return; const d = Math.hypot(s.x - P.pos.x, s.z - P.pos.z); if (d < bd) { bd = d; best = { x: s.x, z: s.z, kind: 'shrine' }; } });
-  return best;
+  if (!QS) QS = questState();
+  return QS.main.tgt ? QS.main.tgt() : null;
 }
 function drawRealmBase(g, toS, s, size, labels) {
   g.fillStyle = '#e4dfd3'; g.fillRect(0, 0, size, size);
@@ -2411,7 +2463,7 @@ function openMap() {
   Audio.sfx('ui');
 }
 function closeOverlays() {
-  for (const id of ['mapOv', 'setOv', 'howOv', 'codexOv']) $(id).classList.add('hidden');
+  for (const id of ['mapOv', 'setOv', 'howOv', 'codexOv', 'testOv']) $(id).classList.add('hidden');
   paused = false;
 }
 
@@ -2554,6 +2606,7 @@ function setupInput() {
       return;
     }
     if (k === 'Escape') { if (performance.now() - ML.exitAt < 300) return; if (paused) closeOverlays(); else if (state === 'play') openSettings(); return; }
+    if (k === 'F2' || k === 'Backquote') { e.preventDefault(); if (!$('testOv').classList.contains('hidden')) closeOverlays(); else openTest(); return; }
     if (k === 'KeyH' && state === 'play') { document.documentElement.classList.toggle('nohud'); return; }
     if (paused) return;
     if (k === 'Space') { e.preventDefault(); doJump(); }
@@ -2635,22 +2688,11 @@ function setupMenus() {
     location.reload();
   });
   $('setTitle').addEventListener('click', () => { closeOverlays(); goTitle(); });
-  document.querySelectorAll('[data-dev]').forEach((b) => b.addEventListener('click', () => {
-    if (state !== 'play') { $('devStat').textContent = '請先開始旅程'; return; }
-    const k = b.dataset.dev;
-    if (k === 'feather') {
-      let n = 0;
-      for (const f of feathers) { if (f.taken || n >= 3) continue; f.taken = true; f.grp.visible = false; prog.f.push(f.id); n++; }
-      save(); const nl = lvFor(prog.f.length); if (nl > P.lvTarget) { P.lvTarget = nl; setTimeout(() => levelUp(nl), 500); }
-      updateLvHUD(); updateQuest(); closeOverlays(); return;
-    }
-    closeOverlays();
-    if (k === 'realm') { P.pos.copy(REALM.landing); P.inRealm = true; P.inEarth = false; P.inHell = false; prog.realm = true; save(); regionCard('天上神域', 'THE EMPYREAN'); }
-    else if (k === 'hell') { P.pos.copy(HELL.landing); P.inHell = true; P.inEarth = false; P.inRealm = false; prog.earth = true; prog.hell = true; save(); syncLayer(); regionCard('地獄 · 冥門前庭', 'THE ABYSSAL THRESHOLD'); }
-    else if (k === 'earth') { P.pos.set(EARTH.landing.x, C.groundAtL(EARTH.landing.x, EARTH.landing.z, 1) + 0.5, EARTH.landing.z); P.inEarth = true; P.inRealm = false; P.inHell = false; prog.earth = true; save(); syncLayer(); regionCard('人間', 'THE MORTAL WORLD'); }
-    else { P.pos.set(SPAWN.x, 0, SPAWN.z); P.inRealm = false; P.inEarth = false; P.inHell = false; syncLayer(); regionCard('鏡湖', 'THE MIRROR LAKE'); }
-    P.vel.set(0, 0, 0); P.safe.copy(P.pos); P.checkpoint.copy(P.pos); P.glide = false; flashScreen(0.8); updateQuest();
-  }));
+  // on a phone held sideways the full list would sit over the move stick, so it starts folded (tap the title to open)
+  if (settings.qMin === undefined) settings.qMin = isTouch && innerHeight < 500;
+  $('quest').classList.toggle('min', !!settings.qMin);
+  $('qHead').addEventListener('click', (e) => { e.stopPropagation(); settings.qMin = !settings.qMin; store.set('lumenfall_settings', settings); $('quest').classList.toggle('min', settings.qMin); Audio.sfx('ui'); });
+  initTestMode();
   document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => { closeOverlays(); Audio.sfx('ui'); }));
   $('reviveBtn').addEventListener('click', revive);
   $('endStay').addEventListener('click', () => finishEnding(false));
@@ -2681,7 +2723,115 @@ function beginJourney() {
   flashScreen(0.7);
   Audio.sfx('glide');
 }
+// ------------------------------------------------------------------ test mode
+// Jump straight to each chapter's key places and bosses. Everything done here lands in its own save slot.
+let pendingWarp = null;
+const WARPS = {
+  spawn: () => ['isle', SPAWN.x, SPAWN.z, '鏡湖', 'THE MIRROR LAKE', { x: LAKE.x, z: LAKE.z }],
+  shrine: () => { const s = SHRINES[Math.max(0, prog.s.findIndex((v) => !v))]; return ['isle', s.x + 7, s.z + 7, '聖壇', 'THE SHRINE', s]; },
+  temple: () => ['isle', TEMPLE.x, TEMPLE.z + 34, '環光聖所', 'THE SANCTUM', TEMPLE],
+  boss1: () => ['isle', BOSS_HOME.x - 16, BOSS_HOME.z + 16, '墮翼之丘', 'HILL OF FALLEN WINGS', BOSS_HOME],
+  realm: () => ['realm', REALM.landing.x, REALM.landing.z, '天上神域', 'THE EMPYREAN', null, REALM.landing.y],
+  boss2: () => ['realm', REALM.bossHome.x, REALM.bossHome.z + 18, '審判之環', 'THE RING OF JUDGEMENT', REALM.bossHome, REALM.bossHome.y],
+  earth: () => ['earth', EARTH.landing.x, EARTH.landing.z, '墜光坑', 'THE CRATER OF FALLEN LIGHT', EARTH.pillar],
+  town: () => ['earth', EARTH.town.x, EARTH.town.z + 30, '晨鐘堡', 'BELLDAWN HOLD', EARTH.town],
+  captive: () => { const c = captives.find((o) => !o.done) || captives[0]; return ['earth', c.x + 12, c.z + 12, '受困的人', 'THE SEALED', c]; },
+  beacon: () => { const b = beacons.find((o) => o.st !== 'lit') || beacons[0]; return ['earth', b.x + 9, b.z + 9, '烽火台', 'THE BEACON', b]; },
+  boss3: () => ['earth', EARTH.bossHome.x + 14, EARTH.bossHome.z + 22, '傾城遺跡', 'THE FALLEN KEEP', EARTH.bossHome],
+  rift: () => ['earth', EARTH.riftRim.x, EARTH.riftRim.z, '墮天裂谷', 'THE RIFT', EARTH.colossus],
+  hell: () => ['hell', HELL.landing.x, HELL.landing.z, '墜落之地', 'THE LANDING', { x: C.HCX, z: C.HCZ - 128 }],
+  bridge: () => ['hell', C.HCX, C.HCZ + HELL_MAP.lavaV(0) + 26, '熔河', 'THE BURNING RIVER', { x: C.HCX, z: C.HCZ - 128 }],
+  boss4: () => ['hell', HELL.bossHome.x, HELL.bossHome.z + 40, '守門者之環', "THE KEEPER'S RING", HELL.bossHome],
+  gate: () => ['hell', HELL.gate.x, HELL.gate.z + 10, '冥門', 'THE ABYSSAL GATE', HELL.gate],
+};
+function enterTest() {
+  if (TEST.on) return;
+  TEST.on = true; store.set('lumenfall_test', TEST);
+  save(); // copies the journey so far into the test slot; the real save stays exactly as it was
+  syncTestUI();
+}
+function warpTo(id) {
+  const w = WARPS[id] && WARPS[id](); if (!w) return;
+  enterTest();
+  if (state === 'landing') { pendingWarp = id; closeOverlays(); beginJourney(); return; }
+  if (state === 'dead') revive();
+  if (state !== 'play') return;
+  closeOverlays();
+  const [L, x, z, cn, en, look, yHint] = w, li = L === 'hell' ? 2 : L === 'earth' ? 1 : 0;
+  P.inRealm = L === 'realm'; P.inEarth = L === 'earth'; P.inHell = L === 'hell';
+  const y0 = yHint !== undefined ? yHint + 2 : Math.max(li ? -1e9 : 0, C.groundAtL(x, z, li)) + 1.5;
+  P.pos.set(x, y0, z); syncLayer();
+  const h = support(x, z, y0 + 1).h; if (h > -1e8) P.pos.y = h + 0.3;
+  if (L !== 'isle') prog.end = true;
+  if (L === 'realm') prog.realm = true;
+  if (li) prog.earth = true;
+  if (L === 'hell') prog.hell = true;
+  save();
+  if (look) P.yaw = Math.atan2(look.x - x, look.z - z);
+  CAM.yaw = P.yaw + Math.PI; CAM.pitch = 0.22;
+  P.vel.set(0, 0, 0); P.safe.copy(P.pos); P.checkpoint.copy(P.pos); P.glide = false; P.lock = null;
+  flashScreen(0.8); regionCard(cn, en); updateQuest();
+}
+function takeFeathers(n) {
+  let k = 0;
+  for (const f of feathers) { if (f.taken || k >= n) continue; f.taken = true; f.grp.visible = false; prog.f.push(f.id); k++; }
+  save(); const nl = lvFor(prog.f.length); if (nl > P.lvTarget) { P.lvTarget = nl; setTimeout(() => levelUp(nl), 400); }
+  updateLvHUD(); updateQuest();
+}
+const CHEATS = {
+  feather: () => { takeFeathers(3); closeOverlays(); },
+  lv: () => { takeFeathers(Math.max(0, LV_REQ[7] - prog.f.length)); closeOverlays(); },
+  heal: () => { applyStats(true); toast('<i class="dia"></i>生命與聖瓶已補滿'); },
+  clear: () => { let n = 0; for (const s of shades) if (!s.dead && s.g.position.distanceTo(P.pos) < 45) { killShade(s); n++; } toast(`<i class="dia"></i>附近敵人已清除 · ${n}`); },
+  codex: () => { for (const k of new Set(Object.values(KILL_KEY))) prog.kills[k] = Math.max(prog.kills[k] || 0, 8); for (const b of bosses) prog.seen[b.cfg.key] = true; save(); toast('<i class="dia"></i>圖鑑已全部解鎖'); },
+  gs: () => { const w = prog.weapon === 'greatsword' ? 'spear' : 'greatsword'; equipWeapon(w); toast(w === 'greatsword' ? '<i class="dia"></i>已換上墮光大劍' : '<i class="dia"></i>已換回聖槍'); },
+};
+function syncTestUI() {
+  const st = $('testStat');
+  st.classList.toggle('on', TEST.on);
+  st.querySelector('span').textContent = TEST.on ? '測試中 · 進度另外儲存，離開後回到正式存檔' : '未開啟 · 按任何一項即自動開啟，並複製目前進度';
+  document.querySelectorAll('#testOv [data-tog]').forEach((b) => b.classList.toggle('on', b.dataset.tog === 'hellBlade' ? !!prog.hellBlade : !!TEST[b.dataset.tog]));
+  document.querySelectorAll('#testOv [data-boss]').forEach((b) => b.classList.toggle('done', !!prog[b.dataset.boss]));
+  $('testExit').classList.toggle('hidden', !TEST.on);
+  $('testChip').classList.toggle('hidden', !TEST.on);
+  if (!TEST.coords) $('testInfo').textContent = '';
+}
+function openTest() {
+  if (state === 'play') paused = true;
+  freeMouse(); closeOverlays(); if (state === 'play') paused = true;
+  syncTestUI(); $('testOv').classList.remove('hidden'); Audio.sfx('ui');
+}
+let testInfoT = 0, fpsAvg = 60;
+function updateTestInfo(dt) {
+  if (!TEST.on || !TEST.coords) return;
+  if (dt > 0) fpsAvg = lerp(fpsAvg, 1 / dt, 0.05);
+  if ((testInfoT -= dt) > 0) return; testInfoT = 0.25;
+  const L = ['光羽之境', '人間', '地獄'][C.LAYER.cur] + (P.inRealm ? ' · 神域' : '');
+  $('testInfo').textContent = `${L} · ${P.pos.x.toFixed(0)}, ${P.pos.y.toFixed(0)}, ${P.pos.z.toFixed(0)} · ${Math.round(fpsAvg)} FPS`;
+}
+function initTestMode() {
+  $('openTest').addEventListener('click', () => openTest());
+  $('testChip').addEventListener('click', (e) => { e.stopPropagation(); openTest(); });
+  document.querySelectorAll('#testOv [data-warp]').forEach((b) => b.addEventListener('click', () => { Audio.sfx('ui'); warpTo(b.dataset.warp); }));
+  document.querySelectorAll('#testOv [data-tog]').forEach((b) => b.addEventListener('click', () => {
+    enterTest(); const k = b.dataset.tog;
+    if (k === 'hellBlade') { prog.hellBlade = !prog.hellBlade; save(); updateQuest(); } else { TEST[k] = !TEST[k]; store.set('lumenfall_test', TEST); }
+    Audio.sfx('ui'); syncTestUI();
+  }));
+  document.querySelectorAll('#testOv [data-cheat]').forEach((b) => b.addEventListener('click', () => {
+    if (state !== 'play') { $('testStat').querySelector('span').textContent = '請先開始旅程，或者先選一個地點跳過去'; return; }
+    enterTest(); CHEATS[b.dataset.cheat](); Audio.sfx('ui'); syncTestUI();
+  }));
+  $('testExit').addEventListener('click', () => { TEST.on = false; TEST.god = TEST.oneHit = TEST.powers = false; store.set('lumenfall_test', TEST); location.reload(); });
+  $('testFresh').addEventListener('click', () => {
+    const b = $('testFresh');
+    if (!b.classList.contains('confirm')) { b.classList.add('confirm'); b.querySelector('span').textContent = '再按一次確認'; setTimeout(() => { b.classList.remove('confirm'); b.querySelector('span').textContent = '全新進度重新開始'; }, 2600); return; }
+    TEST.on = true; store.set('lumenfall_test', TEST); store.set('lumenfall_progress_test', null); location.reload();
+  });
+  syncTestUI();
+}
 function onEnterPlay() {
+  if (pendingWarp) { const w = pendingWarp; pendingWarp = null; setTimeout(() => warpTo(w), 80); }
   $('landing').classList.add('hidden');
   $('hud').classList.remove('hidden');
   requestAnimationFrame(() => $('hud').classList.add('show'));
@@ -2827,6 +2977,8 @@ function frame() {
   if (C.LAYER.cur === 1) { earthCull(camera.position); updateFolk(dt); }
   if (boss && boss.engaged && !prog.seen[boss.cfg.key]) { prog.seen[boss.cfg.key] = true; save(); }
   updateLvFx(dt);
+  if (state === 'play') updateQuestDist(realDt);
+  updateTestInfo(realDt);
   updateFeathers(dt);
   updateFX(dt);
   // seraph pose
@@ -2922,4 +3074,4 @@ addEventListener('resize', resize);
 addEventListener('orientationchange', () => setTimeout(resize, 250));
 document.addEventListener('visibilitychange', () => { if (Audio.ctx) { if (document.hidden) Audio.ctx.suspend(); else Audio.ctx.resume(); } });
 init().catch((e) => { console.error(e); $('loadMsg').textContent = '載入失敗：' + e.message; });
-window.__LF = { layer: () => C.LAYER.cur, hell: () => HELL, sites: () => ({ captives, beacons, folk }), kill: (sh) => killShade(sh), interact: () => doInteract(), dyn: () => ({ ...dyn, pr: renderer.getPixelRatio() }), levelUp: (n) => levelUp(n), showPower: (k) => showPower(k), breakables, equipWeapon: (w) => equipWeapon(w), calls: () => { renderer.info.autoReset = false; renderer.info.reset(); composer.render(0.016); const r = { ...renderer.info.render }; renderer.info.autoReset = true; return r; }, pause: (b) => (paused = b), FX, slow: () => (DT_MAX = 0.05), act: { attackDown, attackUp, lightAttack, doLock, doHeal, startAttack, perfectDodge, doAttack, doJump, doSkill, doDodge, doInteract, openMap, openSettings, damageShade, regionCard, toast }, fast: () => (DT_MAX = 0.25), THREE, scene, composer, q: (o) => { Object.assign(QUAL[settings.quality], o); applyQuality(); }, P, CAM, W, hero: () => hero, boss: () => boss, state: () => state, prog, shades, feathers, setState: (s) => (state = s), camera, renderer };
+window.__LF = { warp: (id) => warpTo(id), test: TEST, quest: () => QS, layer: () => C.LAYER.cur, hell: () => HELL, sites: () => ({ captives, beacons, folk }), kill: (sh) => killShade(sh), interact: () => doInteract(), dyn: () => ({ ...dyn, pr: renderer.getPixelRatio() }), levelUp: (n) => levelUp(n), showPower: (k) => showPower(k), breakables, equipWeapon: (w) => equipWeapon(w), calls: () => { renderer.info.autoReset = false; renderer.info.reset(); composer.render(0.016); const r = { ...renderer.info.render }; renderer.info.autoReset = true; return r; }, pause: (b) => (paused = b), FX, slow: () => (DT_MAX = 0.05), act: { attackDown, attackUp, lightAttack, doLock, doHeal, startAttack, perfectDodge, doAttack, doJump, doSkill, doDodge, doInteract, openMap, openSettings, damageShade, regionCard, toast }, fast: () => (DT_MAX = 0.25), THREE, scene, composer, q: (o) => { Object.assign(QUAL[settings.quality], o); applyQuality(); }, P, CAM, W, hero: () => hero, boss: () => boss, state: () => state, prog, shades, feathers, setState: (s) => (state = s), camera, renderer };

@@ -146,14 +146,36 @@ body.muted .ic .on{display:none} body.muted .ic .off{display:block}
 #mm .tk{stroke:var(--gold-d);stroke-width:1}
 #mm .n{font:600 10px var(--cin);fill:var(--gold-d)}
 /* quest */
-#quest{position:absolute;left:calc(var(--sl) + 12px);top:calc(var(--st) + 152px);min-width:200px;max-width:260px;padding:8px 26px 9px 12px;
-  background:linear-gradient(90deg,rgba(252,249,242,.86) 0%,rgba(252,249,242,.62) 65%,rgba(252,249,242,0) 100%);border-left:1.5px solid var(--gold)}
-#quest .qt{display:flex;align-items:center;gap:8px;font:600 13px var(--serif);letter-spacing:.12em;color:var(--ink)}
-#qObj{margin-top:5px;display:flex;flex-direction:column;gap:3px}
-.qrow{display:flex;align-items:center;gap:7px;font:400 11.5px var(--serif);color:var(--ink-s);letter-spacing:.06em}
-.qrow .box{width:8px;height:8px;border:1px solid var(--gold-d);flex:none}
-.qrow.main{color:var(--ink)}
-.qrow b{margin-left:auto;padding-left:10px;font:600 11px var(--cin);color:var(--gold-d);letter-spacing:.08em}
+#quest{position:absolute;left:calc(var(--sl) + 12px);top:calc(var(--st) + 152px);width:min(268px,38vw);padding:8px 30px 10px 12px;
+  background:linear-gradient(90deg,rgba(252,249,242,.92) 0%,rgba(252,249,242,.84) 88%,rgba(252,249,242,0) 100%);border-left:1.5px solid var(--gold)}
+#quest .qt{all:unset;pointer-events:auto;box-sizing:border-box;display:flex;align-items:center;gap:8px;width:100%;cursor:pointer;-webkit-tap-highlight-color:transparent}
+#quest .qt span{font:600 13px var(--serif);letter-spacing:.14em;color:var(--ink);white-space:nowrap}
+#quest .qt small{font:500 7.5px var(--cin);letter-spacing:.3em;color:var(--gold-d);white-space:nowrap}
+#quest .qt .chev{margin-left:auto;flex:none;width:6px;height:6px;border-right:1.2px solid var(--gold-d);border-bottom:1.2px solid var(--gold-d);transform:translateY(-2px) rotate(45deg);transition:transform .25s}
+#quest.min .qt .chev{transform:translateY(1px) rotate(-135deg)}
+#qObj{margin-top:6px}
+.qmain{display:grid;grid-template-columns:10px 1fr auto;column-gap:8px;align-items:start}
+.qmain .qm{width:6px;height:6px;margin-top:6px;justify-self:center;background:linear-gradient(135deg,#f6e2a9,#c99a3e);transform:rotate(45deg);box-shadow:0 0 6px rgba(232,192,110,.95)}
+.qmain .t{font:600 12.5px/1.45 var(--serif);color:var(--ink);letter-spacing:.06em;min-width:0}
+.qmain b{font:600 11px/1.6 var(--cin);color:var(--gold-d);letter-spacing:.06em;padding-left:6px}
+.qmain .meta{grid-column:2/4;display:flex;gap:10px;align-items:center}
+.qmain .meta em{font-style:normal}
+.qmain .qtag{margin:0;font:500 10px/1.6 var(--serif);letter-spacing:.14em;color:#a8432c;padding:0 5px;box-shadow:inset 0 0 0 1px rgba(168,67,44,.35)}
+.qmain .qd{font:500 9.5px var(--cin);letter-spacing:.22em;color:var(--gold-d)}
+.qmain .qd:empty{display:none}
+.qlist{margin-top:7px;padding-top:6px;border-top:1px solid rgba(198,162,90,.24);display:flex;flex-direction:column;gap:4px}
+.qrow{display:grid;grid-template-columns:10px 1fr auto;column-gap:8px;align-items:center;font:400 11.5px/1.35 var(--serif);color:var(--ink-s);letter-spacing:.05em}
+.qrow span{min-width:0}
+.qrow .box{position:relative;width:7px;height:7px;justify-self:center;box-shadow:inset 0 0 0 1px var(--gold-d)}
+.qrow.done{opacity:.5}
+.qrow.done .box{background:var(--gold-d)}
+.qrow.done .box:after{content:'';position:absolute;left:2px;top:-1px;width:2.5px;height:5px;border:solid #fffaf0;border-width:0 1.2px 1.2px 0;transform:rotate(45deg)}
+.qrow b{font:600 10.5px var(--cin);color:var(--gold-d);letter-spacing:.06em;padding-left:6px}
+.qrow.side b{font:500 9.5px var(--serif);letter-spacing:.14em;color:var(--ink-s);padding:0 5px;box-shadow:inset 0 0 0 1px rgba(198,162,90,.45)}
+.qrow .fe{width:5px;height:10px;justify-self:center;border-radius:50% 50% 50% 50%/62% 62% 38% 38%;background:linear-gradient(180deg,#f7e6b5,#c99a3e);transform:rotate(28deg)}
+.qrow.hint{font-size:10.5px;color:var(--gold-d);letter-spacing:.08em}
+.qrow.hint .up{width:5px;height:5px;justify-self:center;border-left:1.2px solid var(--gold-d);border-top:1.2px solid var(--gold-d);transform:translateY(2px) rotate(45deg)}
+#quest.min .qlist,#quest.min .qmain .qtag{display:none}
 #qObj.pulse{animation:qp .9s ease}
 @keyframes qp{0%{filter:drop-shadow(0 0 0 #fff)}30%{filter:drop-shadow(0 0 8px rgba(255,220,140,1))}100%{filter:none}}
 /* top right */
@@ -300,7 +322,7 @@ body.muted .ic .on{display:none} body.muted .ic .off{display:block}
 #rotate .e{font:500 9px var(--cin);letter-spacing:.4em;color:var(--gold-d)}
 @media (max-height:420px){
   #mm{width:112px;height:112px;top:calc(var(--st) + 12px)} #mm svg{width:136px;height:136px}
-  #quest{top:calc(var(--st) + 136px)}
+  #quest{top:calc(var(--st) + 136px)} .qmain .t{font-size:12px} .qrow{font-size:11px}
   .panel{padding:16px 20px 18px}
 }
 @media (max-height:360px){ #bInteract{bottom:calc(var(--sb) + 226px)} #bDodge{bottom:calc(var(--sb) + 124px)} }
@@ -381,7 +403,33 @@ body.boss #lvUp{top:calc(var(--st) + 56px)}
 @keyframes lvK{0%,10%{opacity:0;letter-spacing:1.4em}26%{opacity:1;letter-spacing:.62em}86%{opacity:1}100%{opacity:0}}
 @keyframes lvRise{0%{opacity:0;transform:translateY(8px)}8%{opacity:1;transform:none}82%{opacity:1}100%{opacity:0}}
 @keyframes lvFade{0%{opacity:0}10%{opacity:1}82%{opacity:1}100%{opacity:0}}
-.devrow .seg button{font-size:11px}
+
+/* test mode */
+#testOv .panel{width:min(720px,96vw)}
+.tstat{display:flex;align-items:center;gap:9px;font:500 12px var(--serif);color:var(--ink-s);letter-spacing:.08em}
+.tstat i{width:7px;height:7px;border-radius:50%;background:#cbbf9f;flex:none}
+.tstat.on i{background:#d0703c;box-shadow:0 0 8px rgba(230,120,60,.9)}
+.th{margin:16px 0 6px;font:600 13px var(--serif);letter-spacing:.3em;color:var(--ink)}
+.th small{margin-left:10px;font:500 8.5px var(--cin);letter-spacing:.3em;color:var(--gold-d)}
+.tch{display:grid;grid-template-columns:104px 1fr;gap:12px;align-items:start;padding:8px 0;border-bottom:1px solid rgba(198,162,90,.16)}
+.tk{padding-top:6px;font:500 12.5px var(--serif);letter-spacing:.22em;color:var(--ink)}
+.tk small{display:block;margin-top:3px;font:500 7.5px var(--cin);letter-spacing:.22em;color:var(--gold-d)}
+.tg{display:flex;flex-wrap:wrap;gap:6px}
+.tg button{border:0;display:flex;align-items:center;gap:7px;padding:7px 12px;background:rgba(255,255,255,.6);box-shadow:inset 0 0 0 1px var(--hair);font:500 12px var(--serif);letter-spacing:.12em;color:var(--ink);transition:background .15s}
+.tg button:hover{background:#fbf3dc}
+.tg button:active{background:#f1dfac}
+.tg button.bo:before{content:'';width:6px;height:6px;flex:none;background:#a8432c;transform:rotate(45deg)}
+.tg button.bo.done:before{background:var(--gold-d)}
+.tg button.bo.done:after{content:'已淨化';font-size:9.5px;letter-spacing:.1em;color:var(--gold-d)}
+.tg button.tt i{position:relative;flex:none;width:26px;height:14px;border-radius:7px;background:rgba(255,255,255,.8);box-shadow:inset 0 0 0 1px var(--hair)}
+.tg button.tt i:after{content:'';position:absolute;left:2px;top:2px;width:10px;height:10px;border-radius:50%;background:#cbbf9f;transition:left .2s}
+.tg button.tt.on i{background:linear-gradient(90deg,#efdba5,#ddbf7c)}
+.tg button.tt.on i:after{left:14px;background:#fffaf0;box-shadow:0 0 5px rgba(255,230,170,1)}
+.tfoot{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-end;margin-top:18px}
+#testChip{position:absolute;right:calc(var(--sr) + 16px);top:calc(var(--st) + 86px);pointer-events:auto;border:0;padding:5px 10px;display:flex;align-items:center;gap:8px;
+  font:600 9px var(--cin);letter-spacing:.26em;color:#fff8ec;background:linear-gradient(90deg,#c9653a,#a8432c);box-shadow:0 2px 10px rgba(120,40,20,.28)}
+#testChip small{font:500 9px var(--cin);letter-spacing:.06em;opacity:.9}
+#testChip small:empty{display:none}
 
 html.ja{--serif:'Noto Serif JP','Hiragino Mincho ProN','Yu Mincho','Noto Serif TC',serif}
 html.ja .act span{letter-spacing:.04em;padding-left:0;font-size:9px}
@@ -616,7 +664,8 @@ html.desk #codexList{max-height:calc(var(--vh)*62)}
       <text class="n" x="74" y="27" text-anchor="middle" style="display:none">N</text>
     </svg>
   </div>
-  <div id="quest" class="ctl"><div class="qt"><i class="dia"></i><span id="qTitle">序章 · 光羽降臨</span></div><div id="qObj"></div></div>
+  <div id="quest" class="ctl"><button class="qt" id="qHead" aria-label="任務"><i class="dia"></i><span id="qTitle">序章 · 光羽降臨</span><small id="qEn">PROLOGUE</small><i class="chev"></i></button><div id="qObj"></div></div>
+  <button id="testChip" class="ctl hidden">TEST<small id="testInfo"></small></button>
   <div id="topr" class="ctl">
     <button class="ic" id="bCodex" aria-label="墮天錄" data-key="B"><svg viewBox="0 0 24 24"><path d="M5 4.5h10.5a3 3 0 0 1 3 3v12H8a3 3 0 0 1-3-3z"/><path d="M5 16.5a3 3 0 0 1 3-3h10.5"/><path d="M11.8 6.8c1.2 1 1.2 2.6 0 3.6c-1.2-1-1.2-2.6 0-3.6z"/></svg></button>
     <button class="ic" id="bMap" aria-label="地圖" data-key="M"><svg viewBox="0 0 24 24"><path d="M3.5 6.5 9 4.5l6 2 5.5-2v13L15 19.5l-6-2-5.5 2z"/><path d="M9 4.5v13M15 6.5v13"/></svg></button>
@@ -675,7 +724,7 @@ html.desk #codexList{max-height:calc(var(--vh)*62)}
     </nav>
   </div>
   <div id="tapHint"><span class="c t-only">觸碰開始</span><span class="e t-only">TAP TO BEGIN</span><span class="c d-only">點擊或按任意鍵開始</span><span class="e d-only">PRESS ANY KEY</span></div>
-  <div class="corner bl">PROTOTYPE · v0.8 · 地獄</div>
+  <div class="corner bl">PROTOTYPE · v0.8.1 · 地獄</div>
   <div class="corner br t-only">MOBILE · LANDSCAPE</div><div class="corner br d-only">DESKTOP · KEYBOARD &amp; MOUSE</div>
 </div>
 
@@ -711,12 +760,29 @@ html.desk #codexList{max-height:calc(var(--vh)*62)}
     <div class="row"><div class="k">鏡頭自動跟隨<small>AUTO CAMERA</small></div><button class="tog" id="camToggle"><em>關閉</em><i></i></button></div>
     <div class="row"><div class="k">角色模型<small>CHARACTER MODEL</small></div><div class="glb"><label class="lbtn" for="glbIn"><span>上載 GLB</span><small>UPLOAD</small></label><input type="file" id="glbIn" accept=".glb,.gltf" hidden><button class="lbtn" id="glbReset"><span>還原</span></button></div></div>
     <p class="mini" id="glbStat">支援 Mixamo 標準骨架嘅人形模型（例如 Tripo 綁骨後匯出嘅 GLB）。</p>
-    <div class="row devrow"><div class="k">測試工具<small>PROTOTYPE ONLY</small></div><div class="seg"><button data-dev="realm">去神域</button><button data-dev="earth">去人間</button><button data-dev="hell">去地獄</button><button data-dev="isle">回鏡湖</button><button data-dev="feather">光羽 +3</button></div></div>
-    <p class="mini" id="devStat">方便試玩用：直接傳送，或者即刻拎 3 根光羽試升 Lv。</p>
+    <div class="row"><div class="k">測試模式<small>TEST MODE</small></div><button class="lbtn" id="openTest"><span>打開測試面板</span><small class="d-only">F2</small></button></div>
+    <p class="mini">直接跳到各章節的重要地點與首領。測試進度另外儲存，不會影響正式存檔。</p>
     <div class="btns">
       <button class="lbtn" id="resetProg"><span>重置旅程進度</span><small>RESET</small></button>
       <button class="lbtn" id="setTitle"><span>回到標題</span><small>TITLE</small></button>
     </div>
+    <button class="ic x" data-close aria-label="關閉"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+</div>
+<div id="testOv" class="ov hidden">
+  <div class="panel">
+    <h2>測試模式<small>TEST MODE</small></h2>
+    <div class="sep"></div>
+    <div class="tstat" id="testStat"><i></i><span></span></div>
+    <div class="th">關卡跳轉<small>JUMP TO</small></div>
+    <div class="tch"><div class="tk">序章<small>THE ISLE</small></div><div class="tg"><button data-warp="spawn">鏡湖起點</button><button data-warp="shrine">聖壇</button><button data-warp="temple">環光聖所</button><button class="bo" data-warp="boss1" data-boss="boss">墮光守衛</button></div></div>
+    <div class="tch"><div class="tk">第一章<small>THE EMPYREAN</small></div><div class="tg"><button data-warp="realm">神域入口</button><button class="bo" data-warp="boss2" data-boss="boss2">審判者</button></div></div>
+    <div class="tch"><div class="tk">第二章<small>THE MORTAL WORLD</small></div><div class="tg"><button data-warp="earth">墜光坑</button><button data-warp="town">晨鐘堡</button><button data-warp="captive">受困的人</button><button data-warp="beacon">烽火台</button><button class="bo" data-warp="boss3" data-boss="boss3">墮天騎士</button><button data-warp="rift">墮天裂谷</button></div></div>
+    <div class="tch"><div class="tk">第三章<small>THE ABYSS</small></div><div class="tg"><button data-warp="hell">墜落之地</button><button data-warp="bridge">熔河橋</button><button class="bo" data-warp="boss4" data-boss="boss4">亞巴頓</button><button data-warp="gate">冥門</button></div></div>
+    <div class="th">能力與作弊<small>CHEATS</small></div>
+    <div class="tg"><button class="tt" data-tog="god"><i></i>無敵</button><button class="tt" data-tog="oneHit"><i></i>一擊必殺</button><button class="tt" data-tog="powers"><i></i>全部能力</button><button class="tt" data-tog="hellBlade"><i></i>神域之主的武器</button><button class="tt" data-tog="coords"><i></i>顯示座標</button></div>
+    <div class="tg" style="margin-top:8px"><button data-cheat="feather">光羽 +3</button><button data-cheat="lv">升到 Lv 8</button><button data-cheat="heal">補滿生命</button><button data-cheat="clear">清除附近敵人</button><button data-cheat="codex">圖鑑全開</button><button data-cheat="gs">換大劍 / 聖槍</button></div>
+    <div class="tfoot"><button class="lbtn" id="testFresh"><span>全新進度重新開始</span><small>FRESH START</small></button><button class="lbtn" id="testExit"><span>離開測試模式</span><small>BACK TO MY SAVE</small></button></div>
     <button class="ic x" data-close aria-label="關閉"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
   </div>
 </div>

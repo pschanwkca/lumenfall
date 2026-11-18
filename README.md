@@ -57,6 +57,22 @@ three.js r160 and fonts load from CDNs.
 - Feather levels, 墮天錄 codex (19 entries in four groups, with lore, weak points and moves), 繁中 / 日本語
 - Cloud shadows, god rays, height fog, colour grade, lake reflections
 
+## Test mode
+
+Settings → 測試模式, or **F2** (also <code>`</code>) on desktop. A red **TEST** chip stays on the HUD while it is on; tap it to reopen the panel.
+
+- Jump straight to each chapter's key places and bosses: the isle (lake, shrine, sanctum, Ophiel), the Empyrean (entrance, Astraea),
+  the mortal world (crater, Belldawn Hold, a sealed captive, a beacon, Camael, the rift) and hell (landing, bridge, Abaddon, the gate)
+- Toggles: invincible, one-hit kills, all powers, the Empyrean lord's weapon, coordinates + FPS readout
+- One-shot cheats: feathers +3, jump to Lv 8, full heal, clear nearby enemies, unlock the codex, swap greatsword / spear
+- Everything in test mode is saved to its own slot (`lumenfall_progress_test`); "離開測試模式" reloads your real save untouched,
+  "全新進度重新開始" starts the test slot from zero (bosses alive again)
+
+## Quest tracker
+
+Chapter title (tap to fold), then one story objective with distance to its marker, then this world's tasks (ticked when done)
+and its feathers. Folded by default on phones so it never covers the move stick.
+
 ## Code
 
 | File | |
