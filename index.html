@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#efe9de">
+<title>LUMENFALL · 光羽之境</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@1,400;1,500&family=Noto+Serif+TC:wght@400;500;600&family=Noto+Serif+JP:wght@400;500;600&display=swap" rel="stylesheet">
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<style>
+:root{
+  --ivory:#faf6ee; --pearl:#efe9de; --gold:#c6a25a; --gold-l:#ead6a2; --gold-d:#8e6c31; --ink:#2d2820; --ink-s:#5c5345;
+  --sl:env(safe-area-inset-left,0px); --sr:env(safe-area-inset-right,0px); --st:env(safe-area-inset-top,0px); --sb:env(safe-area-inset-bottom,0px);
+  --serif:'Noto Serif TC','Songti TC','PMingLiU',serif; --cin:'Cinzel','Times New Roman',serif; --cor:'Cormorant Garamond',serif;
+  --glass:linear-gradient(180deg,rgba(255,253,248,.82),rgba(244,238,227,.7));
+  --hair:rgba(198,162,90,.85);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:#ece6db;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;font-family:var(--serif);color:var(--ink);overscroll-behavior:none}
+button{font:inherit;color:inherit;cursor:pointer}
+.hidden{display:none!important}
+canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block}
+#touch{position:fixed;inset:0;z-index:5}
+.dia{display:inline-block;width:7px;height:7px;transform:rotate(45deg);background:var(--gold);box-shadow:0 0 0 1.5px rgba(255,255,255,.7);flex:none}
+
+/* ---------------- loader ---------------- */
+#loader{position:fixed;inset:0;z-index:60;background:radial-gradient(ellipse at 50% 45%,#fbf8f1 0%,#efe9dd 70%,#e6dfd1 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;transition:opacity 1.2s ease}
+#loader.out{opacity:0;pointer-events:none}
+#loader svg{width:120px;height:120px;animation:spin 18s linear infinite}
+#loader .ln{font:500 22px var(--cin);letter-spacing:.42em;color:var(--gold-d);padding-left:.42em}
+#loader .bar{width:180px;height:1px;background:rgba(198,162,90,.25);overflow:hidden}
+#loader .bar i{display:block;height:100%;background:linear-gradient(90deg,transparent,var(--gold),var(--gold-l));transform-origin:left;transform:scaleX(0);transition:transform .5s ease}
+#loadMsg{font:400 12px var(--serif);letter-spacing:.3em;color:var(--ink-s)}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---------------- landing ---------------- */
+#landing{position:fixed;inset:0;z-index:20;opacity:0;transition:opacity 1.8s ease;overflow:hidden}
+#landing.ready{opacity:1}
+#landing.out{opacity:0!important;transition:opacity 1.3s ease;pointer-events:none}
+#landing .veil{position:absolute;inset:0;pointer-events:none;
+  background:
+   linear-gradient(90deg,rgba(246,241,232,.9) 0%,rgba(246,241,232,.62) 26%,rgba(246,241,232,.12) 48%,rgba(246,241,232,0) 60%),
+   linear-gradient(0deg,rgba(240,234,222,.75) 0%,rgba(240,234,222,0) 22%),
+   linear-gradient(180deg,rgba(240,234,222,.5) 0%,rgba(240,234,222,0) 18%)}
+#haloUI{position:absolute;left:0;top:0;width:min(92vh,600px);height:min(92vh,600px);pointer-events:none;will-change:transform}
+#haloUI .r1{fill:none;stroke:rgba(214,182,112,.9);stroke-width:.9}
+#haloUI .r2{fill:none;stroke:rgba(214,182,112,.55);stroke-width:.6;stroke-dasharray:1.5 5.5}
+#haloUI .r3{fill:none;stroke:rgba(255,250,236,.85);stroke-width:2.2;filter:url(#hglow)}
+#haloUI .spin{transform-origin:200px 200px;animation:spin 90s linear infinite}
+#haloUI .spinr{transform-origin:200px 200px;animation:spin 140s linear infinite reverse}
+#haloUI .st{fill:#fffaf0;transform-box:fill-box;transform-origin:center;animation:twinkle 3.2s ease-in-out infinite}
+@keyframes twinkle{0%,100%{opacity:.15;transform:scale(.55)}50%{opacity:1;transform:scale(1)}}
+.brand{position:absolute;left:calc(var(--sl) + 6vw);top:50%;transform:translateY(-50%);max-width:min(46vw,480px)}
+.eyebrow{font:500 10px var(--cin);letter-spacing:.46em;color:var(--gold-d);opacity:.9;display:flex;align-items:center;gap:10px}
+.eyebrow:before{content:'';width:26px;height:1px;background:var(--gold)}
+.logo{margin:.3em 0 .08em;font:600 clamp(30px,min(6.2vw,12.5vh),78px)/1 var(--cin);white-space:nowrap;letter-spacing:.12em;
+  background:linear-gradient(180deg,#a17a34 0%,#d9bd7a 38%,#f2e2b4 52%,#b8913f 70%,#8a672c 100%);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 1px 0 rgba(255,255,255,.9)) drop-shadow(0 6px 18px rgba(255,248,228,.9))}
+.rule{display:flex;align-items:center;gap:10px;margin:14px 0 12px;width:78%}
+.rule i{flex:1;height:1px;background:linear-gradient(90deg,var(--gold),rgba(198,162,90,.1))}
+.rule i:first-child{background:linear-gradient(90deg,rgba(198,162,90,.1),var(--gold))}
+.rule b{width:7px;height:7px;transform:rotate(45deg);border:1px solid var(--gold);background:var(--ivory)}
+.brand .cn{font:500 clamp(16px,2.3vw,22px) var(--serif);letter-spacing:.78em;color:var(--ink);padding-left:.1em}
+.tag{margin:12px 0 0;font:italic 400 clamp(14px,1.7vw,17px) var(--cor);color:var(--ink-s);letter-spacing:.02em}
+#menu{margin-top:26px;display:flex;flex-direction:column;align-items:flex-start;gap:4px;opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .9s ease,transform .9s ease}
+#landing.menu #menu{opacity:1;transform:none;pointer-events:auto}
+#menu button{display:flex;align-items:baseline;gap:14px;background:none;border:0;padding:9px 4px;color:var(--ink);position:relative}
+#menu button .c{font:500 16px var(--serif);letter-spacing:.32em}
+#menu button .e{font:500 9.5px var(--cin);letter-spacing:.32em;color:var(--gold-d)}
+#menu button:before{content:'';width:5px;height:5px;transform:rotate(45deg) translateY(-2px);border:1px solid var(--gold);align-self:center}
+#menu button.primary{margin-bottom:8px;padding:13px 26px 13px 20px;background:var(--glass);box-shadow:inset 0 0 0 1px var(--hair),inset 0 0 0 4px rgba(255,255,255,.5),inset 0 0 0 5px rgba(198,162,90,.3),0 10px 30px rgba(120,96,50,.18)}
+#menu button.primary:before{background:var(--gold)}
+#menu button.primary .c{font-size:17px;font-weight:600}
+#menu button:active{transform:scale(.97)}
+@media (hover:hover){#menu button:hover .c{color:var(--gold-d)}}
+#tapHint{position:absolute;left:50%;bottom:calc(var(--sb) + 9vh);transform:translateX(-50%);text-align:center;display:flex;flex-direction:column;gap:6px;transition:opacity .6s ease;animation:breathe 2.6s ease-in-out infinite}
+#tapHint .c{font:500 14px var(--serif);letter-spacing:.6em;color:var(--ink);padding-left:.6em}
+#tapHint .e{font:500 9.5px var(--cin);letter-spacing:.5em;color:var(--gold-d);padding-left:.5em}
+#landing.menu #tapHint{opacity:0;pointer-events:none;animation:none}
+@keyframes breathe{0%,100%{opacity:.45}50%{opacity:1}}
+.corner{position:absolute;font:500 9px var(--cin);letter-spacing:.32em;color:var(--gold-d);opacity:.85}
+.corner.bl{left:calc(var(--sl) + 22px);bottom:calc(var(--sb) + 16px)}
+.corner.br{right:calc(var(--sr) + 22px);bottom:calc(var(--sb) + 16px)}
+.corner.tl{left:calc(var(--sl) + 22px);top:calc(var(--st) + 18px);display:flex;align-items:center;gap:8px}
+#lSnd{position:absolute;right:calc(var(--sr) + 18px);top:calc(var(--st) + 14px)}
+@media (max-height:520px) and (orientation:landscape){
+  .eyebrow{font-size:8.5px}
+  .rule{margin:9px 0 8px}
+  .brand .cn{font-size:16px}
+  .tag{margin-top:6px;font-size:13.5px}
+  #menu{margin-top:14px;gap:0}
+  #menu button{padding:6px 4px}
+  #menu button .c{font-size:14px}
+  #menu button.primary{padding:10px 22px 10px 16px;margin-bottom:4px}
+  #menu button.primary .c{font-size:15px}
+  #tapHint{bottom:calc(var(--sb) + 7vh)}
+}
+@media (orientation:portrait){
+  #landing .veil{background:linear-gradient(180deg,rgba(246,241,232,.92) 0%,rgba(246,241,232,.55) 24%,rgba(246,241,232,0) 42%,rgba(246,241,232,0) 62%,rgba(240,234,222,.88) 86%)}
+  .brand{left:6vw;right:6vw;top:calc(var(--st) + 8vh);transform:none;text-align:center;max-width:none}
+  .logo{font-size:min(11vw,64px);letter-spacing:.08em}
+  #menu button{white-space:nowrap}
+  .eyebrow{justify-content:center}.eyebrow:before{display:none}
+  .rule{margin:12px auto;width:62%}
+  #menu{position:fixed;left:50%;bottom:calc(var(--sb) + 7vh);transform:translate(-50%,8px);align-items:center;margin:0}
+  #landing.menu #menu{transform:translate(-50%,0)}
+  #haloUI{width:min(78vw,520px);height:min(78vw,520px)}
+  .corner.br{display:none}
+}
+
+/* ---------------- shared glass circle button ---------------- */
+.ic{width:40px;height:40px;border-radius:50%;border:0;padding:0;display:grid;place-items:center;background:var(--glass);color:var(--gold-d);
+  box-shadow:inset 0 0 0 1px var(--hair),inset 0 0 0 3.5px rgba(255,255,255,.45),0 4px 14px rgba(80,60,25,.16);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);pointer-events:auto;transition:transform .12s}
+.ic svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.ic.press,.ic:active{transform:scale(.9)}
+.ic .off{display:none}
+body.muted .ic .on{display:none} body.muted .ic .off{display:block}
+
+/* ---------------- HUD ---------------- */
+#hud{position:fixed;inset:0;z-index:10;pointer-events:none;opacity:0;transition:opacity 1.4s ease,filter .8s}
+#hud.show{opacity:1}
+#hud.dim{filter:grayscale(.7) brightness(1.05);opacity:.35}
+#hud.cine .ctl{opacity:0!important;pointer-events:none!important;transition:opacity .8s}
+#hud .vig{position:absolute;inset:0;background:radial-gradient(ellipse 75% 70% at 50% 50%,transparent 55%,rgba(78,66,46,.2) 100%)}
+.ctl{transition:opacity .6s}
+/* minimap */
+#mm{position:absolute;left:calc(var(--sl) + 20px);top:calc(var(--st) + 14px);width:124px;height:124px}
+#mmc{position:absolute;inset:0;width:100%;height:100%;border-radius:50%}
+#mm svg{position:absolute;left:-12px;top:-12px;width:148px;height:148px;overflow:visible}
+#mm .f1{fill:none;stroke:var(--gold);stroke-width:1.2}
+#mm .f2{fill:none;stroke:rgba(255,255,255,.9);stroke-width:3}
+#mm .f3{fill:none;stroke:rgba(198,162,90,.55);stroke-width:.7}
+#mm .tk{stroke:var(--gold-d);stroke-width:1}
+#mm .n{font:600 10px var(--cin);fill:var(--gold-d)}
+/* quest */
+#quest{position:absolute;left:calc(var(--sl) + 12px);top:calc(var(--st) + 152px);min-width:200px;max-width:260px;padding:8px 26px 9px 12px;
+  background:linear-gradient(90deg,rgba(252,249,242,.86) 0%,rgba(252,249,242,.62) 65%,rgba(252,249,242,0) 100%);border-left:1.5px solid var(--gold)}
+#quest .qt{display:flex;align-items:center;gap:8px;font:600 13px var(--serif);letter-spacing:.12em;color:var(--ink)}
+#qObj{margin-top:5px;display:flex;flex-direction:column;gap:3px}
+.qrow{display:flex;align-items:center;gap:7px;font:400 11.5px var(--serif);color:var(--ink-s);letter-spacing:.06em}
+.qrow .box{width:8px;height:8px;border:1px solid var(--gold-d);flex:none}
+.qrow.main{color:var(--ink)}
+.qrow b{margin-left:auto;padding-left:10px;font:600 11px var(--cin);color:var(--gold-d);letter-spacing:.08em}
+#qObj.pulse{animation:qp .9s ease}
+@keyframes qp{0%{filter:drop-shadow(0 0 0 #fff)}30%{filter:drop-shadow(0 0 8px rgba(255,220,140,1))}100%{filter:none}}
+/* top right */
+#topr{position:absolute;right:calc(var(--sr) + 16px);top:calc(var(--st) + 14px);display:flex;gap:10px}
+/* hp */
+#hpw{position:absolute;left:50%;bottom:calc(var(--sb) + 14px);transform:translateX(-50%);width:min(320px,36vw);display:flex;align-items:center;gap:9px}
+#hpw .l{font:600 9.5px var(--cin);letter-spacing:.2em;color:var(--gold-d);text-shadow:0 0 6px rgba(255,255,255,.9)}
+#hpw .bar{position:relative;flex:1;height:7px;background:rgba(255,253,248,.55);box-shadow:inset 0 0 0 1px var(--hair),0 0 0 2px rgba(255,255,255,.35),0 2px 10px rgba(80,60,25,.18);overflow:hidden}
+#hpw .bar:before,#hpw .bar:after{content:'';position:absolute;top:50%;width:5px;height:5px;background:var(--gold);transform:translateY(-50%) rotate(45deg);z-index:3}
+#hpw .bar:before{left:-3px}#hpw .bar:after{right:-3px}
+#hpd,#hpf{position:absolute;left:1px;top:1px;bottom:1px;right:1px;transform-origin:left}
+#hpd{background:rgba(255,255,255,.95)}
+#hpf{background:linear-gradient(90deg,#d9b56a,#f3e1ae 60%,#fff8e4);box-shadow:0 0 8px rgba(255,226,160,.9)}
+#hpw.low #hpf{background:linear-gradient(90deg,#c9866a,#ecc2a0);animation:breathe 1s infinite}
+#hpn{font:600 10.5px var(--cin);color:var(--ink);min-width:58px;letter-spacing:.06em;text-shadow:0 0 6px rgba(255,255,255,.95)}
+/* stamina */
+#stam{position:absolute;left:0;top:0;width:44px;height:44px;margin:-22px 0 0 -22px;opacity:0;transition:opacity .4s}
+#stam.on{opacity:1}
+#stam .tr{fill:none;stroke:rgba(255,255,255,.55);stroke-width:4}
+#stam .ar{fill:none;stroke:url(#stg);stroke-width:4;stroke-linecap:round;stroke-dasharray:113.1;transform:rotate(-90deg);transform-origin:22px 22px;filter:drop-shadow(0 0 3px rgba(255,220,150,.9))}
+#stam.low .ar{stroke:#e2a17f;animation:breathe .6s infinite}
+/* joystick */
+#joy{position:absolute;left:calc(var(--sl) + 64px);bottom:calc(var(--sb) + 52px);width:124px;height:124px}
+#joyBase{position:absolute;inset:0;border-radius:50%;display:grid;place-items:center;
+  background:radial-gradient(circle,rgba(255,252,244,.32) 0%,rgba(255,252,244,.14) 60%,rgba(255,252,244,.0) 72%);
+  box-shadow:inset 0 0 0 1px rgba(198,162,90,.65),inset 0 0 0 5px rgba(255,255,255,.18);opacity:.6;transition:opacity .25s}
+#joyBase.active{opacity:1}
+#joyBase:before{content:'';position:absolute;inset:14px;border-radius:50%;border:1px dashed rgba(198,162,90,.4)}
+#joyKnob{width:52px;height:52px;border-radius:50%;background:radial-gradient(circle at 50% 40%,#fffdf6,#f2e3bd 70%,#d9bb79);box-shadow:0 0 0 1px rgba(255,255,255,.9),0 0 18px rgba(255,226,160,.85),0 4px 12px rgba(80,60,25,.22)}
+/* action buttons */
+.act{position:absolute;border-radius:50%;border:0;padding:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;pointer-events:auto;color:var(--gold-d);
+  background:radial-gradient(circle at 50% 32%,rgba(255,254,250,.84),rgba(240,233,220,.6) 72%);
+  box-shadow:inset 0 0 0 1px var(--hair),inset 0 0 0 4px rgba(255,255,255,.4),inset 0 0 0 5px rgba(198,162,90,.3),0 5px 18px rgba(70,52,20,.2);
+  backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);transition:transform .1s ease,box-shadow .25s}
+.act svg.i{width:46%;height:46%;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.act span{font:600 9.5px var(--serif);letter-spacing:.18em;color:var(--ink-s);padding-left:.18em}
+.act.press{transform:scale(.9);box-shadow:inset 0 0 0 1px var(--gold),inset 0 0 0 4px rgba(255,255,255,.5),0 0 26px rgba(255,214,140,.95)}
+#bAtk{right:calc(var(--sr) + 32px);bottom:calc(var(--sb) + 28px);width:88px;height:88px}
+#bAtk svg.i{width:44%;height:44%}
+#bAtk span{font-size:10.5px}
+#bJump{right:calc(var(--sr) + 142px);bottom:calc(var(--sb) + 16px);width:62px;height:62px}
+#bJump.wing{box-shadow:inset 0 0 0 1px var(--gold),inset 0 0 0 4px rgba(255,255,255,.5),0 0 18px rgba(255,226,160,.7)}
+#bSkill{right:calc(var(--sr) + 128px);bottom:calc(var(--sb) + 100px);width:62px;height:62px}
+#bDodge{right:calc(var(--sr) + 38px);bottom:calc(var(--sb) + 132px);width:60px;height:60px}
+#bSkill .cd{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+#bSkill .cd circle{fill:none;stroke:rgba(70,58,40,.3);stroke-width:32;stroke-dasharray:100.53}
+#bSkill.cool svg.i,#bSkill.cool span{opacity:.35}
+#skNum{position:absolute;font:600 17px var(--cin);color:var(--ink);text-shadow:0 0 6px #fff}
+#bInteract{position:absolute;right:calc(var(--sr) + 28px);bottom:calc(var(--sb) + 240px);pointer-events:auto;border:0;padding:9px 20px 9px 16px;display:flex;align-items:center;gap:10px;
+  background:var(--glass);box-shadow:inset 0 0 0 1px var(--gold),inset 0 0 0 4px rgba(255,255,255,.5),0 0 24px rgba(255,220,150,.75);animation:glowp 1.8s ease-in-out infinite;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+#bInteract .t{display:flex;flex-direction:column;align-items:flex-start;line-height:1.25}
+#intLbl{font:600 14px var(--serif);letter-spacing:.2em;color:var(--ink)}
+#intLbl em{font-style:normal;font-family:var(--cin);color:var(--gold-d);margin-left:4px}
+#intSub{font:500 8.5px var(--cin);letter-spacing:.3em;color:var(--gold-d)}
+#bInteract.locked{animation:none;box-shadow:inset 0 0 0 1px var(--hair),0 4px 14px rgba(70,52,20,.15);opacity:.86}
+#bInteract.locked .dia{background:#9a948a}
+#bInteract.press{transform:scale(.95)}
+@keyframes glowp{0%,100%{box-shadow:inset 0 0 0 1px var(--gold),inset 0 0 0 4px rgba(255,255,255,.5),0 0 14px rgba(255,220,150,.5)}50%{box-shadow:inset 0 0 0 1px var(--gold),inset 0 0 0 4px rgba(255,255,255,.5),0 0 30px rgba(255,220,150,1)}}
+/* region card */
+#region{position:absolute;left:50%;top:21%;transform:translateX(-50%);text-align:center;opacity:0;pointer-events:none;white-space:nowrap}
+#region.on{animation:reg 3.6s ease forwards}
+#region .orn{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:8px}
+#region .orn i{width:64px;height:1px;background:linear-gradient(90deg,transparent,var(--gold))}
+#region .orn i:last-child{background:linear-gradient(90deg,var(--gold),transparent)}
+#region .orn b{width:6px;height:6px;transform:rotate(45deg);background:var(--gold)}
+#regCn{font:500 27px var(--serif);letter-spacing:.55em;padding-left:.55em;color:var(--ink);text-shadow:0 0 18px rgba(255,255,255,1),0 0 4px rgba(255,255,255,1)}
+#regEn{margin-top:7px;font:500 10px var(--cin);letter-spacing:.5em;padding-left:.5em;color:var(--gold-d);text-shadow:0 0 8px #fff}
+@keyframes reg{0%{opacity:0;letter-spacing:.3em;filter:blur(4px)}18%{opacity:1;filter:none}78%{opacity:1}100%{opacity:0}}
+/* toasts */
+#toasts{position:absolute;left:50%;top:calc(var(--st) + 14px);transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px}
+.toast{display:flex;align-items:center;gap:9px;padding:7px 18px;font:500 12.5px var(--serif);letter-spacing:.12em;color:var(--ink);white-space:nowrap;
+  background:linear-gradient(90deg,rgba(252,249,242,0),rgba(252,249,242,.9) 18%,rgba(252,249,242,.9) 82%,rgba(252,249,242,0));animation:tin .45s ease}
+.toast b{font-family:var(--cin);color:var(--gold-d)}
+.toast.big{font-size:14px;padding:9px 30px;letter-spacing:.18em}
+.toast.out{opacity:0;transform:translateY(-6px);transition:all .7s ease}
+@keyframes tin{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+#dmg{position:fixed;inset:0;z-index:11;pointer-events:none;opacity:0;box-shadow:inset 0 0 140px rgba(96,46,80,.6)}
+#dmg.on{animation:dmg .7s ease}
+@keyframes dmg{0%{opacity:1}100%{opacity:0}}
+#flash{position:fixed;inset:0;z-index:50;pointer-events:none;opacity:0;background:radial-gradient(circle at 50% 45%,#fffef9,#fff8e8 60%,#f8eed8)}
+
+/* ---------------- overlays ---------------- */
+.ov{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;background:rgba(242,237,227,.5);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);animation:fin .35s ease;padding:calc(var(--st) + 12px) calc(var(--sr) + 12px) calc(var(--sb) + 12px) calc(var(--sl) + 12px)}
+@keyframes fin{from{opacity:0}to{opacity:1}}
+.panel{position:relative;max-height:100%;overflow:auto;background:linear-gradient(180deg,rgba(253,251,246,.95),rgba(246,241,232,.95));padding:22px 28px 24px;
+  box-shadow:inset 0 0 0 1px var(--hair),inset 0 0 0 6px rgba(255,255,255,.6),inset 0 0 0 7px rgba(198,162,90,.3),0 24px 60px rgba(80,60,25,.22)}
+.panel h2{margin:0;padding-right:44px;font:600 18px var(--serif);letter-spacing:.42em;color:var(--ink);display:flex;align-items:baseline;gap:14px}
+.panel h2 small{font:500 9.5px var(--cin);letter-spacing:.36em;color:var(--gold-d)}
+.panel .x{position:absolute;right:14px;top:12px;width:34px;height:34px}
+.sep{height:1px;margin:14px 0;background:linear-gradient(90deg,var(--gold),rgba(198,162,90,0))}
+.row{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:10px 0;border-bottom:1px solid rgba(198,162,90,.18)}
+.row .k{font:500 14px var(--serif);letter-spacing:.25em}
+.row .k small{display:block;font:500 8.5px var(--cin);letter-spacing:.3em;color:var(--gold-d);margin-top:3px}
+.seg{display:flex;box-shadow:inset 0 0 0 1px var(--hair)}
+.seg button{border:0;background:none;padding:8px 14px;font:500 13px var(--serif);letter-spacing:.15em;color:var(--ink-s)}
+.seg button.on{background:linear-gradient(180deg,#f3e3b6,#e1c37f);color:var(--ink);box-shadow:inset 0 0 0 1px rgba(255,255,255,.6)}
+.tog{border:0;background:none;display:flex;align-items:center;gap:10px;font:500 13px var(--serif);color:var(--ink-s)}
+.tog i{width:40px;height:20px;border-radius:10px;box-shadow:inset 0 0 0 1px var(--hair);position:relative;background:rgba(255,255,255,.6);transition:background .2s}
+.tog i:after{content:'';position:absolute;left:3px;top:3px;width:14px;height:14px;border-radius:50%;background:#cbbf9f;transition:all .2s}
+.tog.on i{background:linear-gradient(90deg,#efdba5,#ddbf7c)}
+.tog.on i:after{left:23px;background:#fffaf0;box-shadow:0 0 6px rgba(255,230,170,1)}
+.tog em{font-style:normal;min-width:30px}
+.lbtn{border:0;background:var(--glass);box-shadow:inset 0 0 0 1px var(--hair);padding:9px 18px;display:inline-flex;align-items:baseline;gap:10px;font:500 13px var(--serif);letter-spacing:.2em}
+.lbtn small{font:500 8.5px var(--cin);letter-spacing:.3em;color:var(--gold-d)}
+.lbtn.gold{background:linear-gradient(180deg,#f6e8c2,#e4c886);box-shadow:inset 0 0 0 1px rgba(150,115,50,.6),inset 0 0 0 3px rgba(255,255,255,.45),0 8px 22px rgba(150,110,40,.25)}
+#resetProg.confirm{box-shadow:inset 0 0 0 1px #b4705a;color:#8b4a36}
+.btns{display:flex;gap:12px;margin-top:18px;flex-wrap:wrap}
+/* map */
+#mapOv .panel{display:flex;gap:22px;padding:18px 22px;height:100%;max-height:min(100%,560px)}
+#mapOv .mapbox{position:relative;flex:none;height:100%;aspect-ratio:1/1;max-width:62vw}
+#bigmap{position:absolute;left:0;top:0;box-shadow:inset 0 0 0 1px var(--hair)}
+#mapOv .side{min-width:190px;display:flex;flex-direction:column}
+#mapList{list-style:none;margin:6px 0 0;padding:0}
+#mapList li{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid rgba(198,162,90,.18);font:500 13px var(--serif);letter-spacing:.15em;color:var(--ink-s)}
+#mapList li em{margin-left:auto;font-style:normal;font-size:11px;color:var(--gold-d)}
+#mapList li .dia{background:#fff;box-shadow:0 0 0 1px var(--gold-d)}
+#mapList li.lit .dia{background:var(--gold)}
+#mapList li.lit{color:var(--ink)}
+#mapList .star{font-style:normal;color:var(--gold-d);width:7px;text-align:center}
+#mapList .dot{width:7px;height:7px;border-radius:50%;background:#fff;box-shadow:0 0 0 1px var(--gold-d)}
+.legend{margin-top:auto;font:400 10.5px var(--serif);color:var(--ink-s);letter-spacing:.1em;line-height:1.9}
+/* how to */
+#howOv .panel{width:min(640px,96vw)}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:10px 30px}
+.cols h3{margin:0 0 6px;font:600 10px var(--cin);letter-spacing:.36em;color:var(--gold-d)}
+.cols dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font:400 12.5px var(--serif);letter-spacing:.08em}
+.cols dt{color:var(--gold-d);font-weight:600}
+.cols dd{margin:0;color:var(--ink-s)}
+.note{margin:14px 0 0;font:400 12.5px/1.9 var(--serif);letter-spacing:.06em;color:var(--ink-s)}
+/* end + death */
+.big{position:fixed;inset:0;z-index:31;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;animation:fin 1.4s ease;
+  background:radial-gradient(ellipse at 50% 45%,rgba(255,253,247,.9),rgba(246,240,228,.78) 60%,rgba(236,228,212,.85))}
+.big .k1{font:500 10px var(--cin);letter-spacing:.6em;color:var(--gold-d);padding-left:.6em}
+.big .k2{margin:14px 0 6px;font:500 clamp(26px,4.6vw,44px) var(--serif);letter-spacing:.5em;padding-left:.5em;color:var(--ink)}
+.big .k3{font:600 clamp(13px,1.8vw,16px) var(--cin);letter-spacing:.5em;padding-left:.5em;background:linear-gradient(180deg,#a17a34,#e4c886,#9a7432);-webkit-background-clip:text;background-clip:text;color:transparent}
+.big p{max-width:520px;margin:18px 24px 0;font:400 14px var(--serif);letter-spacing:.12em;color:var(--ink-s);line-height:1.9}
+.big .btns{justify-content:center;margin-top:26px}
+#deathOv{background:radial-gradient(ellipse at 50% 45%,rgba(250,247,240,.75),rgba(206,200,190,.8))}
+/* rotate */
+#rotate{position:fixed;inset:0;z-index:40;background:radial-gradient(ellipse at 50% 45%,#fbf8f1,#ebe4d6);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center}
+#rotate svg{width:74px;height:74px;stroke:var(--gold-d);fill:none;stroke-width:1.3;animation:rot 2.4s ease-in-out infinite}
+@keyframes rot{0%,30%{transform:rotate(0)}60%,100%{transform:rotate(-90deg)}}
+#rotate .c{font:500 15px var(--serif);letter-spacing:.4em;color:var(--ink)}
+#rotate .e{font:500 9px var(--cin);letter-spacing:.4em;color:var(--gold-d)}
+@media (max-height:420px){
+  #mm{width:112px;height:112px;top:calc(var(--st) + 12px)} #mm svg{width:136px;height:136px}
+  #quest{top:calc(var(--st) + 136px)}
+  .panel{padding:16px 20px 18px}
+}
+@media (max-height:360px){ #bInteract{bottom:calc(var(--sb) + 226px)} #bDodge{bottom:calc(var(--sb) + 124px)} }
+/* combat additions */
+#bLock{right:calc(var(--sr) + 152px);bottom:calc(var(--sb) + 184px);width:46px;height:46px}
+#bLock svg.i{width:52%;height:52%}
+#bLock.on{color:#fff8e6;background:radial-gradient(circle at 50% 35%,#f3d996,#c79a46 80%);box-shadow:inset 0 0 0 1px #fff3d4,0 0 20px rgba(255,214,140,.9)}
+#bHeal{right:calc(var(--sr) + 218px);bottom:calc(var(--sb) + 20px);width:52px;height:52px}
+#bHeal b{position:absolute;right:-2px;bottom:-2px;min-width:20px;height:20px;border-radius:10px;padding:0 5px;background:linear-gradient(180deg,#f6e3ae,#d6b062);font:600 11px/20px var(--cin);color:var(--ink);box-shadow:0 0 0 1.5px #fffaf0}
+#bHeal.empty{opacity:.45}
+#bAtk{--c:0}
+#bAtk:after{content:'';position:absolute;inset:-5px;border-radius:50%;background:conic-gradient(rgba(255,222,150,.95) calc(var(--c)*360deg),transparent 0);-webkit-mask:radial-gradient(circle,transparent 62%,#000 63%);mask:radial-gradient(circle,transparent 62%,#000 63%);pointer-events:none}
+#bAtk.full:after{background:rgba(255,240,200,1);filter:drop-shadow(0 0 8px #ffd98a)}
+#bAtk.counter{box-shadow:inset 0 0 0 1px var(--gold),inset 0 0 0 4px rgba(255,255,255,.5),0 0 30px rgba(255,214,140,1);animation:glowp .6s ease-in-out infinite}
+#lockRet{position:absolute;left:0;top:0;width:0;height:0;display:none;pointer-events:none}
+#lockRet i{position:absolute;left:-17px;top:-17px;width:34px;height:34px;border:1.5px solid rgba(255,236,190,.95);transform:rotate(45deg);box-shadow:0 0 10px rgba(255,214,140,.9),inset 0 0 6px rgba(255,214,140,.6);animation:lockspin 3s linear infinite}
+#lockRet .hpm{position:absolute;left:-26px;top:24px;width:52px;height:3px;background:rgba(40,30,20,.35);box-shadow:0 0 0 1px rgba(255,240,210,.7)}
+#lockRet .hpm b{display:block;height:100%;background:linear-gradient(90deg,#e9c06e,#fff2cf);transform-origin:left}
+#lockRet.boss .hpm{display:none}
+@keyframes lockspin{to{transform:rotate(405deg)}}
+#dnums{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.dn{position:absolute;left:0;top:0;font:600 15px var(--cin);color:#fff8e6;text-shadow:0 0 6px rgba(160,110,30,.95),0 1px 0 #8e6c31,0 0 1px #5a4320;white-space:nowrap}
+.dn.crit{font-size:23px;color:#ffe3a3;text-shadow:0 0 10px rgba(255,190,90,1),0 1px 0 #8e6c31}
+#bigText{position:absolute;left:50%;top:34%;transform:translate(-50%,-50%);text-align:center;opacity:0;pointer-events:none;white-space:nowrap}
+#bigText.on{animation:big 1.3s ease forwards}
+#bigText .cn{font:600 32px var(--serif);letter-spacing:.5em;padding-left:.5em;color:#fffaf0;text-shadow:0 0 18px rgba(255,200,110,1),0 0 3px rgba(120,80,20,.9)}
+#bigText .en{margin-top:4px;font:600 10px var(--cin);letter-spacing:.6em;padding-left:.6em;color:#fff1cf;text-shadow:0 0 8px rgba(160,110,30,1)}
+@keyframes big{0%{opacity:0;transform:translate(-50%,-50%) scale(1.25);filter:blur(6px)}15%{opacity:1;transform:translate(-50%,-50%) scale(1);filter:none}75%{opacity:1}100%{opacity:0;transform:translate(-50%,-56%)}}
+#witch{position:fixed;inset:0;z-index:9;pointer-events:none;opacity:0;background:radial-gradient(ellipse 70% 65% at 50% 50%,transparent 45%,rgba(150,170,230,.38) 100%)}
+#witch.on{animation:witch 1.2s ease forwards}
+@keyframes witch{0%{opacity:0}12%{opacity:1}70%{opacity:.9}100%{opacity:0}}
+
+/* ---- feather level */
+#lvw{position:absolute;left:50%;bottom:calc(var(--sb) + 34px);transform:translateX(-50%);width:min(320px,36vw);display:flex;align-items:center;gap:8px;pointer-events:none}
+#lvw .lv{display:flex;align-items:baseline;gap:3px;font:600 9px var(--cin);letter-spacing:.16em;color:var(--gold-d);text-shadow:0 0 6px #fff}
+#lvw .lv b{font:600 15px var(--cin);letter-spacing:0;color:#8c6a2e;text-shadow:0 0 6px #fff,0 0 2px #fff}
+#lvw .xp{position:relative;flex:1;height:3px;background:rgba(255,253,248,.55);box-shadow:inset 0 0 0 1px var(--hair)}
+#lvw .xp i{position:absolute;inset:0;transform-origin:left;transform:scaleX(0);background:linear-gradient(90deg,#d9b46a,#fff1c8);box-shadow:0 0 6px rgba(255,214,140,.9);transition:transform .8s cubic-bezier(.2,.8,.2,1)}
+#lvw .n{font:500 9px var(--cin);letter-spacing:.12em;color:var(--gold-d);text-shadow:0 0 6px #fff;min-width:44px;text-align:right}
+#lvw .n:before{content:'光羽 ';font:400 9px var(--serif)}
+#lvUp{position:absolute;left:50%;top:calc(var(--st) + 4px);transform:translateX(-50%);width:min(440px,80vw);text-align:center;pointer-events:none;z-index:30}
+#lvUp.hidden{display:none}
+body.boss #lvUp{top:calc(var(--st) + 56px)}
+#lvUp .emb{position:relative;width:108px;height:108px;margin:0 auto}
+#lvUp .emb svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+#lvUp .emb .r1{stroke:#d7b468;fill:none;stroke-width:1;transform-origin:50% 50%}
+#lvUp .emb .r2{stroke:#f3dc9c;fill:none;stroke-width:.6;stroke-dasharray:2 5;transform-origin:50% 50%}
+#lvUp .emb .fx path{fill:#fffaf0;stroke:#c9a35a;stroke-width:.5}
+#lvUp .num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+#lvUp .num small{font:600 8px var(--cin);letter-spacing:.34em;padding-left:.34em;color:#a88444;margin:-2px 0 -1px}
+#lvUp .num b{font:600 44px/1 var(--cin);background:linear-gradient(180deg,#fff6d8 10%,#e8c46e 55%,#a87b2c);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 0 10px rgba(255,220,150,.95)) drop-shadow(0 0 2px #fff)}
+#lvUp .num em{position:absolute;bottom:17px;font:500 9px var(--cin);letter-spacing:.2em;color:#a88444;font-style:normal}
+#lvUp .k{margin-top:2px;font:600 13px var(--cin);letter-spacing:.62em;padding-left:.62em;color:#8c6a2e;text-shadow:0 0 10px #fff,0 0 3px #fff}
+#lvUp .t{margin-top:4px;font:500 15px var(--serif);letter-spacing:.42em;padding-left:.42em;color:var(--ink);text-shadow:0 0 10px #fff,0 0 3px #fff}
+#lvUp ul{list-style:none;margin:8px auto 0;padding:7px 16px;display:inline-flex;flex-direction:column;gap:5px;background:linear-gradient(90deg,rgba(255,252,244,0),rgba(255,252,244,.82) 18%,rgba(255,252,244,.82) 82%,rgba(255,252,244,0))}
+#lvUp li{display:grid;grid-template-columns:72px 44px 18px 44px;align-items:baseline;font:400 12px var(--serif);color:var(--ink-s)}
+#lvUp li span{text-align:left;letter-spacing:.14em}
+#lvUp li s{font:500 11px var(--cin);color:#a69a85;text-decoration:none}
+#lvUp li i{font-style:normal;color:#c9a35a}
+#lvUp li b{font:600 13px var(--cin);color:#8c6a2e}
+#lvUp .perk{margin-top:9px;font:500 12px var(--serif);letter-spacing:.16em;color:#7d5f22;text-shadow:0 0 8px #fff}
+#lvUp .perk:before,#lvUp .perk:after{content:'✦';margin:0 8px;color:#d7b468;font-size:9px}
+#lvUp.on .emb{animation:lvEmb 4.4s cubic-bezier(.2,.8,.2,1) both}
+#lvUp.on .r1{animation:lvSpin 4.4s linear both}
+#lvUp.on .r2{animation:lvSpin2 4.4s linear both}
+#lvUp.on .fx{animation:lvFx 4.4s ease-out both;transform-origin:66px 66px}
+#lvUp.on .num b{animation:lvNum 4.4s cubic-bezier(.2,1.4,.3,1) both}
+#lvUp.on .num em{animation:lvFade 4.4s both .2s}
+#lvUp.on .k{animation:lvK 4.4s both}
+#lvUp.on .t{animation:lvRise 4.4s both .15s}
+#lvUp.on li{animation:lvRise 4.4s both var(--d)}
+#lvUp.on .perk{animation:lvRise 4.4s both 1.5s}
+@keyframes lvEmb{0%{opacity:0;transform:scale(.4)}10%{opacity:1;transform:scale(1.08)}18%{transform:scale(1)}86%{opacity:1}100%{opacity:0;transform:scale(1.15)}}
+@keyframes lvSpin{0%{transform:rotate(-90deg)}100%{transform:rotate(90deg)}}
+@keyframes lvSpin2{0%{transform:rotate(60deg) scale(1.3)}12%{transform:rotate(20deg) scale(1)}100%{transform:rotate(-80deg) scale(1)}}
+@keyframes lvFx{0%{opacity:0;transform:rotate(-40deg) scale(.5)}14%{opacity:1;transform:rotate(0) scale(1)}80%{opacity:1}100%{opacity:0;transform:rotate(30deg) scale(1.2)}}
+@keyframes lvNum{0%,8%{opacity:0;transform:scale(2.4)}20%{opacity:1;transform:scale(1)}86%{opacity:1}100%{opacity:0}}
+@keyframes lvK{0%,10%{opacity:0;letter-spacing:1.4em}26%{opacity:1;letter-spacing:.62em}86%{opacity:1}100%{opacity:0}}
+@keyframes lvRise{0%{opacity:0;transform:translateY(8px)}8%{opacity:1;transform:none}82%{opacity:1}100%{opacity:0}}
+@keyframes lvFade{0%{opacity:0}10%{opacity:1}82%{opacity:1}100%{opacity:0}}
+.devrow .seg button{font-size:11px}
+
+html.ja{--serif:'Noto Serif JP','Hiragino Mincho ProN','Yu Mincho','Noto Serif TC',serif}
+html.ja .act span{letter-spacing:.04em;padding-left:0;font-size:9px}
+/* ---- translucent controls: they float over the scene instead of covering it */
+.act{background:radial-gradient(circle at 50% 34%,rgba(255,253,246,.34),rgba(255,250,238,.1) 72%)!important;
+  box-shadow:inset 0 0 0 1px rgba(214,180,106,.8),inset 0 0 0 3px rgba(255,255,255,.16),0 2px 10px rgba(60,40,10,.1)!important;
+  backdrop-filter:blur(1.5px)!important;-webkit-backdrop-filter:blur(1.5px)!important}
+.act svg.i{filter:drop-shadow(0 0 2px rgba(255,255,255,.95)) drop-shadow(0 0 1px rgba(255,255,255,.9))}
+.act span{color:#5d4a26!important;text-shadow:0 0 4px #fff,0 0 2px #fff}
+.act.press{background:radial-gradient(circle at 50% 34%,rgba(255,252,240,.7),rgba(255,246,226,.35) 72%)!important;box-shadow:inset 0 0 0 1px var(--gold),0 0 22px rgba(255,214,140,.85)!important}
+#bJump.wing{box-shadow:inset 0 0 0 1.5px rgba(232,198,118,1),0 0 16px rgba(255,226,160,.6)!important}
+#bAtk.counter{box-shadow:inset 0 0 0 1.5px var(--gold),0 0 28px rgba(255,214,140,1)!important}
+.ic{background:radial-gradient(circle at 50% 34%,rgba(255,253,246,.42),rgba(255,250,238,.16) 72%)!important;box-shadow:inset 0 0 0 1px rgba(214,180,106,.75)!important}
+.ic svg{filter:drop-shadow(0 0 2px rgba(255,255,255,.95))}
+#lvw{position:absolute!important;left:calc(var(--sl) + 116px)!important;top:calc(var(--st) + 104px)!important;bottom:auto!important;transform:none!important;width:auto!important;display:flex!important;align-items:center;gap:7px;--p:0}
+#lvw .lv{position:relative;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;align-content:center;gap:0;
+  background:radial-gradient(circle at 50% 35%,#fffdf6,#f1e7d2 75%);box-shadow:inset 0 0 0 1px var(--gold),0 2px 10px rgba(70,52,20,.25);font:600 7.5px var(--cin);letter-spacing:.2em;color:var(--gold-d);line-height:1}
+#lvw .lv:before{content:'';position:absolute;inset:-4px;border-radius:50%;background:conic-gradient(#e2bd6c calc(var(--p)*360deg),rgba(255,255,255,.55) 0);-webkit-mask:radial-gradient(circle,transparent 63%,#000 65%);mask:radial-gradient(circle,transparent 63%,#000 65%);filter:drop-shadow(0 0 3px rgba(255,220,150,.8))}
+#lvw .lv b{font:600 18px/1 var(--cin);color:#8c6a2e;text-shadow:none;margin-top:1px}
+#lvw .xp{display:none}
+#lvw .n{min-width:0;text-align:left;font:500 9.5px var(--cin);color:var(--gold-d);text-shadow:0 0 6px #fff,0 0 2px #fff;margin-top:22px}
+@media (max-height:420px){#lvw{left:calc(var(--sl) + 104px)!important;top:calc(var(--st) + 94px)!important}}
+
+#codexOv .cx{display:grid;grid-template-columns:170px 1fr;gap:20px;margin-top:10px}
+#codexList{list-style:none;margin:0;padding:0}
+#codexList li{display:flex;align-items:center;gap:9px;padding:8px 6px;border-bottom:1px solid rgba(198,162,90,.18);font:500 13px var(--serif);letter-spacing:.12em;color:var(--ink-s);cursor:pointer;pointer-events:auto}
+#codexList li em{margin-left:auto;font-style:normal;font-size:10.5px;color:var(--gold-d)}
+#codexList li.sel{background:linear-gradient(90deg,rgba(226,189,108,.22),transparent);color:var(--ink)}
+#codexList li.unk{color:#a69f90}
+#codexDetail{display:grid;grid-template-columns:150px 1fr;gap:16px;align-items:start}
+#codexDetail .em svg{width:150px;height:150px;filter:drop-shadow(0 4px 14px rgba(120,96,40,.18))}
+#codexDetail h3{margin:2px 0 0;font:600 17px var(--serif);letter-spacing:.24em;color:var(--ink)}
+#codexDetail small{display:block;font:500 9px var(--cin);letter-spacing:.3em;color:var(--gold-d);margin:3px 0 8px}
+#codexDetail dl{display:grid;grid-template-columns:42px 1fr;gap:4px 10px;margin:0 0 8px;font:400 12px var(--serif)}
+#codexDetail dt{color:var(--gold-d);letter-spacing:.1em}#codexDetail dd{margin:0;color:var(--ink-s)}
+#codexDetail dd.st{color:#c9a35a;letter-spacing:.15em}#codexDetail dd.st i{font-style:normal;color:#ddd5c4}
+#codexDetail p{margin:6px 0;font:400 12.5px/1.75 var(--serif);color:var(--ink);letter-spacing:.06em}
+#codexDetail p.lock{color:#b0a893;font-size:11px;letter-spacing:.2em}
+#codexDetail p.lock:before{content:'🔒 ';filter:grayscale(1);opacity:.6}
+#codexDetail .rw{display:flex;gap:10px;margin:10px 0 8px;font:400 12px var(--serif)}#codexDetail .rw b{color:var(--gold-d);font-weight:500}
+#lvUp li.en{display:block;text-align:center;font:500 10px var(--cin);letter-spacing:.3em;color:#a88444}
+@media (max-height:420px){#codexOv .cx{grid-template-columns:140px 1fr;gap:12px}#codexDetail{grid-template-columns:110px 1fr}#codexDetail .em svg{width:110px;height:110px}}
+#bossBar{position:absolute;left:50%;top:calc(var(--st) + 12px);transform:translateX(-50%);width:min(560px,50vw);text-align:center}
+#bossBar .nm{display:flex;align-items:baseline;justify-content:center;gap:12px;margin-bottom:5px;text-shadow:0 0 8px #fff,0 0 2px #fff}
+#bossBar .nm span{font:600 14px var(--serif);letter-spacing:.3em;color:var(--ink);white-space:nowrap}
+#bossBar .nm small{white-space:nowrap}
+#bossBar .nm small{font:500 8.5px var(--cin);letter-spacing:.32em;color:var(--gold-d)}
+#bossBar .bar{position:relative;height:8px;background:rgba(30,24,30,.35);box-shadow:inset 0 0 0 1px rgba(255,236,190,.85),0 0 0 2px rgba(60,40,20,.25)}
+#bossBar .bar i{position:absolute;left:1px;top:1px;bottom:1px;right:1px;transform-origin:left}
+#bossHpD{background:rgba(255,255,255,.8)}
+#bossHp{background:linear-gradient(90deg,#8c5a8e,#c46b5a 40%,#e9b56a)}
+#bossBar .bar em{position:absolute;left:50%;top:-3px;bottom:-3px;width:2px;background:#fff2cf;box-shadow:0 0 4px #c69a4a}
+#bossBar.p2 #bossHp{background:linear-gradient(90deg,#5a2a6e,#a8425a 40%,#ffb15a)}
+body.boss #toasts{top:calc(var(--st) + 54px)}
+.glb{display:flex;gap:8px;align-items:center}
+.glb .lbtn{cursor:pointer}
+.mini{margin:6px 0 0;font:400 11px/1.7 var(--serif);color:var(--ink-s);letter-spacing:.05em}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="touch"></div>
+
+<!-- ============ HUD ============ -->
+<div id="hud" class="hidden">
+  <div class="vig"></div>
+  <div id="mm" class="ctl">
+    <canvas id="mmc"></canvas>
+    <svg viewBox="0 0 148 148">
+      <circle class="f2" cx="74" cy="74" r="63.5"/>
+      <circle class="f1" cx="74" cy="74" r="65"/>
+      <circle class="f3" cx="74" cy="74" r="70"/>
+      <g id="mmTicks"></g>
+      <path d="M74 1 L78.5 9 L74 13 L69.5 9 Z" fill="#c6a25a" stroke="#fffaf0" stroke-width="1"/>
+      <text class="n" x="74" y="27" text-anchor="middle" style="display:none">N</text>
+    </svg>
+  </div>
+  <div id="quest" class="ctl"><div class="qt"><i class="dia"></i><span id="qTitle">序章 · 光羽降臨</span></div><div id="qObj"></div></div>
+  <div id="topr" class="ctl">
+    <button class="ic" id="bCodex" aria-label="墮天錄"><svg viewBox="0 0 24 24"><path d="M5 4.5h10.5a3 3 0 0 1 3 3v12H8a3 3 0 0 1-3-3z"/><path d="M5 16.5a3 3 0 0 1 3-3h10.5"/><path d="M11.8 6.8c1.2 1 1.2 2.6 0 3.6c-1.2-1-1.2-2.6 0-3.6z"/></svg></button>
+    <button class="ic" id="bMap" aria-label="地圖"><svg viewBox="0 0 24 24"><path d="M3.5 6.5 9 4.5l6 2 5.5-2v13L15 19.5l-6-2-5.5 2z"/><path d="M9 4.5v13M15 6.5v13"/></svg></button>
+    <button class="ic" id="bSnd" aria-label="聲音"><svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path class="on" d="M15.5 9a4.5 4.5 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11"/><path class="off" d="M16 9.5l5 5M21 9.5l-5 5"/></svg></button>
+    <button class="ic" id="bSet" aria-label="設定"><svg viewBox="0 0 24 24"><path d="M12 2.8l1.6 5.6 5.6-1.6-3.6 4.6 3.6 4.6-5.6-1.6L12 20l-1.6-5.6-5.6 1.6 3.6-4.6-3.6-4.6 5.6 1.6z"/><circle cx="12" cy="11.4" r="2.2"/></svg></button>
+  </div>
+  <div id="lvw" class="ctl"><span class="lv"><span>LV</span><b id="lvB">1</b></span><div class="xp"><i id="xpF"></i></div><span class="n" id="xpN">0 / 3</span></div>
+  <div id="lvUp" class="hidden"><div class="emb"><svg viewBox="0 0 132 132"><g class="fx"><path transform="rotate(0 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(30 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(60 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(90 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(120 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(150 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(180 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(210 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(240 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(270 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(300 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(330 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/></g><circle class="r1" cx="66" cy="66" r="44"/><g class="r1"><path transform="rotate(0 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(15 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(30 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(45 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(60 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(75 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(90 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(105 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(120 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(135 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(150 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(165 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(180 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(195 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(210 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(225 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(240 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(255 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(270 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(285 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(300 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(315 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(330 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(345 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/></g><circle class="r2" cx="66" cy="66" r="52"/><circle class="r1" cx="66" cy="66" r="36" opacity=".5"/></svg><div class="num"><small id="lvSmall">LEVEL</small><b id="lvNum">2</b><em id="lvFromRow">Lv <span id="lvFrom">1</span> →</em></div></div><div class="k" id="lvK">LEVEL UP</div><div class="t" id="lvT">光羽之力 · 增強</div><ul id="lvStats"></ul><div class="perk" id="lvPerk"></div></div>
+  <div id="hpw" class="ctl"><span class="l">HP</span><div class="bar"><div id="hpd"></div><div id="hpf"></div></div><span id="hpn">100 / 100</span></div>
+  <svg id="stam" viewBox="0 0 44 44"><defs><linearGradient id="stg" x1="0" x2="1"><stop offset="0" stop-color="#e6c57a"/><stop offset="1" stop-color="#fff6dc"/></linearGradient></defs><circle class="tr" cx="22" cy="22" r="18"/><circle id="stArc" class="ar" cx="22" cy="22" r="18"/></svg>
+  <div id="joy" class="ctl"><div id="joyBase"><div id="joyKnob"></div></div></div>
+  <button class="act ctl" id="bAtk"><svg class="i" viewBox="0 0 24 24"><path d="M4.5 19.5 16.2 7.8"/><path d="M14.6 6.2 20 4l-2.2 5.4-1.6-1.6z" fill="currentColor"/><path d="M13.2 4.6c1.3.2 2.4.8 3 1.6M19.4 10.8c-.2-1.3-.8-2.4-1.6-3"/><path d="M6.2 15.6l2.2 2.2"/></svg><span id="atkLbl">攻擊</span></button>
+  <button class="act ctl" id="bLock" aria-label="鎖定"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5.2"/><path d="M12 2.5v4.2M12 17.3v4.2M2.5 12h4.2M17.3 12h4.2"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg></button>
+  <button class="act ctl" id="bHeal" aria-label="光露"><svg class="i" viewBox="0 0 24 24"><path d="M9.6 3.5h4.8M10.5 3.5v4.4L6.9 13.2a5.4 5.4 0 1 0 10.2 0l-3.6-5.3V3.5"/><path d="M8.3 15.4c2 .9 5.4.9 7.4 0"/></svg><b id="healN">3</b></button>
+  <button class="act ctl" id="bSkill"><svg class="cd" viewBox="0 0 64 64"><circle id="skCd" cx="32" cy="32" r="16" style="stroke-dashoffset:100.53"/></svg><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.6"/><circle cx="12" cy="12" r="8.2" stroke-dasharray="1.6 2.4"/><path d="M12 1.5v2.4M12 20.1v2.4M1.5 12h2.4M20.1 12h2.4"/></svg><span>聖環</span><b id="skNum"></b></button>
+  <button class="act ctl" id="bDodge"><svg class="i" viewBox="0 0 24 24"><path d="M19.5 4.5C12 5 6.5 9.8 4.5 19.5c3-4.4 6.4-7 10.6-8.2"/><path d="M19.5 4.5c-.5 4.8-3 8.6-7.6 10.8"/><path d="M9 14.5l-2 1M11 12.4l-2.6.4M13.2 10.6l-2.6-.2"/></svg><span>閃避</span></button>
+  <button class="act ctl" id="bJump"><svg class="i" viewBox="0 0 24 24"><path d="M12 20V8.5M8.5 11.5 12 8l3.5 3.5"/><path d="M12 4.5c-3-1.5-6.8-1-9 1.5 2.6-.4 4.5.4 5.6 1.6"/><path d="M12 4.5c3-1.5 6.8-1 9 1.5-2.6-.4-4.5.4-5.6 1.6"/></svg><span id="jumpLbl">跳躍</span></button>
+  <button id="bInteract" class="ctl hidden"><i class="dia"></i><span class="t"><b id="intLbl">點亮聖壇</b><small id="intSub">KINDLE THE SHRINE</small></span></button>
+  <div id="region"><div class="orn"><i></i><b></b><i></i></div><div id="regCn"></div><div id="regEn"></div></div>
+  <div id="toasts"></div>
+  <div id="lockRet"><i></i><div class="hpm"><b id="lockHp"></b></div></div>
+  <div id="dnums"></div>
+  <div id="bigText"><div class="cn"></div><div class="en"></div></div>
+  <div id="bossBar" class="hidden"><div class="nm"><span id="bossName">墮光守衛 · 歐菲爾</span><small id="bossEn">OPHIEL, THE FALLEN WARDEN</small></div><div class="bar"><i id="bossHpD"></i><i id="bossHp"></i><em></em></div></div>
+</div>
+<div id="witch"></div>
+<div id="dmg"></div>
+
+<!-- ============ LANDING ============ -->
+<div id="landing">
+  <div class="veil"></div>
+  <svg id="haloUI" viewBox="0 0 400 400">
+    <defs><filter id="hglow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+    <circle class="r3" cx="200" cy="200" r="168" opacity=".75"/>
+    <circle class="r1" cx="200" cy="200" r="176"/>
+    <g class="spin"><circle class="r2" cx="200" cy="200" r="186"/><g id="haloTicks"></g></g>
+    <g class="spinr"><circle class="r1" cx="200" cy="200" r="196" opacity=".45"/></g>
+    <g id="haloStars"></g>
+  </svg>
+  <button class="ic" id="lSnd" aria-label="聲音"><svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path class="on" d="M15.5 9a4.5 4.5 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11"/><path class="off" d="M16 9.5l5 5M21 9.5l-5 5"/></svg></button>
+  <div class="brand">
+    <div class="eyebrow">A SERAPHIC OPEN-WORLD JOURNEY</div>
+    <h1 class="logo">LUMENFALL</h1>
+    <div class="rule"><i></i><b></b><i></i></div>
+    <div class="cn">光羽之境</div>
+    <p class="tag">Where the last light falls, a seraph awakens.</p>
+    <nav id="menu">
+      <button class="primary" data-act="start"><span class="c" id="startCn">開始旅程</span><span class="e" id="startEn">BEGIN JOURNEY</span></button>
+      <button data-act="howto"><span class="c">操作說明</span><span class="e">HOW TO PLAY</span></button>
+      <button data-act="settings"><span class="c">設定</span><span class="e">SETTINGS</span></button>
+    </nav>
+  </div>
+  <div id="tapHint"><span class="c">觸碰開始</span><span class="e">TAP TO BEGIN</span></div>
+  <div class="corner bl">PROTOTYPE · v0.3 · 神域</div>
+  <div class="corner br">MOBILE · LANDSCAPE</div>
+</div>
+
+<!-- ============ OVERLAYS ============ -->
+<div id="codexOv" class="ov hidden">
+  <div class="panel" style="width:min(780px,96vw)">
+    <h2>墮天錄<small>CODEX OF THE FALLEN</small></h2>
+    <div class="sep"></div>
+    <div class="cx"><ul id="codexList"></ul><div id="codexDetail"></div></div>
+    <button class="ic x" data-close aria-label="關閉"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+</div>
+<div id="mapOv" class="ov hidden">
+  <div class="panel">
+    <div class="mapbox"><canvas id="bigmap"></canvas></div>
+    <div class="side">
+      <h2>聖域地圖<small>THE REALM</small></h2>
+      <div class="sep"></div>
+      <ul id="mapList"></ul>
+      <div class="legend"><span id="mapHint"></span><br>◆ 聖壇　✦ 聖所　○ 光羽　● 蝕影　⌃ 上升光流</div>
+    </div>
+    <button class="ic x" data-close aria-label="關閉"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+</div>
+<div id="setOv" class="ov hidden">
+  <div class="panel" style="width:min(460px,94vw)">
+    <h2>設定<small>SETTINGS</small></h2>
+    <div class="sep"></div>
+    <div class="row"><div class="k">畫質<small>GRAPHICS</small></div><div class="seg"><button data-q="low">流暢</button><button data-q="mid">均衡</button><button data-q="high">極致</button></div></div>
+    <div class="row"><div class="k">語言<small>LANGUAGE</small></div><div class="seg"><button data-lang="zh">繁中</button><button data-lang="ja">日本語</button></div></div>
+    <div class="row"><div class="k">聲音<small>SOUND</small></div><button class="tog" id="sndToggle"><em>開啟</em><i></i></button></div>
+    <div class="row"><div class="k">鏡頭自動跟隨<small>AUTO CAMERA</small></div><button class="tog" id="camToggle"><em>關閉</em><i></i></button></div>
+    <div class="row"><div class="k">角色模型<small>CHARACTER MODEL</small></div><div class="glb"><label class="lbtn" for="glbIn"><span>上載 GLB</span><small>UPLOAD</small></label><input type="file" id="glbIn" accept=".glb,.gltf" hidden><button class="lbtn" id="glbReset"><span>還原</span></button></div></div>
+    <p class="mini" id="glbStat">支援 Mixamo 標準骨架嘅人形模型（例如 Tripo 綁骨後匯出嘅 GLB）。</p>
+    <div class="row devrow"><div class="k">測試工具<small>PROTOTYPE ONLY</small></div><div class="seg"><button data-dev="realm">去神域</button><button data-dev="earth">去人間</button><button data-dev="isle">回鏡湖</button><button data-dev="feather">光羽 +3</button></div></div>
+    <p class="mini" id="devStat">方便試玩用：直接傳送，或者即刻拎 3 根光羽試升 Lv。</p>
+    <div class="btns">
+      <button class="lbtn" id="resetProg"><span>重置旅程進度</span><small>RESET</small></button>
+      <button class="lbtn" id="setTitle"><span>回到標題</span><small>TITLE</small></button>
+    </div>
+    <button class="ic x" data-close aria-label="關閉"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+</div>
+<div id="howOv" class="ov hidden">
+  <div class="panel">
+    <h2>操作說明<small>HOW TO PLAY</small></h2>
+    <div class="sep"></div>
+    <div class="cols">
+      <div><h3>TOUCH</h3><dl>
+        <dt>左側拖曳</dt><dd>移動（推到盡為奔跑）</dd>
+        <dt>右側拖曳</dt><dd>轉動視角</dd>
+        <dt>攻擊</dt><dd>連按四段槍舞・長按蓄力重擊</dd>
+        <dt>閃避</dt><dd>剛好避開 → 聖時慢動作</dd>
+        <dt>聖裁</dt><dd>聖時內按攻擊，發動反擊</dd>
+        <dt>鎖定</dt><dd>鎖定最近敵人／大型 Boss</dd>
+        <dt>聖環　聖瓶</dt><dd>範圍淨化　回復生命</dd>
+        <dt>跳躍／展翼</dt><dd>空中按展翼滑翔，再按振翼上升</dd>
+        <dt>空中閃避</dt><dd>收翼俯衝</dd></dl></div>
+      <div><h3>KEYBOARD</h3><dl>
+        <dt>WASD</dt><dd>移動</dd>
+        <dt>拖曳滑鼠</dt><dd>轉動視角，點擊攻擊</dd>
+        <dt>J / K</dt><dd>攻擊（長按蓄力）／聖環</dd>
+        <dt>L　R</dt><dd>鎖定　聖瓶</dd>
+        <dt>Shift</dt><dd>閃避</dd>
+        <dt>Space</dt><dd>跳躍／展翼／振翼</dd>
+        <dt>E　M</dt><dd>互動　地圖</dd></dl></div>
+    </div>
+    <p class="note">收集光羽就會升 Lv（生命、攻擊提升）。點亮四座聖壇、喚醒聖所後，<br>Lv3 以上可以由聖核踏上天梯，升往天上神域，挑戰審判之環的審判者。</p>
+    <button class="ic x" data-close aria-label="關閉"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+</div>
+<div id="endOv" class="big hidden">
+  <div class="k1">PROLOGUE · COMPLETE</div>
+  <div class="k2">光羽之境已甦醒</div>
+  <div class="k3">THE REALM AWAKENS</div>
+  <p>環光再次轉動，聖所的光落回大地。散落各處的光羽仍在等待著你。</p>
+  <div class="btns"><button class="lbtn gold" id="endStay"><span>繼續探索</span><small>EXPLORE</small></button><button class="lbtn" id="endTitle"><span>回到標題</span><small>TITLE</small></button></div>
+</div>
+<div id="deathOv" class="big hidden">
+  <div class="k1">THE LIGHT DIMS</div>
+  <div class="k2">光芒暫熄</div>
+  <p>羽翼仍在。於最後點亮的聖壇再次甦醒。</p>
+  <div class="btns"><button class="lbtn gold" id="reviveBtn"><span>再次甦醒</span><small>RISE AGAIN</small></button></div>
+</div>
+<div id="rotate" class="hidden">
+  <svg viewBox="0 0 64 64"><rect x="20" y="8" width="24" height="48" rx="4"/><path d="M29 50h6"/><path d="M52 22a22 22 0 0 0-8-10" /><path d="M44 12h0.5l-.5 4"/></svg>
+  <div class="c">請將手機橫置</div><div class="e">ROTATE TO LANDSCAPE</div>
+</div>
+<div id="flash"></div>
+<div id="loader">
+  <svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" fill="none" stroke="#c6a25a" stroke-width=".8"/><circle cx="60" cy="60" r="46" fill="none" stroke="#c6a25a" stroke-width=".5" stroke-dasharray="1 4"/><path d="M60 4l3 6-3 3-3-3z" fill="#c6a25a"/><path d="M60 116l3-6-3-3-3 3z" fill="#c6a25a"/></svg>
+  <div class="ln">LUMENFALL</div>
+  <div class="bar"><i id="loadBar"></i></div>
+  <div id="loadMsg">光正在匯聚…</div>
+</div>
+
+<script>
+// decorate the title halo + minimap frame
+(function(){
+  const ns='http://www.w3.org/2000/svg';
+  const t=document.getElementById('haloTicks');
+  for(let i=0;i<120;i++){const a=i/120*Math.PI*2,l=i%10===0?9:i%5===0?5:2.5,r=186;const ln=document.createElementNS(ns,'line');
+    ln.setAttribute('x1',200+Math.cos(a)*r);ln.setAttribute('y1',200+Math.sin(a)*r);ln.setAttribute('x2',200+Math.cos(a)*(r-l));ln.setAttribute('y2',200+Math.sin(a)*(r-l));
+    ln.setAttribute('stroke','rgba(214,182,112,.7)');ln.setAttribute('stroke-width',i%10===0?1:.6);t.appendChild(ln);}
+  const s=document.getElementById('haloStars');
+  for(let i=0;i<16;i++){const a=(i/16)*Math.PI*2+Math.sin(i*7)*0.2,r=176+Math.sin(i*3.3)*14,sz=2+((i*7)%5);const p=document.createElementNS(ns,'path');
+    const x=200+Math.cos(a)*r,y=200+Math.sin(a)*r;
+    p.setAttribute('d',`M${x} ${y-sz*2.2} Q${x} ${y} ${x+sz*2.2} ${y} Q${x} ${y} ${x} ${y+sz*2.2} Q${x} ${y} ${x-sz*2.2} ${y} Q${x} ${y} ${x} ${y-sz*2.2}Z`);
+    p.setAttribute('class','st');p.style.animationDelay=(i*0.37%3.2)+'s';s.appendChild(p);}
+  const m=document.getElementById('mmTicks');
+  for(let i=0;i<72;i++){const a=i/72*Math.PI*2,r1=65,r2=i%6===0?60.5:63;const ln=document.createElementNS(ns,'line');
+    ln.setAttribute('x1',74+Math.cos(a)*r1);ln.setAttribute('y1',74+Math.sin(a)*r1);ln.setAttribute('x2',74+Math.cos(a)*r2);ln.setAttribute('y2',74+Math.sin(a)*r2);
+    ln.setAttribute('class','tk');ln.setAttribute('opacity',i%6===0?.9:.35);m.appendChild(ln);}
+})();
+</script>
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>
