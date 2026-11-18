@@ -133,23 +133,27 @@ export function buildGrid() {
 // ---------- the human world: a second heightfield far below the cloud sea ----------
 export const EARTH_Y = -700;
 export const LAYER = { cur: 0 };
-export const grid2 = { h: new Float32Array(GN * GN), mask: new Float32Array(GN * GN), flower: new Float32Array(GN * GN), wheat: new Float32Array(GN * GN) };
+// the human world is a larger grid of its own: 1.28 km square at 4 m cells
+export const EWORLD = 1280, EHALF = 640, ESEG = 320, EGN = ESEG + 1, ECELL = EWORLD / ESEG;
+export const grid2 = { h: new Float32Array(EGN * EGN), mask: new Float32Array(EGN * EGN), flower: new Float32Array(EGN * EGN), wheat: new Float32Array(EGN * EGN) };
 // triangle interpolation identical to PlaneGeometry's split; L = 0 island (y 0), L = 1 human world (y EARTH_Y)
 export function groundAtL(x, z, L) {
-  const fx = (x + HALF) / CELL, fz = (z + HALF) / CELL;
+  const half = L ? EHALF : HALF, cell = L ? ECELL : CELL, seg = L ? ESEG : SEG, gn = L ? EGN : GN;
+  const fx = (x + half) / cell, fz = (z + half) / cell;
   const base = L ? EARTH_Y : 0;
-  if (fx < 0 || fz < 0 || fx >= SEG || fz >= SEG) return base - 100;
+  if (fx < 0 || fz < 0 || fx >= seg || fz >= seg) return base - 100;
   const ix = Math.floor(fx), iz = Math.floor(fz);
   const u = fx - ix, v = fz - iz;
   const H = L ? grid2.h : grid.h;
-  const h00 = H[iz * GN + ix], h10 = H[iz * GN + ix + 1], h01 = H[(iz + 1) * GN + ix], h11 = H[(iz + 1) * GN + ix + 1];
+  const h00 = H[iz * gn + ix], h10 = H[iz * gn + ix + 1], h01 = H[(iz + 1) * gn + ix], h11 = H[(iz + 1) * gn + ix + 1];
   if (u + v <= 1) return base + h00 + (h10 - h00) * u + (h01 - h00) * v;
   return base + h11 + (h01 - h11) * (1 - u) + (h10 - h11) * (1 - v);
 }
 export function groundAt(x, z) { return groundAtL(x, z, LAYER.cur); }
 export function maskAt(x, z) {
+  if (LAYER.cur) { const ix = clamp(Math.round((x + EHALF) / ECELL), 0, ESEG), iz = clamp(Math.round((z + EHALF) / ECELL), 0, ESEG); return grid2.mask[iz * EGN + ix]; }
   const ix = clamp(Math.round((x + HALF) / CELL), 0, SEG), iz = clamp(Math.round((z + HALF) / CELL), 0, SEG);
-  return (LAYER.cur ? grid2 : grid).mask[iz * GN + ix];
+  return grid.mask[iz * GN + ix];
 }
 
 // ---------- procedural textures ----------

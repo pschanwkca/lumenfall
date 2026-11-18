@@ -50,6 +50,9 @@ export function installFog(sunDir) {
     float sunA = pow(max(dot(fDir, ${S}), 0.0), 5.0);
     vec3 fc = mix(fogColor, ${lin('#ffe1b0')}, sunA * 0.7);
     fc = mix(fc, ${lin('#9fbadc')}, (1.0 - sunA) * smoothstep(0.02, 0.4, fDir.y) * 0.5);
+    #ifdef FOG_SCALE
+      fogFactor *= FOG_SCALE; // landmarks that should read through the haze
+    #endif
     gl_FragColor.rgb = mix(gl_FragColor.rgb, fc, fogFactor);
   }
 #endif`;
@@ -87,21 +90,26 @@ function worldVaryings(sh) {
   sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vWN;\n' + NOISE);
 }
 // stratified rock on steep faces, macro colour breakup on flats
-export function terrainDetail(m) {
+export function terrainDetail(m, o = {}) {
+  if (o.tint) m.defines = Object.assign({}, m.defines, { TINT_ROCK: 1 }); // cliffs take on the painted ground's tone (scorched rift walls)
   m.onBeforeCompile = (sh) => {
     worldVaryings(sh);
     sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
       {
+        vec3 vc0 = diffuseColor.rgb;
         float m1 = efb(vWP.xz*0.045), m2 = en(vWP.xz*0.6);
         diffuseColor.rgb *= 0.8 + 0.32*m1 + 0.1*m2;
         float steep = 1.0 - smoothstep(0.48, 0.8, vWN.y);
         float band = 0.5 + 0.5*sin(vWP.y*0.9 + m1*6.0);
         float grit = en(vec2(vWP.x + vWP.z, vWP.y*2.0)*0.35);
         vec3 rk = mix(${lin('#8f8678')}, ${lin('#bdb3a1')}, band*0.7 + grit*0.3) * (0.82 + 0.3*m2);
+        #ifdef TINT_ROCK
+          rk *= clamp(vc0 / ${lin('#9a9184')}, vec3(0.1), vec3(1.2));
+        #endif
         diffuseColor.rgb = mix(diffuseColor.rgb, rk, steep);
       }`);
   };
-  m.customProgramCacheKey = () => 'lf-terrain';
+  m.customProgramCacheKey = () => 'lf-terrain' + (o.tint ? '-t' : '');
   return m;
 }
 export function strataMaterial(moss = 0.85, o = {}) {

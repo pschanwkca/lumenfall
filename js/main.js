@@ -9,7 +9,8 @@ import { buildWorld, W, colliders, sunDir, updateAmbient, setWaterQuality, HALO_
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { GradeShader, GodRayShader, CLOUD, hookCloudClock, rockGeo } from './env.js';
 import { setLang, tr } from './i18n.js';
-import { buildEarthGrid, buildEarth, EARTH, earthRegion } from './earth.js';
+import { buildEarthGrid, buildEarth, EARTH, earthRegion, earthCull, inRift, SEA_NORTH } from './earth.js';
+import { createFolk, FOLK_PAL } from './folk.js';
 import { getFeatherGeo } from './hero.js';
 import { SeraphActor } from './seraph.js';
 import { createBoss, BOSS_HOME } from './boss.js';
@@ -31,7 +32,9 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
 };
 const settings = Object.assign({ quality: isTouch ? 'mid' : 'high', sound: true, autoCam: false, lang: 'zh', sens: 1 }, store.get('lumenfall_settings', {}));
-let prog = Object.assign({ f: [], s: [false, false, false, false], end: false, boss: false, boss2: false, boss3: false, realm: false, earth: false, weapon: 'spear', kills: {}, seen: {}, broken: {} }, store.get('lumenfall_progress', {}));
+let prog = Object.assign({ f: [], s: [false, false, false, false], end: false, boss: false, boss2: false, boss3: false, realm: false, earth: false, weapon: 'spear', kills: {}, seen: {}, broken: {}, rescued: {}, beacons: {} }, store.get('lumenfall_progress', {}));
+if (!prog.rescued) prog.rescued = {}; if (!prog.beacons) prog.beacons = {};
+const nRescued = () => Object.keys(prog.rescued).length, nBeacons = () => Object.keys(prog.beacons).length;
 const save = () => store.set('lumenfall_progress', prog);
 let Q = QUAL[settings.quality] || QUAL.mid;
 
@@ -106,9 +109,9 @@ const LV_PERK = { 3: '解鎖「天梯」· 可由環光聖所升往天上神域'
 const lvFor = (n) => { let l = 1; while (l < LV_REQ.length && n >= LV_REQ[l]) l++; return l; };
 P.lv = lvFor(prog.f.length); P.lvTarget = P.lv; P.atkMul = 1; P.inRealm = false; P.inEarth = false;
 function applyStats(heal) {
-  P.maxHp = 100 + (P.lv - 1) * 10 + (prog.boss ? 25 : 0) + (prog.boss2 ? 25 : 0) + (prog.boss3 ? 25 : 0);
+  P.maxHp = 100 + (P.lv - 1) * 10 + (prog.boss ? 25 : 0) + (prog.boss2 ? 25 : 0) + (prog.boss3 ? 25 : 0) + nBeacons() * 10; // each kindled beacon: +10
   P.atkMul = 1 + (P.lv - 1) * 0.06 + (prog.boss3 ? 0.1 : 0);
-  P.maxFlasks = 3 + (P.lv >= 4 ? 1 : 0) + (prog.boss2 ? 1 : 0);
+  P.maxFlasks = 3 + (P.lv >= 4 ? 1 : 0) + (prog.boss2 ? 1 : 0) + (nRescued() >= 3 ? 1 : 0) + (nRescued() >= 6 ? 1 : 0); // the people's gratitude
   if (heal) { P.hp = P.maxHp; P.flasks = P.maxFlasks; } else P.hp = Math.min(P.hp, P.maxHp);
 }
 applyStats(true);
@@ -462,7 +465,7 @@ function updateFX(dt) {
 
 // ------------------------------------------------------------------ light feathers (collectibles)
 const feathers = [];
-let REALM_F0 = 999, EARTH_F0 = 999, EARTH_F1 = 999;
+let REALM_F0 = 999, EARTH_F0 = 999, EARTH_F1 = 999, EARTH_F2 = 999;
 function buildFeathers() {
   const spots = [];
   const g = (x, z, dy = 1.4) => [x, Math.max(0, groundAt(x, z)) + dy, z];
@@ -484,6 +487,8 @@ function buildFeathers() {
   EARTH_F1 = spots.length;
   for (const f of BREAK_F) spots.push(f);
   for (const f of REALM.extraFeathers) spots.push(f);
+  EARTH_F2 = spots.length;
+  for (const f of EARTH.moreFeathers) spots.push(f);
   const fMat = new THREE.MeshStandardMaterial({ map: TEX.feather, transparent: true, side: THREE.DoubleSide, depthWrite: false, color: '#fff8e8', emissive: '#ffe6a8', emissiveMap: TEX.feather, emissiveIntensity: 2.4 });
   const glowMat = new THREE.SpriteMaterial({ map: TEX.glow, color: new THREE.Color(1.5, 1.1, 0.55), transparent: true, opacity: 0.75, depthWrite: false });
   const beamMat = new THREE.MeshBasicMaterial({ map: TEX.beam, color: new THREE.Color(1.25, 0.95, 0.5), transparent: true, opacity: 0.42, depthWrite: false, side: THREE.DoubleSide });
@@ -587,6 +592,7 @@ function buildShades() {
   spawn(-46, -38, -1); spawn(62, 78, -1); spawn(-110, 90, -1); spawn(70, 60, -1, 'archer');
   for (const [x, y, z, type, isle] of REALM.enemies) spawn(x, z, -1, type, y, isle);
   for (const [x, z, type] of EARTH.enemies) spawn(x, z, -1, type, undefined, undefined, true);
+  spawnShade = spawn;
   // projectile pool: dark feathers
   const pm = new THREE.MeshStandardMaterial({ map: TEX.feather, color: '#26202e', emissive: '#c78cff', emissiveMap: TEX.feather, emissiveIntensity: 1.6, transparent: true, side: THREE.DoubleSide, depthWrite: false });
   for (let i = 0; i < 18; i++) {
@@ -652,8 +658,10 @@ function damageShade(s, dmg, from, kind = 'hit') {
     updateQuest();
   }
 }
+let spawnShade = null;
 function updateShades(dt) {
   for (const s of shades) {
+    if (s.dormant) continue;
     if (!s.realm && !!s.earth !== (C.LAYER.cur === 1)) { if (!s.dead) { s.g.visible = false; s.sh.visible = false; } continue; }
     const far = Math.abs(s.pos.x - P.pos.x) > 110 || Math.abs(s.pos.z - P.pos.z) > 110 || Math.abs(s.pos.y - P.pos.y) > 60;
     if (!s.dead) { s.g.visible = !far; s.sh.visible = !far; if (far && s.st === 'idle') continue; }
@@ -669,10 +677,13 @@ function updateShades(dt) {
     }
     s.t += dt; s.hitT -= dt;
     const toP = _v.copy(P.pos).sub(s.pos); toP.y = 0;
-    const dist = toP.length();
+    let dist = toP.length();
     const homeD = Math.hypot(s.pos.x - s.home.x, s.pos.z - s.home.z);
     const archer = s.type === 'archer';
-    const aggro = state === 'play' && dist < (archer ? 24 : 14) && Math.abs(P.pos.y - s.pos.y) < 7 && homeD < 34;
+    // a siege beast goes for the beacon unless the seraph is right in its face
+    const siege = !archer && s.siege && s.siege.st === 'siege' && !(dist < 7 && Math.abs(P.pos.y - s.pos.y) < 4) ? s.siege : null;
+    if (siege) { toP.set(siege.x - s.pos.x, 0, siege.z - s.pos.z); dist = Math.max(0, toP.length() - 1.6); }
+    const aggro = !!siege || (state === 'play' && dist < (archer ? 24 : 14) && Math.abs(P.pos.y - s.pos.y) < 7 && (homeD < 34 || !!s.siege));
     let glint = 0;
     if (archer) {
       switch (s.st) {
@@ -728,12 +739,13 @@ function updateShades(dt) {
           s.mat.emissiveIntensity = 1.3 + s.t * 6;
           s.body.position.x = Math.sin(s.t * 70) * 0.04;
           glint = clamp((s.t - 0.25) / 0.3, 0, 1);
-          if (s.t > 0.6) { s.st = 'lunge'; s.t = 0; s.vel.copy(s.dir).multiplyScalar(13); s.body.position.x = 0; Audio.sfx('dash'); }
+          if (s.t > 0.6) { s.st = 'lunge'; s.t = 0; s.bit = false; s.vel.copy(s.dir).multiplyScalar(13); s.body.position.x = 0; Audio.sfx('dash'); }
           break;
         }
         case 'lunge': {
           s.vel.multiplyScalar(Math.exp(-2.5 * dt));
-          if (dist < 1.25 && Math.abs(P.pos.y - s.pos.y) < 2) hurtPlayer(16, s.pos);
+          if (siege) { if (!s.bit && dist < 1.4) { s.bit = true; siege.hp -= 11; burst(FX.sparks, siege.x, siege.y + 2, siege.z, 14, { speed: 4, up: 2, life: 0.6, size: 1, c: [2, 0.6, 0.3] }); folkFlinch(siege); } }
+          else if (dist < 1.25 && Math.abs(P.pos.y - s.pos.y) < 2) hurtPlayer(16, s.pos);
           if (s.t > 0.4) { s.st = 'recover'; s.t = 0; }
           break;
         }
@@ -1056,7 +1068,7 @@ function buildBreakables() {
       rg.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
       const m = new THREE.Mesh(rg, rockMat); m.scale.set(3.4, 2.6, 3.2); m.position.y = 1.6; m.castShadow = m.receiveShadow = true; g.add(m);
     }
-    g.position.set(x, y, z); scene.add(g);
+    g.position.set(x, y, z); (L ? EARTH.root : scene).add(g);
     const col = { x, z, r: 3.3, y0: y - 1, y1: y + 6 };
     colliders.solids.push(col);
     const b = { id, kind, x, y, z, g, col, broken: !!prog.broken[id], need: kind === 'seal' ? 'shield' : 'oath', gate: !feather };
@@ -1064,8 +1076,8 @@ function buildBreakables() {
     if (feather) BREAK_F.push([x, y + 1.4, z]);
     breakables.push(b);
   };
-  add('sealElder', 'seal', -178, 80, 0); add('sealNorth', 'seal', -60, -160, 0); add('sealWood', 'seal', -200, 40, 1);
-  add('rockLake', 'rock', 40, 110, 0); add('rockPeak', 'rock', 180, 160, 1); add('rockKeep', 'rock', -104, -150, 1, false);
+  add('sealElder', 'seal', -178, 80, 0); add('sealNorth', 'seal', -60, -160, 0); add('sealWood', 'seal', -170, 205, 1);
+  add('rockLake', 'rock', 40, 110, 0); add('rockPeak', 'rock', 238, -150, 1); add('rockKeep', 'rock', EARTH.keepGate.x, EARTH.keepGate.z, 1, false);
 }
 function breakIt(b) {
   b.broken = true; prog.broken[b.id] = true; save();
@@ -1370,13 +1382,14 @@ function updatePlayer(dt) {
   // safe spot + falling into the cloud sea
   P.safeT -= dt;
   const r = Math.hypot(P.pos.x, P.pos.z);
-  if (P.grounded && P.safeT < 0 && (P.inRealm ? P.pos.y > REALM.y - 20 : P.inEarth || r < edgeR(Math.atan2(P.pos.z, P.pos.x)) - 16)) { P.safe.copy(P.pos); P.safeT = 0.5; }
+  if (P.grounded && P.safeT < 0 && (P.inRealm ? P.pos.y > REALM.y - 20 : P.inEarth ? !inRift(P.pos.x, P.pos.z, 3) && P.pos.y > C.EARTH_Y - 6 : r < edgeR(Math.atan2(P.pos.z, P.pos.x)) - 16)) { P.safe.copy(P.pos); P.safeT = 0.5; }
   if (P.inRealm && P.pos.y < REALM.y - 70) { P.inRealm = false; currentRegion = ''; updateQuest(); } // dropped out of the Empyrean: fall to the isle below
   if (!P.inEarth && P.pos.y < -70) dropToEarth(); // over the island's edge: through the cloud sea to the human world
   if (P.inEarth) {
     const rr = Math.hypot(P.pos.x, P.pos.z);
-    if (rr > 262) { P.pos.x *= 262 / rr; P.pos.z *= 262 / rr; }
-    if (P.pos.y < C.EARTH_Y - 60) fallRespawn();
+    if (rr > 600) { P.pos.x *= 600 / rr; P.pos.z *= 600 / rr; }
+    if (P.pos.y < C.EARTH_Y - 26 && inRift(P.pos.x, P.pos.z, 6)) riftRepel();
+    else if (P.pos.y < C.EARTH_Y - 60) fallRespawn();
   }
 }
 function dropToEarth() {
@@ -1386,11 +1399,20 @@ function dropToEarth() {
   P.vel.y = Math.min(P.vel.y, -40); P.glide = false; P.grounded = false;
   P.inEarth = true; P.inRealm = false;
   syncLayer();
+  P.checkpoint.copy(EARTH.landing); // the light pillar is where a fallen seraph wakes in this world
   flashScreen(0.9); CAM.shake = Math.max(CAM.shake, 0.4);
   const first = !prog.earth; prog.earth = true; save();
   regionCard('人間', 'THE MORTAL WORLD');
   if (first) setTimeout(() => toast('<i class="dia"></i>穿過雲海，墜向人間 · 按「展翼」減速滑翔', true), 900);
   updateQuest();
+}
+function riftRepel() {
+  // the seal holds: the dark throws the seraph back up to the rim (no harm done — the way down isn't open yet)
+  flashScreen(0.7); CAM.shake = Math.max(CAM.shake, 0.5);
+  P.pos.copy(P.safe); P.pos.y += 1; P.vel.set(0, 0, 0); P.glide = false; P.grounded = true;
+  burst(FX.sparks, P.pos.x, P.pos.y + 1, P.pos.z, 40, { speed: 6, up: 3, life: 1, size: 1.1, c: [2, 0.55, 0.25] });
+  toast('<i class="dia"></i>深淵被封印 · 一股力量將你推回地面', true);
+  Audio.sfx('hurt');
 }
 function fallRespawn() {
   flashScreen(0.9);
@@ -1411,6 +1433,8 @@ function revive() {
   $('hud').classList.remove('dim');
   flashScreen(1);
   P.pos.copy(P.checkpoint); P.vel.set(0, 0, 0); P.hp = P.maxHp; P.stamina = 100; P.inv = 2; P.lastHurt = time; P.flasks = P.maxFlasks; hero.resetCloth();
+  P.inEarth = P.checkpoint.y < -350; P.inRealm = P.checkpoint.y > 200; syncLayer(); currentRegion = ''; updateQuest();
+  for (const b of beacons) if (b.st === 'siege') endSiege(b, 'calm');
   for (const b of bosses) b.reset();
   P.grounded = true; P.glide = false;
   CAM.yaw = P.yaw + Math.PI;
@@ -1418,6 +1442,156 @@ function revive() {
   state = 'play';
 }
 
+
+// ------------------------------------------------------------------ the people of the mortal world
+// Captives sealed in miasma crystal (clear the guards, then purify), beacons whose keepers must be defended
+// against waves of beasts (then kindle the flame), and Belldawn Hold, which fills with people and light as they come home.
+let folk = null;
+const captives = [], beacons = [];
+const HOME_LINES = ['謝謝你。我把燈帶回來了。', '回到這裡，才知道自己還活著。', '我會守住這盞燈，直到天亮。', '他們說天使都墮落了。你不一樣。', '晨鐘響的時候，我會為你祈禱。', '我要把這件事告訴所有人。'];
+function say(line) { toast(`<span class="say">「${line}」</span>`); }
+function lampsLit() { return 5 + nRescued() * 2 + nBeacons() * 2; }
+function addResident(i) {
+  const T = EARTH.town, sl = T.slots[i % T.slots.length], ring = Math.floor(i / T.slots.length);
+  const x = T.x + sl[0] * (1 + ring * 0.6), z = T.z + sl[1] * (1 + ring * 0.6);
+  return folk.add({ x, z, yaw: Math.atan2(T.x - x, T.z - z), st: i % 3 === 1 ? 'pray' : 'idle', line: HOME_LINES[i % HOME_LINES.length] });
+}
+function makeCrystal(x, y, z) {
+  const g = new THREE.Group(); g.position.set(x, y, z);
+  const m = new THREE.MeshStandardMaterial({ color: '#2b2133', emissive: '#ff5a3a', emissiveMap: TEX.vein, emissiveIntensity: 1.3, roughness: 0.18, metalness: 0.35, transparent: true, opacity: 0.82 });
+  const geo = new THREE.OctahedronGeometry(1, 0);
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * Math.PI * 2, top = i >= 7, sh = new THREE.Mesh(geo, m);
+    if (top) { sh.position.set((i - 7.5) * 0.5, 2.4, 0); sh.scale.set(0.35, 1.3, 0.35); sh.rotation.z = (i - 7.5) * 0.9; }
+    else { sh.position.set(Math.cos(a) * 1.05, 1.2, Math.sin(a) * 1.05); sh.scale.set(0.32, 1.4 + (i % 3) * 0.35, 0.32); sh.rotation.set(Math.sin(a) * 0.32, 0, -Math.cos(a) * 0.32); }
+    sh.castShadow = true; g.add(sh);
+  }
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.glow, color: new THREE.Color(1.4, 0.3, 0.2), transparent: true, opacity: 0.6, depthWrite: false })); glow.scale.setScalar(5); glow.position.y = 1.2; g.add(glow);
+  EARTH.root.add(noReflect(g));
+  return g;
+}
+function buildFolk() {
+  folk = createFolk(EARTH.root, { ground: (x, z) => C.groundAtL(x, z, 1), max: 96 });
+  const T = EARTH.town, R = mulberry(4242);
+  // the townsfolk of Belldawn
+  const toCrater = Math.atan2(EARTH.pillar.x - T.x, EARTH.pillar.z - T.z), gx = Math.sin(toCrater), gz = Math.cos(toCrater);
+  [
+    { x: T.x + 3, z: T.z + 2.5, st: 'idle', line: '晨鐘每天早上都會響。就算沒有人聽見，也要響。', col: '#bfae8e' },
+    { x: T.x - 6, z: T.z - 16, st: 'pray', line: '騎士長走了以後，這口鐘就是我們的盾。', kind: 'monk' },
+    { x: T.x + 13, z: T.z + 5, st: 'idle', line: '孩子問我，天使是不是忘記了我們。', col: '#b9a0a0' },
+    { x: T.x + 14.2, z: T.z + 6.4, st: 'idle', scale: 0.6, lantern: false, line: '你的翅膀……可以借我摸一下嗎？', col: '#e1c48e' },
+    { x: T.x + gx * 58 + gz * 4, z: T.z + gz * 58 - gx * 4, st: 'guard', yaw: toCrater, line: '城外的燈一盞一盞熄了。你……是來點燈的嗎？' },
+    { x: T.x + gx * 58 - gz * 4, z: T.z + gz * 58 + gx * 4, st: 'guard', yaw: toCrater },
+  ].forEach((o) => folk.add(o));
+  for (let i = 0; i < nRescued(); i++) addResident(i);
+  // captives in their crystal
+  for (const cd of EARTH.captives) {
+    const c = Object.assign({}, cd, { guards: [], done: !!prog.rescued[cd.id] });
+    c.crystal = makeCrystal(c.x, c.y, c.z);
+    c.person = folk.add({ x: c.x, z: c.z, st: 'sealed', lit: false, yaw: R() * 6.28 });
+    for (const [dx, dz, type] of cd.guards) { const sh = spawnShade(c.x + dx, c.z + dz, -1, type || 'melee', undefined, undefined, true); sh.site = c; c.guards.push(sh); if (c.done) killShade(sh, true); }
+    if (c.done) { c.crystal.visible = false; c.person.on = false; }
+    captives.push(c);
+  }
+  // beacons and their keepers
+  for (const bd of EARTH.beacons) {
+    const b = Object.assign(bd, { st: prog.beacons[bd.id] ? 'lit' : 'calm', hp: 100, wave: 0, beasts: [], keepers: [], gap: 0, cool: 0 });
+    for (let i = 0; i < b.folk; i++) {
+      const a = (i / b.folk) * Math.PI * 2 + 0.4, x = b.x + Math.cos(a) * 3.6, z = b.z + Math.sin(a) * 3.6;
+      b.keepers.push(folk.add({ x, z, yaw: Math.atan2(Math.cos(a), Math.sin(a)), kind: b.monks ? 'monk' : b.id === 'bHarbor' ? 'fisher' : 'villager', st: b.st === 'lit' ? (i % 2 ? 'idle' : 'pray') : 'guard', line: b.st === 'lit' ? b.line : i === 0 ? '……牠們又來了。燈火撐不了多久。' : null }));
+    }
+    for (let i = 0; i < 4; i++) {
+      const sh = spawnShade(b.x, b.z, -1, i === 3 ? 'archer' : 'melee', undefined, undefined, true);
+      sh.siege = b; killShade(sh, true); sh.dormant = true; sh.home.set(b.x, b.y, b.z); b.beasts.push(sh);
+    }
+    beacons.push(b);
+  }
+  EARTH.lamps.set(lampsLit());
+}
+function folkFlinch(b) { for (const p of b.keepers) if (p.st === 'guard') p.set('cower'); }
+function wake(sh, x, z) {
+  sh.dead = false; sh.dormant = false; sh.hp = sh.maxHp; sh.t = 0; sh.st = 'chase';
+  sh.pos.set(x, C.groundAtL(x, z, 1), z); sh.vel.set(0, 0, 0); sh.g.scale.setScalar(1); sh.g.visible = true; sh.sh.visible = true; sh.mat.emissiveIntensity = 1.3;
+  burst(FX.smoke, x, sh.pos.y + 1, z, 22, { speed: 4, up: 2, life: 1.1, size: 2.2, c: [0.35, 0.25, 0.3] });
+}
+function sleepBeast(sh) {
+  if (!sh.dead) burst(FX.smoke, sh.pos.x, sh.pos.y + 1, sh.pos.z, 16, { speed: 3, up: 2, life: 1, size: 2, c: [0.35, 0.25, 0.3] });
+  sh.dead = true; sh.dormant = true; sh.st = 'dead'; sh.t = 9; sh.g.visible = false; sh.sh.visible = false; if (sh.aim) sh.aim.visible = false;
+}
+function spawnWave(b) {
+  const n = b.waves[b.wave], a0 = Math.atan2(b.x - P.pos.x, b.z - P.pos.z);
+  for (let i = 0; i < n; i++) {
+    const sh = b.beasts[n >= 4 ? i : Math.min(i, 2)], a = a0 + (i - (n - 1) / 2) * 0.7, r = 24;
+    wake(sh, b.x + Math.sin(a) * r, b.z + Math.cos(a) * r);
+  }
+  toast(`<i class="dia"></i>${b.name} · 第 <b>${b.wave + 1}</b>/${b.waves.length} 波`);
+}
+function startSiege(b) {
+  b.st = 'siege'; b.hp = 100; b.wave = 0; b.gap = 2.2;
+  for (const p of b.keepers) p.set('guard');
+  toast(`<i class="dia"></i>瘴獸逼近${b.name} · 守住燈火`, true);
+  Audio.sfx('ui');
+  spawnWave(b);
+}
+function endSiege(b, st) {
+  b.st = st; b.cool = 6;
+  for (const sh of b.beasts) if (!sh.dormant) sleepBeast(sh);
+  for (const p of b.keepers) p.set(st === 'fallen' ? 'cower' : 'guard');
+}
+function kindle(b) {
+  b.st = 'lit'; prog.beacons[b.id] = true; save();
+  applyStats(false); P.hp = Math.min(P.maxHp, P.hp + 10);
+  P.checkpoint.set(b.x, b.y + 0.5, b.z + 5);
+  b.keepers.forEach((p, i) => { p.line = i === 0 ? b.line : null; p.set('cheer'); });
+  burst(FX.sparks, b.x, b.y + 2.4, b.z, 80, { speed: 7, up: 5, life: 1.4, size: 1.3, c: [2.2, 1.5, 0.7] });
+  flashScreen(0.4); Audio.sfx('perfect');
+  bigText('燈火重燃', 'THE LIGHT HOLDS');
+  setTimeout(() => toast(`<i class="dia"></i>${b.name} 成為據點 · 生命上限 +10`, true), 1200);
+  EARTH.lamps.set(lampsLit()); updateQuest();
+}
+function rescue(c) {
+  c.done = true; prog.rescued[c.id] = true; save();
+  c.crystal.visible = false;
+  burst(FX.sparks, c.x, c.y + 1.5, c.z, 90, { speed: 7, up: 4, life: 1.3, size: 1.2, c: [1.9, 1.4, 0.8] });
+  burst(FX.smoke, c.x, c.y + 1, c.z, 30, { speed: 5, up: 2, life: 1.2, size: 2.2, c: [0.45, 0.32, 0.4] });
+  flashScreen(0.35); CAM.shake = Math.max(CAM.shake, 0.25); Audio.sfx('perfect');
+  const p = c.person, T = EARTH.town;
+  p.lit = true; p.yaw = Math.atan2(P.pos.x - p.x, P.pos.z - p.z);
+  p.set('bow', () => { say(c.line); setTimeout(() => { const a = Math.atan2(T.x - p.x, T.z - p.z); p.dest = { x: p.x + Math.sin(a) * 30, z: p.z + Math.cos(a) * 30 }; p.set('leave'); }, 1800); });
+  const before = P.maxFlasks;
+  applyStats(false); P.flasks = Math.min(P.maxFlasks, P.flasks + 1);
+  const n = nRescued();
+  toast(`<i class="dia"></i>救出被困的人 <b>${n}</b>/${captives.length} · 他們會回到晨鐘堡 · 光露 +1`, true);
+  if (P.maxFlasks > before) setTimeout(() => toast('<i class="dia"></i>人們的感謝 · 聖瓶上限 +1', true), 2200);
+  addResident(n - 1); EARTH.lamps.set(lampsLit()); updateQuest();
+}
+function updateFolk(dt) {
+  if (!folk) return;
+  for (const b of beacons) {
+    b.setPower(b.st === 'lit' ? 1 : b.st === 'siege' ? 0.2 + 0.4 * Math.max(0, b.hp) / 100 : b.st === 'won' ? 0.55 : 0.12, time);
+    if (state !== 'play' || !P.inEarth) continue;
+    const d = Math.hypot(P.pos.x - b.x, P.pos.z - b.z), near = d < 40 && Math.abs(P.pos.y - b.y) < 24;
+    if (b.st === 'calm' && near) startSiege(b);
+    else if (b.st === 'siege') {
+      if (d > 95) { endSiege(b, 'calm'); continue; }
+      if (b.hp <= 0) { endSiege(b, 'fallen'); toast(`<i class="dia"></i>${b.name}的燈火熄滅了……離開再回來可以再試`, true); Audio.sfx('hurt'); continue; }
+      const alive = b.beasts.some((sh) => !sh.dormant && !sh.dead);
+      if (!alive) {
+        b.gap -= dt;
+        if (b.gap <= 0) {
+          if (b.wave + 1 < b.waves.length) { b.wave++; b.gap = 2.2; spawnWave(b); }
+          else { b.st = 'won'; for (const p of b.keepers) p.set('cheer'); toast(`<i class="dia"></i>守住了 · 點亮${b.name}的燈火`, true); Audio.sfx('glide'); }
+        }
+      }
+      for (const p of b.keepers) if (p.st === 'cower' && p.t > 1.6) p.set('guard');
+    } else if (b.st === 'fallen') { b.cool -= dt; if (b.cool <= 0 && d > 45) { b.st = 'calm'; for (const p of b.keepers) p.set('guard'); } }
+  }
+  folk.update(dt, time, camera.position, P.pos, P.inEarth && state === 'play' ? say : null);
+  // the siege bar
+  const sb = beacons.find((b) => b.st === 'siege');
+  if (sb !== hud.siegeB) { hud.siegeB = sb; $('siegeBar').classList.toggle('hidden', !sb); document.body.classList.toggle('siege', !!sb); if (sb) { $('siegeName').textContent = `守住${sb.name}的燈火`; $('siegeEn').textContent = `DEFEND ${sb.en}`; } }
+  if (sb) { $('siegeHp').style.transform = `scaleX(${clamp(sb.hp / 100, 0, 1)})`; $('siegeWave').textContent = `${sb.wave + 1} / ${sb.waves.length}`; }
+}
 // ------------------------------------------------------------------ interactions
 let interactTarget = null;
 function updateInteract() {
@@ -1436,19 +1610,25 @@ function updateInteract() {
     if (!t && prog.end && !P.inRealm && Math.hypot(P.pos.x - T.x, P.pos.z - T.z) < 6.5 && P.pos.y > T.floorY - 1 && P.pos.y < T.floorY + 6) t = P.lv >= 3 ? { kind: 'ascend' } : { kind: 'ascendLocked', n: P.lv };
     if (!t && P.inRealm && Math.hypot(P.pos.x - REALM.gate.x, P.pos.z - REALM.gate.z) < 5 && Math.abs(P.pos.y - REALM.gate.y) < 3) t = { kind: 'descend' };
     if (!t && P.inEarth && Math.hypot(P.pos.x - EARTH.pillar.x, P.pos.z - EARTH.pillar.z) < 6 && Math.abs(P.pos.y - EARTH.pillar.y) < 5) t = { kind: 'rise' };
+    if (!t && P.inEarth) {
+      for (const c of captives) if (!c.done && Math.hypot(P.pos.x - c.x, P.pos.z - c.z) < 4.8 && Math.abs(P.pos.y - c.y) < 4) { const n = c.guards.filter((g) => !g.dead).length; t = n ? { kind: 'crystalSealed', n, c } : { kind: 'purify', c }; }
+      for (const b of beacons) if (b.st === 'won' && Math.hypot(P.pos.x - b.x, P.pos.z - b.z) < 6 && Math.abs(P.pos.y - b.y) < 4) t = { kind: 'kindle', b };
+    }
   }
-  if (JSON.stringify(t && { k: t.kind, n: t.n, i: t.s?.i }) !== JSON.stringify(interactTarget && { k: interactTarget.kind, n: interactTarget.n, i: interactTarget.s?.i })) {
+  const key = (o) => JSON.stringify(o && { k: o.kind, n: o.n, i: o.s?.i ?? o.c?.id ?? o.b?.id });
+  if (key(t) !== key(interactTarget)) {
     interactTarget = t;
     const el = $('bInteract');
     if (!t) el.classList.add('hidden');
     else {
       el.classList.remove('hidden');
-      el.classList.toggle('locked', t.kind === 'sealed' || t.kind === 'coreLocked' || t.kind === 'ascendLocked');
+      el.classList.toggle('locked', t.kind === 'sealed' || t.kind === 'coreLocked' || t.kind === 'ascendLocked' || t.kind === 'crystalSealed');
       const L = {
         shrine: ['點亮聖壇', 'KINDLE THE SHRINE'], sealed: [`淨化周圍的蝕影 <em>${t.n}</em>`, 'SEALED BY SHADES'],
         core: ['觸碰聖核', 'TOUCH THE SACRED CORE'], coreLocked: [`聖核沉睡中 <em>${t.n}/4</em>`, 'LIGHT ALL FOUR SHRINES'],
         ascend: ['升往天上神域', 'ASCEND TO THE EMPYREAN'], ascendLocked: [`光羽之力不足 <em>Lv${t.n}/3</em>`, 'REACH LV 3 TO ASCEND'],
         descend: ['返回人間之島', 'RETURN TO THE ISLE'], rise: ['返回天上之島', 'RETURN TO THE ISLE ABOVE'],
+        purify: ['淨化蝕晶', 'PURIFY THE CRYSTAL'], crystalSealed: [`擊退看守的瘴獸 <em>${t.n}</em>`, 'GUARDED BY BEASTS'], kindle: ['點亮燈火', 'KINDLE THE BEACON'],
       }[t.kind];
       $('intLbl').innerHTML = L[0]; $('intSub').textContent = L[1];
     }
@@ -1462,6 +1642,8 @@ function doInteract() {
   else if (t.kind === 'ascend') startTrip(true);
   else if (t.kind === 'descend') startTrip(false);
   else if (t.kind === 'rise') startTrip('rise');
+  else if (t.kind === 'purify') { rescue(t.c); interactTarget = null; $('bInteract').classList.add('hidden'); }
+  else if (t.kind === 'kindle') { kindle(t.b); interactTarget = null; $('bInteract').classList.add('hidden'); }
   else if (t.kind === 'ascendLocked') { toast(`<i class="dia"></i>需要 Lv3 才能踏上天梯 · 目前 Lv${P.lv}`); Audio.sfx('ui'); }
   else Audio.sfx('ui');
 }
@@ -1711,9 +1893,10 @@ function updateQuest() {
   const lit = prog.s.filter(Boolean).length, f = prog.f.length;
   let title, rows;
   if (P.inEarth) {
-    const ef = prog.f.filter((id) => id >= EARTH_F0 && id < EARTH_F1).length;
+    const ef = prog.f.filter((id) => (id >= EARTH_F0 && id < EARTH_F1) || id >= EARTH_F2).length;
     title = '第二章 · 人間';
-    rows = [['探索人間，收集光羽', `${ef}/${EARTH.feathers.length}`], prog.boss3 ? ['墮天騎士 · 已淨化', '✓'] : ['挑戰：傾城遺跡的墮天騎士', ''], ['回到墜光坑的光柱，返回天上', '']];
+    rows = [['解救被蝕晶封住的人', `${nRescued()}/${EARTH.captives.length}`], ['守住人們的燈火', `${nBeacons()}/${EARTH.beacons.length}`],
+      ['探索人間，收集光羽', `${ef}/${EARTH.feathers.length + EARTH.moreFeathers.length}`], prog.boss3 ? ['墮天騎士 · 已淨化', '✓'] : ['挑戰：傾城遺跡的墮天騎士', '']];
   } else if (prog.end || P.inRealm) {
     title = '第一章 · 天上神域';
     const rf = prog.f.filter((id) => id >= REALM_F0 && id < EARTH_F0).length;
@@ -1733,26 +1916,28 @@ function flashScreen(a) { const f = $('flash'); f.style.transition = 'none'; f.s
 // minimap
 let mapBase = null;
 function buildMapBase(L) {
-  const N = 480;
+  const N = L ? 640 : 480, EXT = L ? C.EWORLD : 640, HX = EXT / 2;
   const cv = document.createElement('canvas'); cv.width = cv.height = N;
   const g = cv.getContext('2d');
   const img = g.createImageData(N, N);
-  const G2 = L ? C.grid2 : grid, base = L ? C.EARTH_Y : 0, ga = (x, z) => C.groundAtL(x, z, L) - base;
-  const H = (ix, iz) => G2.h[clamp(iz, 0, GN - 1) * GN + clamp(ix, 0, GN - 1)];
+  const G2 = L ? C.grid2 : grid, base = L ? C.EARTH_Y : 0, ga = (x, z) => C.groundAtL(x, z, L) - base, GNn = L ? C.EGN : GN;
+  const H = (ix, iz) => G2.h[clamp(iz, 0, GNn - 1) * GNn + clamp(ix, 0, GNn - 1)];
   for (let py = 0; py < N; py++) {
     for (let px = 0; px < N; px++) {
-      const fx = (px / N) * (GN - 1), fz = (py / N) * (GN - 1);
+      const fx = (px / N) * (GNn - 1), fz = (py / N) * (GNn - 1);
       const ix = Math.floor(fx), iz = Math.floor(fz);
-      const wx = -320 + (px / N) * 640, wz = -320 + (py / N) * 640;
+      const wx = -HX + (px / N) * EXT, wz = -HX + (py / N) * EXT;
       const h = ga(wx, wz);
       const i = (py * N + px) * 4;
+      if (L && inRift(wx, wz, 2) && h < -2) { const d = smooth(-2, -60, h); img.data[i] = lerp(120, 70, d); img.data[i + 1] = lerp(84, 30, d); img.data[i + 2] = lerp(74, 26, d); img.data[i + 3] = 255; continue; }
+      if (L && h < 0.05) { const d = smooth(0.05, -10, h); img.data[i] = lerp(214, 176, d); img.data[i + 1] = lerp(224, 198, d); img.data[i + 2] = lerp(226, 212, d); img.data[i + 3] = 255; continue; }
       if (h < -6) { img.data[i + 3] = 0; continue; }
       const sx = H(ix + 1, iz) - H(ix - 1, iz), sz = H(ix, iz + 1) - H(ix, iz - 1);
       const shade = clamp(1 + (-sx * 0.6 - sz * 0.6) * 0.05, 0.82, 1.1);
       let r, gg, b;
       if (h < 0.05 && (L || Math.hypot(wx - LAKE.x, wz - LAKE.z) < LAKE.r * 1.3)) { const d = smooth(0.05, -2, h); r = lerp(214, 186, d); gg = lerp(224, 203, d); b = lerp(226, 214, d); }
-      else { const t = clamp(h / (L ? 60 : 36), 0, 1); r = lerp(240, 214, t) * shade; gg = lerp(235, 204, t) * shade; b = lerp(222, 184, t) * shade; }
-      const step = 640 / N;
+      else { const t = clamp(h / (L ? 90 : 36), 0, 1); r = lerp(240, 214, t) * shade; gg = lerp(235, 204, t) * shade; b = lerp(222, 184, t) * shade; }
+      const step = EXT / N;
       const c0 = Math.floor(h / 4), c1 = Math.floor(ga(wx + step, wz) / 4), c2 = Math.floor(ga(wx, wz + step) / 4);
       if (h > 0.5 && (c0 !== c1 || c0 !== c2)) { const strong = c0 % 5 === 0; r = lerp(r, 168, strong ? 0.55 : 0.3); gg = lerp(gg, 140, strong ? 0.55 : 0.3); b = lerp(b, 92, strong ? 0.55 : 0.3); }
       if (h < -1.5) { const a = smooth(-6, -1.5, h); img.data[i + 3] = 255 * a; } else img.data[i + 3] = 255;
@@ -1777,7 +1962,13 @@ function layoutMinimap() {
 }
 function drawDiamond(g, x, y, r, fill, stroke) { g.beginPath(); g.moveTo(x, y - r); g.lineTo(x + r * 0.75, y); g.lineTo(x, y + r); g.lineTo(x - r * 0.75, y); g.closePath(); if (fill) { g.fillStyle = fill; g.fill(); } if (stroke) { g.strokeStyle = stroke; g.lineWidth = 1.4; g.stroke(); } }
 function questTarget() {
-  if (P.inEarth) return prog.boss3 ? { x: EARTH.pillar.x, z: EARTH.pillar.z, kind: 'core' } : { x: EARTH.bossHome.x, z: EARTH.bossHome.z, kind: 'boss' };
+  if (P.inEarth) {
+    let best = null, bd = 1e9;
+    for (const c of captives) if (!c.done) { const d = Math.hypot(c.x - P.pos.x, c.z - P.pos.z); if (d < bd) { bd = d; best = { x: c.x, z: c.z, kind: 'shrine' }; } }
+    for (const b of beacons) if (b.st !== 'lit') { const d = Math.hypot(b.x - P.pos.x, b.z - P.pos.z); if (d < bd) { bd = d; best = { x: b.x, z: b.z, kind: 'shrine' }; } }
+    if (best) return best;
+    return prog.boss3 ? { x: EARTH.pillar.x, z: EARTH.pillar.z, kind: 'core' } : { x: EARTH.bossHome.x, z: EARTH.bossHome.z, kind: 'boss' };
+  }
   if (prog.end) {
     if (!P.inRealm) return P.lv >= 3 && !prog.boss2 ? { x: TEMPLE.x, z: TEMPLE.z, kind: 'core' } : null;
     return prog.boss2 ? null : { x: REALM.bossHome.x, z: REALM.bossHome.z, kind: 'boss' };
@@ -1796,6 +1987,13 @@ function drawRealmBase(g, toS, s, size, labels) {
   g.fillStyle = 'rgba(150,170,110,0.28)'; for (const q of REALM.blobs) if (!q.small) { shape(q, 0.62); g.fill(); }
   if (labels) for (const I of REALM.isles) { const [x, y] = toS(I.x, I.z); g.fillStyle = '#7d6232'; g.font = `500 ${Math.round(Math.max(11, size / 46))}px "Noto Serif TC", serif`; g.textAlign = 'center'; g.fillText(tr(I.name), x, y + I.r * s + 12); }
 }
+function drawEarthPOI(g, toS, s, size) {
+  const u = size / 140;
+  // the colossus over the rift
+  { const [x, y] = toS(EARTH.colossus.x, EARTH.colossus.z); g.strokeStyle = 'rgba(150,50,36,0.9)'; g.lineWidth = 1.4 * u; g.beginPath(); g.arc(x, y, 6 * u, 0, 6.3); g.stroke(); g.beginPath(); g.arc(x, y, 3 * u, 0, 6.3); g.fillStyle = '#5a2620'; g.fill(); }
+  for (const c of captives) { const [x, y] = toS(c.x, c.z); g.save(); g.translate(x, y); g.fillStyle = c.done ? '#f0d48a' : '#3a2a40'; g.strokeStyle = c.done ? '#9b7a3c' : '#e07a5a'; g.lineWidth = 1 * u; g.beginPath(); g.moveTo(0, -4 * u); g.lineTo(2.6 * u, 0); g.lineTo(0, 4 * u); g.lineTo(-2.6 * u, 0); g.closePath(); g.fill(); g.stroke(); g.restore(); }
+  for (const b of beacons) { const [x, y] = toS(b.x, b.z); g.fillStyle = b.st === 'lit' ? '#f2c76a' : '#fbf7ee'; g.strokeStyle = '#9b7a3c'; g.lineWidth = 1.1 * u; g.beginPath(); g.moveTo(x, y - 4.6 * u); g.quadraticCurveTo(x + 3.4 * u, y, x, y + 3 * u); g.quadraticCurveTo(x - 3.4 * u, y, x, y - 4.6 * u); g.fill(); g.stroke(); }
+}
 function drawMap(g, size, cx, cz, range, round) {
   const s = (size / 2) / range;
   const toS = (x, z) => [size / 2 + (x - cx) * s, size / 2 + (z - cz) * s];
@@ -1805,7 +2003,7 @@ function drawMap(g, size, cx, cz, range, round) {
   if (round) { g.fillStyle = '#dcd7cd'; g.fillRect(0, 0, size, size); }
   const sky = P.inRealm, earth = P.inEarth, cl = sky ? 's' : earth ? 'e' : 'i';
   if (sky) drawRealmBase(g, toS, s, size, !round);
-  else if (earth) { const [ox, oy] = toS(-320, -320); g.drawImage(mapBase2, ox, oy, 640 * s, 640 * s); for (const m of EARTH.marks) { const [x, y] = toS(m.x, m.z); g.strokeStyle = 'rgba(155,122,60,0.75)'; g.lineWidth = 1.2; g.beginPath(); g.arc(x, y, Math.max(4, m.r * s * 0.3), 0, 6.3); g.stroke(); if (!round) { g.fillStyle = '#7d6232'; g.font = `500 ${Math.round(Math.max(11, size / 46))}px "Noto Serif TC", serif`; g.textAlign = 'center'; g.fillText(tr(m.name), x, y + Math.max(4, m.r * s * 0.3) + 13); } } }
+  else if (earth) { const [ox, oy] = toS(-C.EHALF, -C.EHALF); g.drawImage(mapBase2, ox, oy, C.EWORLD * s, C.EWORLD * s); drawEarthPOI(g, toS, s, size); for (const m of EARTH.marks) { const [x, y] = toS(m.x, m.z); g.strokeStyle = 'rgba(155,122,60,0.75)'; g.lineWidth = 1.2; g.beginPath(); g.arc(x, y, Math.max(4, m.r * s * 0.3), 0, 6.3); g.stroke(); if (!round) { g.fillStyle = '#7d6232'; g.font = `500 ${Math.round(Math.max(11, size / 46))}px "Noto Serif TC", serif`; g.textAlign = 'center'; g.fillText(tr(m.name), x, y + Math.max(4, m.r * s * 0.3) + 13); } } }
   else { const [ox, oy] = toS(-320, -320); g.drawImage(mapBase, ox, oy, 640 * s, 640 * s); }
   const u = size / 140;
   // updrafts
@@ -1921,7 +2119,7 @@ function openMap() {
   const pr = Math.min(3, (devicePixelRatio || 1) * (VIEW.s || 1));
   cv.width = size * pr; cv.height = size * pr; cv.style.width = cv.style.height = size + 'px';
   const g = cv.getContext('2d'); g.setTransform(pr, 0, 0, pr, 0, 0);
-  if (P.inRealm) drawMap(g, size, REALM.x, REALM.z - 42, 150, false); else if (P.inEarth) drawMap(g, size, 0, 0, 262, false); else drawMap(g, size, 0, -4, 248, false);
+  if (P.inRealm) drawMap(g, size, REALM.x, REALM.z - 42, 150, false); else if (P.inEarth) drawMap(g, size, 40, -10, 590, false); else drawMap(g, size, 0, -4, 248, false);
   const lit = prog.s.filter(Boolean).length;
   $('mapList').innerHTML = SHRINES.map((s, i) => `<li class="${prog.s[i] ? 'lit' : ''}"><i class="dia"></i><span>${s.name}</span><em>${prog.s[i] ? '已點亮' : shadesAlive(i) ? '封印中' : '待點亮'}</em></li>`).join('') +
     `<li class="${prog.end ? 'lit' : ''}"><i class="star">✦</i><span>環光聖所</span><em>${prog.end ? '已甦醒' : lit === 4 ? '可進入' : `${lit}/4`}</em></li>` +
@@ -1929,6 +2127,16 @@ function openMap() {
     `<li class="${prog.boss ? 'lit' : ''}"><i class="dia"></i><span>墮光守衛</span><em>${prog.boss ? '已淨化' : '未挑戰'}</em></li>` +
     (prog.earth ? `<li class="${prog.boss3 ? 'lit' : ''}"><i class="dia"></i><span>墮天騎士</span><em>${prog.boss3 ? '已淨化' : '未挑戰'}</em></li>` : '') +
     (prog.realm ? `<li class="${prog.boss2 ? 'lit' : ''}"><i class="dia"></i><span>審判者</span><em>${prog.boss2 ? '已淨化' : '未挑戰'}</em></li>` : '');
+  if (P.inEarth) {
+    const lit = beacons.filter((b) => b.st === 'lit').length;
+    $('mapList').innerHTML = `<li class="${nRescued() === captives.length ? 'lit' : ''}"><i class="dia"></i><span>被困的人</span><em>${nRescued()}/${captives.length} 已救出</em></li>` +
+      beacons.map((b) => `<li class="${b.st === 'lit' ? 'lit' : ''}"><i class="dia"></i><span>${b.name}</span><em>${b.st === 'lit' ? '燈火長明' : b.st === 'won' ? '可點燈' : '待守護'}</em></li>`).join('') +
+      `<li class="${prog.boss3 ? 'lit' : ''}"><i class="dia"></i><span>墮天騎士</span><em>${prog.boss3 ? '已淨化' : '未挑戰'}</em></li>` +
+      `<li><i class="star">✦</i><span>墮天巨像</span><em>封印中</em></li>` +
+      `<li><i class="dot"></i><span>晨鐘堡居民</span><em>${4 + nRescued()} 人 · 燈 ${Math.min(EARTH.lamps.n, lampsLit())}</em></li>`;
+    void lit;
+  }
+  $('mapTitle').innerHTML = P.inEarth ? '人間地圖<small>THE MORTAL WORLD</small>' : P.inRealm ? '天上神域<small>THE EMPYREAN</small>' : '聖域地圖<small>THE REALM</small>';
   $('mapHint').textContent = `已發現的光羽會標示在地圖上 · ${feathers.filter((f) => f.seen && !f.taken).length} 根待拾取`;
   Audio.sfx('ui');
 }
@@ -2247,10 +2455,14 @@ function syncLayer() {
   const want = P.pos.y < -350 ? 1 : 0;
   if (C.LAYER.cur === want) return;
   C.LAYER.cur = want;
-  for (const gm of W.grassMats) { gm.uniforms.uHeight.value = want ? EARTH.heightTex : W.heightTex; gm.uniforms.uBaseY.value = want ? C.EARTH_Y : 0; }
+  for (const gm of W.grassMats) {
+    gm.uniforms.uHeight.value = want ? EARTH.heightTex : W.heightTex; gm.uniforms.uBaseY.value = want ? C.EARTH_Y : 0;
+    if (gm.uniforms.uGrid) gm.uniforms.uGrid.value.set(want ? C.EHALF : C.HALF, want ? C.ESEG / C.EWORLD : C.SEG / C.WORLD, want ? C.EGN : C.GN);
+  }
+  if (EARTH.root) EARTH.root.visible = want === 1;
   currentRegion = '';
 }
-const waterAt = (x, z) => (C.LAYER.cur ? C.EARTH_Y : Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r * 1.3 ? 0 : -999);
+const waterAt = (x, z) => (C.LAYER.cur ? (z < SEA_NORTH ? -999 : C.EARTH_Y) : Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r * 1.3 ? 0 : -999);
 
 // ------------------------------------------------------------------ loop
 function sampleDyn() {
@@ -2283,6 +2495,7 @@ function frame() {
   if (state === 'play' || state === 'trans' || state === 'ending') { updateShades(edt); updateProjectiles(edt); if (boss) boss.update(edt, dt); }
   if (state === 'ascend') updateTrip(dt);
   if (state === 'play') updateBreakables(dt);
+  if (C.LAYER.cur === 1) { earthCull(camera.position); updateFolk(dt); }
   if (boss && boss.engaged && !prog.seen[boss.cfg.key]) { prog.seen[boss.cfg.key] = true; save(); }
   updateLvFx(dt);
   updateFeathers(dt);
@@ -2337,7 +2550,9 @@ async function init() {
   await wait();
   buildPlayer();
   buildFX();
+  EARTH.root.visible = false;
   buildShades();
+  buildFolk();
   buildBoss();
   buildBreakables();
   buildFeathers();
@@ -2371,4 +2586,4 @@ addEventListener('resize', resize);
 addEventListener('orientationchange', () => setTimeout(resize, 250));
 document.addEventListener('visibilitychange', () => { if (Audio.ctx) { if (document.hidden) Audio.ctx.suspend(); else Audio.ctx.resume(); } });
 init().catch((e) => { console.error(e); $('loadMsg').textContent = '載入失敗：' + e.message; });
-window.__LF = { dyn: () => ({ ...dyn, pr: renderer.getPixelRatio() }), levelUp: (n) => levelUp(n), showPower: (k) => showPower(k), breakables, equipWeapon: (w) => equipWeapon(w), calls: () => { renderer.info.autoReset = false; renderer.info.reset(); composer.render(0.016); const r = { ...renderer.info.render }; renderer.info.autoReset = true; return r; }, pause: (b) => (paused = b), FX, slow: () => (DT_MAX = 0.05), act: { attackDown, attackUp, lightAttack, doLock, doHeal, startAttack, perfectDodge, doAttack, doJump, doSkill, doDodge, doInteract, openMap, openSettings, damageShade, regionCard, toast }, fast: () => (DT_MAX = 0.25), THREE, scene, composer, q: (o) => { Object.assign(QUAL[settings.quality], o); applyQuality(); }, P, CAM, W, hero: () => hero, boss: () => boss, state: () => state, prog, shades, feathers, setState: (s) => (state = s), camera, renderer };
+window.__LF = { sites: () => ({ captives, beacons, folk }), kill: (sh) => killShade(sh), interact: () => doInteract(), dyn: () => ({ ...dyn, pr: renderer.getPixelRatio() }), levelUp: (n) => levelUp(n), showPower: (k) => showPower(k), breakables, equipWeapon: (w) => equipWeapon(w), calls: () => { renderer.info.autoReset = false; renderer.info.reset(); composer.render(0.016); const r = { ...renderer.info.render }; renderer.info.autoReset = true; return r; }, pause: (b) => (paused = b), FX, slow: () => (DT_MAX = 0.05), act: { attackDown, attackUp, lightAttack, doLock, doHeal, startAttack, perfectDodge, doAttack, doJump, doSkill, doDodge, doInteract, openMap, openSettings, damageShade, regionCard, toast }, fast: () => (DT_MAX = 0.25), THREE, scene, composer, q: (o) => { Object.assign(QUAL[settings.quality], o); applyQuality(); }, P, CAM, W, hero: () => hero, boss: () => boss, state: () => state, prog, shades, feathers, setState: (s) => (state = s), camera, renderer };

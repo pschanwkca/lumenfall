@@ -328,14 +328,14 @@ function wrapInstanced(base, max, radius, seed) {
 const GRASS_VS = (flower) => `
   #include <common>
   #include <fog_pars_vertex>
-  uniform sampler2D uHeight; uniform vec3 uCenter; uniform vec3 uPlayer; uniform float uTime; uniform float uRadius; uniform float uBaseY; varying float vWheat;
+  uniform sampler2D uHeight; uniform vec3 uCenter; uniform vec3 uPlayer; uniform float uTime; uniform float uRadius; uniform float uBaseY; uniform vec3 uGrid; varying float vWheat;
   attribute vec3 aOff; attribute vec2 aRnd; ${flower ? 'attribute vec3 aCol; varying vec3 vCol;' : ''}
   varying float vH; varying float vVar; varying vec3 vW; varying float vGust; varying float vPatch; varying float vCloud; uniform float uCloudT;
   ${NOISE}
   void main(){
     vec2 rel = mod(aOff.xz - uCenter.xz + uRadius, 2.0*uRadius) - uRadius;
     vec2 wxz = uCenter.xz + rel;
-    vec2 huv = ((wxz + ${HALF.toFixed(1)}) * ${(SEG / WORLD).toFixed(6)} + 0.5) / ${GN.toFixed(1)};
+    vec2 huv = ((wxz + uGrid.x) * uGrid.y + 0.5) / uGrid.z; // half-size, cells per metre, grid points
     vec4 hm = texture2D(uHeight, huv);
     float fade = 1.0 - smoothstep(uRadius*0.6, uRadius*0.97, length(rel));
     ${flower ? 'float s = aRnd.y*0.9*fade*step(aRnd.x, hm.b*0.55)*step(0.5, hm.g);' : 'float s = aRnd.y*fade*smoothstep(0.3, 0.75, hm.g);'}
@@ -371,6 +371,7 @@ function buildGrass(scene, quality) {
     uBase: { value: new THREE.Color('#3f5f2c') }, uTip: { value: new THREE.Color('#b8c770') },
     uGold: { value: new THREE.Color('#e6cf78') }, uSilver: { value: new THREE.Color('#d3e3a9') },
     uSunDir: { value: sunDir }, uLight: { value: 1.25 }, uCloudT: CLOUD, uBaseY: { value: 0 }, uWheat: { value: new THREE.Color('#d8b25a') },
+    uGrid: { value: new THREE.Vector3(HALF, SEG / WORLD, GN) },
   }]);
   uniforms.uHeight.value = W.heightTex;
   const grassMat = new THREE.ShaderMaterial({
@@ -404,7 +405,7 @@ function buildGrass(scene, quality) {
 
   const fu = THREE.UniformsUtils.clone(uniforms);
   fu.uHeight.value = W.heightTex;
-  fu.uCloudT = CLOUD; fu.uBaseY = uniforms.uBaseY;
+  fu.uCloudT = CLOUD; fu.uBaseY = uniforms.uBaseY; fu.uGrid = uniforms.uGrid;
   fu.uRadius.value = 34;
   const flowerMat = new THREE.ShaderMaterial({
     uniforms: fu,

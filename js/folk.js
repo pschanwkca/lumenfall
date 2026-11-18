@@ -1,0 +1,131 @@
+// LUMENFALL · 人間的人 — the faceless, cloaked folk of the mortal world
+// Everyone shares one instanced mesh (a hooded cloak with a pale, featureless face, in the same visual language as the
+// seraph) plus one instanced lantern and one glow sprite each. Poses are whole-body: kneel, cower, raise a lantern,
+// bow, hop for joy, walk home. Lines are short and spoken once in a while when the seraph comes close.
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { TEX } from './core.js';
+
+export const FOLK_PAL = {
+  villager: ['#c9b79a', '#a8b3a0', '#b9a0a0', '#9fb0c2', '#c7bfae', '#b7a98a'],
+  fisher: ['#7f93a3', '#8e9c8a', '#6f8495', '#94a0a8'],
+  monk: ['#dcd6c9', '#cdc6b6', '#e6e1d6'],
+};
+const LANTERN = { idle: [0.3, 0.92, 0.22], guard: [0.24, 1.52, 0.34], pray: [0.46, 0.14, 0.32], sealed: [0.46, 0.14, 0.32], cower: [0.22, 0.62, 0.26], cheer: [0.3, 1.3, 0.2], bow: [0.32, 0.6, 0.36], walk: [0.3, 0.92, 0.22], leave: [0.3, 0.92, 0.22] };
+
+export function createFolk(root, { ground, max = 96 }) {
+  const tag = (g, col, tint) => {
+    const n = g.attributes.position.count, cc = new THREE.Color(col), c = new Float32Array(n * 3), t = new Float32Array(n);
+    for (let i = 0; i < n; i++) { c[i * 3] = cc.r; c[i * 3 + 1] = cc.g; c[i * 3 + 2] = cc.b; t[i] = tint; }
+    g.setAttribute('color', new THREE.BufferAttribute(c, 3)); g.setAttribute('aTint', new THREE.BufferAttribute(t, 1));
+    return g;
+  };
+  const cloak = new THREE.LatheGeometry([[0.001, 0], [0.36, 0.02], [0.39, 0.12], [0.35, 0.5], [0.28, 0.9], [0.21, 1.16], [0.15, 1.3], [0.001, 1.34]].map(([r, y]) => new THREE.Vector2(r, y)), 16);
+  const hood = new THREE.SphereGeometry(0.2, 14, 10); hood.scale(1, 1.08, 1.12); hood.translate(0, 1.47, -0.02);
+  const face = new THREE.SphereGeometry(0.14, 12, 8); face.scale(1, 1.1, 0.8); face.translate(0, 1.44, 0.1);
+  const scarf = new THREE.TorusGeometry(0.17, 0.055, 6, 16); scarf.rotateX(Math.PI / 2); scarf.translate(0, 1.3, 0);
+  const geo = mergeGeometries([tag(cloak, '#ffffff', 1), tag(hood, '#f2efe8', 1), tag(face, '#efe2cf', 0), tag(scarf, '#d8b463', 0)]);
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82 });
+  mat.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aTint;')
+      .replace('#include <color_vertex>', `vColor = vec3(1.0);
+        vColor *= color;
+        #ifdef USE_INSTANCING_COLOR
+          vColor.xyz *= mix(vec3(1.0), instanceColor.xyz, aTint);
+        #endif`);
+  };
+  mat.customProgramCacheKey = () => 'lumenfall-folk-1';
+  const bodies = new THREE.InstancedMesh(geo, mat, max);
+  bodies.castShadow = true; bodies.receiveShadow = true; bodies.frustumCulled = false;
+  const lgeo = new THREE.CylinderGeometry(0.09, 0.11, 0.24, 6);
+  const lanterns = new THREE.InstancedMesh(lgeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 1.7, 0.9) }), max);
+  lanterns.frustumCulled = false;
+  const gp = new Float32Array(max * 3), gc = new Float32Array(max * 3);
+  const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.BufferAttribute(gp, 3)); gg.setAttribute('color', new THREE.BufferAttribute(gc, 3));
+  const glows = new THREE.Points(gg, new THREE.PointsMaterial({ map: TEX.glow, size: 2.0, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+  glows.frustumCulled = false;
+  root.add(bodies, lanterns, glows);
+  const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+  for (let i = 0; i < max; i++) { bodies.setMatrixAt(i, zero); lanterns.setMatrixAt(i, zero); bodies.setColorAt(i, new THREE.Color(1, 1, 1)); lanterns.setColorAt(i, new THREE.Color(1, 1, 1)); }
+  bodies.count = lanterns.count = 0;
+  const people = [];
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(0, 0, 0, 'YXZ'), sv = new THREE.Vector3(), pv = new THREE.Vector3(), cc = new THREE.Color();
+  let lastSay = -99;
+
+  function add(o) {
+    if (people.length >= max) return null;
+    const pal = FOLK_PAL[o.kind || 'villager'];
+    const p = {
+      i: people.length, x: o.x, z: o.z, yaw: o.yaw ?? Math.random() * 6.28, st: o.st || 'idle', t: 0, ph: Math.random() * 6.28,
+      s: o.scale || (0.92 + Math.random() * 0.14), lit: o.lit ?? true, lantern: o.lantern ?? true, line: o.line, said: -99, on: true, fade: 1,
+      lean: 0, sy: 1, bob: 0, dest: null, then: null, home: { x: o.x, z: o.z, yaw: o.yaw ?? 0 },
+    };
+    p.y = ground(p.x, p.z);
+    bodies.setColorAt(p.i, cc.set(o.col || pal[Math.floor(Math.random() * pal.length)]));
+    bodies.instanceColor.needsUpdate = true;
+    people.push(p);
+    bodies.count = lanterns.count = people.length;
+    p.set = (st, then) => { p.st = st; p.t = 0; p.then = then || null; };
+    p.goTo = (x, z, then, st = 'walk') => { p.dest = { x, z }; p.set(st, then); };
+    return p;
+  }
+
+  function update(dt, t, cam, player, say) {
+    let dirtyC = false;
+    for (const p of people) {
+      p.t += dt;
+      if (!p.on) { if (!p.hidden) { bodies.setMatrixAt(p.i, zero); lanterns.setMatrixAt(p.i, zero); gc[p.i * 3] = gc[p.i * 3 + 1] = gc[p.i * 3 + 2] = 0; p.hidden = true; dirtyC = true; } continue; }
+      p.hidden = false;
+      const dc = Math.hypot(p.x - cam.x, p.z - cam.z);
+      if (dc > 170 && p.drawn && p.st !== 'walk' && p.st !== 'leave') continue;
+      p.drawn = true;
+      const dpx = player.x - p.x, dpz = player.z - p.z, dp = Math.hypot(dpx, dpz);
+      let lean = 0, sy = 1, bob = 0, jit = 0;
+      switch (p.st) {
+        case 'idle': lean = Math.sin(t * 0.9 + p.ph) * 0.02; sy = 1 + Math.sin(t * 1.6 + p.ph) * 0.012; break;
+        case 'guard': lean = -0.03; sy = 1.01; p.yaw += Math.sin(t * 0.7 + p.ph) * dt * 0.25; break;
+        case 'pray': case 'sealed': sy = 0.64; lean = 0.3 + (p.st === 'pray' ? Math.sin(t * 0.8 + p.ph) * 0.04 : 0); break;
+        case 'cower': sy = 0.8; lean = -0.12; jit = Math.sin(t * 38 + p.ph) * 0.02; break;
+        case 'cheer': bob = Math.abs(Math.sin(t * 9 + p.ph)) * 0.32; lean = -0.06; if (p.t > 1.8) p.set('idle'); break;
+        case 'bow': lean = Math.sin(Math.min(1, p.t / 1.4) * Math.PI) * 0.62; if (p.t > 1.5) { const f = p.then; p.set('idle'); if (f) f(p); } break;
+        case 'walk': case 'leave': {
+          bob = Math.abs(Math.sin(t * 8 + p.ph)) * 0.06; lean = 0.08;
+          if (p.dest) {
+            const dx = p.dest.x - p.x, dz = p.dest.z - p.z, d = Math.hypot(dx, dz), sp = (p.st === 'leave' ? 2.2 : 1.6) * dt;
+            p.yaw = dampAngle(p.yaw, Math.atan2(dx, dz), 6, dt);
+            if (d > sp) { p.x += (dx / d) * sp; p.z += (dz / d) * sp; p.y = ground(p.x, p.z); } else if (p.st === 'walk') { p.dest = null; const f = p.then; p.set('idle'); if (f) f(p); }
+          }
+          if (p.st === 'leave') { p.fade = Math.max(0, 1 - Math.max(0, p.t - 5) / 1.5); if (p.fade <= 0) p.on = false; }
+          break;
+        }
+      }
+      // people turn to look at the seraph
+      if (dp < 7 && (p.st === 'idle' || p.st === 'guard' || p.st === 'cheer')) p.yaw = dampAngle(p.yaw, Math.atan2(dpx, dpz), 3, dt);
+      p.lean += (lean - p.lean) * Math.min(1, dt * 6); p.sy += (sy - p.sy) * Math.min(1, dt * 6);
+      const s = p.s * p.fade;
+      e.set(p.lean, p.yaw, 0); q.setFromEuler(e);
+      bodies.setMatrixAt(p.i, m4.compose(pv.set(p.x + jit, p.y + bob, p.z), q, sv.set(s, s * p.sy, s)));
+      // the lantern
+      const L = LANTERN[p.st] || LANTERN.idle, cy = Math.cos(p.yaw), sn = Math.sin(p.yaw);
+      const lx = p.x + (cy * L[0] + sn * L[2]) * s, lz = p.z + (-sn * L[0] + cy * L[2]) * s, ly = p.y + bob + L[1] * s * (p.st === 'pray' || p.st === 'sealed' ? 1 : p.sy);
+      if (p.lantern) {
+        lanterns.setMatrixAt(p.i, m4.compose(pv.set(lx, ly, lz), q.identity(), sv.set(s, s, s)));
+        const k = p.lit ? 1 : 0.12;
+        lanterns.setColorAt(p.i, cc.setRGB(k, k * 0.95, k * 0.9));
+        gp[p.i * 3] = lx; gp[p.i * 3 + 1] = ly; gp[p.i * 3 + 2] = lz;
+        const g = p.lit ? (0.9 + Math.sin(t * 6 + p.ph) * 0.08) * p.fade : 0;
+        gc[p.i * 3] = g * 1.1; gc[p.i * 3 + 1] = g * 0.72; gc[p.i * 3 + 2] = g * 0.36;
+      } else { lanterns.setMatrixAt(p.i, zero); gc[p.i * 3] = gc[p.i * 3 + 1] = gc[p.i * 3 + 2] = 0; }
+      dirtyC = true;
+      // a word or two when the seraph comes close
+      if (say && p.line && dp < 4.6 && Math.abs(player.y - p.y) < 3 && p.st !== 'sealed' && p.st !== 'leave' && p.st !== 'walk' && t - p.said > 45 && t - lastSay > 5) { p.said = t; lastSay = t; say(p.line, p); }
+    }
+    if (dirtyC) {
+      bodies.instanceMatrix.needsUpdate = true; lanterns.instanceMatrix.needsUpdate = true;
+      if (lanterns.instanceColor) lanterns.instanceColor.needsUpdate = true;
+      gg.attributes.position.needsUpdate = true; gg.attributes.color.needsUpdate = true;
+    }
+  }
+  return { add, update, people, bodies };
+}
+function dampAngle(a, b, k, dt) { let d = ((b - a + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI; return a + d * (1 - Math.exp(-k * dt)); }
