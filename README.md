@@ -30,7 +30,7 @@ three.js r160 and fonts load from CDNs.
 
 ## World
 
-The hero is a young warrior of Belldawn: to everyone a plain human, in truth the son of an angel (Sachiel, once Camael's
+The hero, 黎恩 (Lian), is a young warrior of Belldawn: to everyone a plain human, in truth the son of an angel (Sachiel, once Camael's
 lieutenant, who fled the list of angels whose light was to be fed to the seal) and a human lamp-keeper (Elin).
 He sets out with an unpolished holy sword and his father's reliquary. Everything is open from the start; monsters grow
 with the story: weakest by Belldawn's gate, stronger the farther out, then the isle, the Empyrean and hell.
@@ -43,6 +43,9 @@ with the story: weakest by Belldawn's gate, stronger the farther out, then the i
 | III | 天上神域 the Empyrean | 阿斯特萊亞 Astraea | 審判之翼, 審判之槍 |
 | IV | 墮天巨像 · 地獄前庭 | 亞巴頓 Abaddon | 天樞之劍 (three seals on the colossus) |
 
+- The climb is gated by the story: the crater's pillar answers only after Camael's echo wakes it; the sanctum core
+  waits until Ophiel lays down his sword; the stairway needs Lv5
+- Flight comes in two steps: the father's wings (at the core) only glide; Astraea's wings let you flap upward and air-dash
 - The wings only appear while used (glide, flap, air dash, holy ring) and fold away otherwise; no halo until then
 - Mortal world terrain: 1.28 km with Belldawn Hold, the harbour, the abbey, the fallen keep, the mire, the rift and the colossus
 - Jump off any layer to fall to the one below; light pillars carry you back up

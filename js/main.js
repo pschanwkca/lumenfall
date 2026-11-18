@@ -121,7 +121,8 @@ const CAM = { yaw: 0, pitch: 0.26, dist: 5.6, lastDrag: -99, look: new THREE.Vec
 Object.assign(P, { charge: -1, chargeFull: false, atkHeld: false, atkDownT: 0, counterT: 0, perfectCd: 0, spin: 0, flasks: 3, maxFlasks: 3, healT: -1, healed: false, lock: null });
 // ---------- light-feather levels: every feather is experience; levels raise HP / attack and unlock the way up
 const LV_REQ = [0, 3, 7, 12, 18, 25, 33, 42, 52, 64];
-const LV_PERK = { 3: '解鎖「天梯」· 可由環光聖所升往天上神域', 4: '聖瓶上限 +1', 6: '光羽之力 · 攻擊再提升', 8: '熾翼覺醒' };
+const ASCEND_LV = 5;
+const LV_PERK = { 4: '聖瓶上限 +1', 5: '解鎖「天梯」· 可由環光聖所升往天上神域', 6: '光羽之力 · 攻擊再提升', 8: '熾翼覺醒' };
 const lvFor = (n) => { let l = 1; while (l < LV_REQ.length && n >= LV_REQ[l]) l++; return l; };
 P.lv = lvFor(prog.f.length); P.lvTarget = P.lv; P.atkMul = 1; P.inRealm = false; P.inEarth = false;
 function applyStats(heal) {
@@ -187,7 +188,7 @@ function applyWeaponLook() {
 // powers granted by the purified
 const POWERS = {
   shield: { key: 'boss', glyph: '盾', name: '守衛之盾', en: "WARDEN'S AEGIS", desc: '原地按「閃避」舉盾格擋，時機啱可反擊 · 衝刺可擊碎黑晶封印' },
-  wings: { key: 'boss2', glyph: '翼', name: '審判之翼', en: "ARBITER'S WINGS", desc: '空中按「閃避」向前衝刺 · 滑翔更省力，振翼更有力' },
+  wings: { key: 'boss2', glyph: '翼', name: '審判之翼', en: "ARBITER'S WINGS", desc: '真正飛起來 · 滑翔中按「振翼」向上飛 · 空中按「閃避」向前衝刺' },
   oath: { key: 'boss3', glyph: '誓', name: '騎士之誓', en: "KNIGHT'S OATH", desc: '蓄滿力的重擊會震地 · 擊碎裂石，震飛周圍敵人' },
 };
 const has = (k) => TEST.powers || !!prog[POWERS[k].key];
@@ -1252,7 +1253,7 @@ function doJump() {
   } else if (!P.glide && P.stamina > 4 && canWing()) {
     P.glide = true; P.vel.y = Math.max(P.vel.y, -1.5); Audio.sfx('glide');
     featherBurst(P.pos.x, P.pos.y + 1.3, P.pos.z, 4, 1.5);
-  } else if (P.glide) flap();
+  } else if (P.glide) { if (has('wings') || TEST.powers) flap(); else { P.glide = false; Audio.sfx('ui'); } } // until the Arbiter's wings, the jump key folds them
 }
 function flap() {
   if (P.flapCd > 0) return;
@@ -1820,7 +1821,7 @@ function buildFolk() {
     { x: T.x + 3, z: T.z + 2.5, st: 'idle', line: '晨鐘每天早上都會響。就算沒有人聽見，也要響。', col: '#bfae8e' },
     { x: T.x - 6, z: T.z - 16, st: 'pray', line: '騎士長走了以後，這口鐘就是我們的盾。', kind: 'monk' },
     { x: T.x + 13, z: T.z + 5, st: 'idle', line: '孩子問我，天使是不是忘記了我們。', col: '#b9a0a0' },
-    { x: T.x + 14.2, z: T.z + 6.4, st: 'idle', scale: 0.6, lantern: false, line: '你的劍好大！我長大也要跟你一樣。', col: '#e1c48e' },
+    { x: T.x + 14.2, z: T.z + 6.4, st: 'idle', scale: 0.6, lantern: false, line: '黎恩哥哥，你的劍好大！我長大也要跟你一樣。', col: '#e1c48e' },
     { x: T.x + gx * 58 + gz * 4, z: T.z + gz * 58 - gx * 4, st: 'guard', yaw: toCrater, line: '要出去了？城外的燈一盞一盞熄了，越走越危險。' },
     { x: T.x + gx * 58 - gz * 4, z: T.z + gz * 58 + gx * 4, st: 'guard', yaw: toCrater },
   ].forEach((o) => folk.add(o));
@@ -1946,11 +1947,11 @@ function updateInteract() {
     const T = W.temple;
     if (!t && !prog.end && Math.hypot(P.pos.x - T.x, P.pos.z - T.z) < 6.5 && P.pos.y > T.floorY - 1) {
       const lit = prog.s.filter(Boolean).length;
-      t = lit === 4 ? { kind: 'core' } : { kind: 'coreLocked', n: lit };
+      t = lit < 4 ? { kind: 'coreLocked', n: lit } : prog.boss || TEST.powers ? { kind: 'core' } : { kind: 'coreWarden' };
     }
-    if (!t && prog.end && !P.inRealm && Math.hypot(P.pos.x - T.x, P.pos.z - T.z) < 6.5 && P.pos.y > T.floorY - 1 && P.pos.y < T.floorY + 6) t = P.lv >= 3 ? { kind: 'ascend' } : { kind: 'ascendLocked', n: P.lv };
+    if (!t && prog.end && !P.inRealm && Math.hypot(P.pos.x - T.x, P.pos.z - T.z) < 6.5 && P.pos.y > T.floorY - 1 && P.pos.y < T.floorY + 6) t = P.lv >= ASCEND_LV || TEST.powers ? { kind: 'ascend' } : { kind: 'ascendLocked', n: P.lv };
     if (!t && P.inRealm && Math.hypot(P.pos.x - REALM.gate.x, P.pos.z - REALM.gate.z) < 5 && Math.abs(P.pos.y - REALM.gate.y) < 3) t = { kind: 'descend' };
-    if (!t && P.inEarth && Math.hypot(P.pos.x - EARTH.pillar.x, P.pos.z - EARTH.pillar.z) < 6 && Math.abs(P.pos.y - EARTH.pillar.y) < 5) t = { kind: 'rise' };
+    if (!t && P.inEarth && Math.hypot(P.pos.x - EARTH.pillar.x, P.pos.z - EARTH.pillar.z) < 6 && Math.abs(P.pos.y - EARTH.pillar.y) < 5) t = pillarAwake() ? { kind: 'rise' } : { kind: 'riseLocked' };
     if (!t && P.inHell) {
       if (Math.hypot(P.pos.x - HELL.pillar.x, P.pos.z - HELL.pillar.z) < 6 && Math.abs(P.pos.y - HELL.pillar.y) < 5) t = { kind: 'riseHell' };
       else if (Math.hypot(P.pos.x - HELL.gate.x, P.pos.z - HELL.gate.z) < 12 && Math.abs(P.pos.y - HELL.gate.y) < 8) t = { kind: 'hellGate' };
@@ -1968,12 +1969,12 @@ function updateInteract() {
     if (!t) el.classList.add('hidden');
     else {
       el.classList.remove('hidden');
-      el.classList.toggle('locked', t.kind === 'sealed' || t.kind === 'coreLocked' || t.kind === 'ascendLocked' || t.kind === 'crystalSealed' || t.kind === 'hellGate');
+      el.classList.toggle('locked', t.kind === 'sealed' || t.kind === 'coreLocked' || t.kind === 'coreWarden' || t.kind === 'riseLocked' || t.kind === 'ascendLocked' || t.kind === 'crystalSealed' || t.kind === 'hellGate');
       const L = {
         shrine: ['點亮聖壇', 'KINDLE THE SHRINE'], sealed: [`淨化周圍的蝕影 <em>${t.n}</em>`, 'SEALED BY SHADES'],
         core: ['觸碰聖核', 'TOUCH THE SACRED CORE'], coreLocked: [`聖核沉睡中 <em>${t.n}/4</em>`, 'LIGHT ALL FOUR SHRINES'],
-        ascend: ['升往天上神域', 'ASCEND TO THE EMPYREAN'], ascendLocked: [`光羽之力不足 <em>Lv${t.n}/3</em>`, 'REACH LV 3 TO ASCEND'],
-        descend: ['返回人間之島', 'RETURN TO THE ISLE'], rise: ['返回天上之島', 'RETURN TO THE ISLE ABOVE'],
+        ascend: ['升往天上神域', 'ASCEND TO THE EMPYREAN'], ascendLocked: [`光羽之力不足 <em>Lv${t.n}/${ASCEND_LV}</em>`, 'REACH LV 5 TO ASCEND'],
+        descend: ['返回人間之島', 'RETURN TO THE ISLE'], rise: ['乘光柱前往雲上', 'RIDE THE PILLAR INTO THE SKY'], riseLocked: ['光柱沒有回應', 'THE PILLAR DOES NOT ANSWER'], coreWarden: ['聖核被守衛封住', 'THE WARDEN STILL HOLDS THE CORE'],
         riseHell: ['返回人間', 'RETURN TO THE MORTAL WORLD'], hellGate: [prog.boss4 ? '查看冥門' : '冥門被封印', 'THE GATE OF THE ABYSS'],
         purify: ['淨化蝕晶', 'PURIFY THE CRYSTAL'], crystalSealed: [`擊退看守的瘴獸 <em>${t.n}</em>`, 'GUARDED BY BEASTS'], kindle: ['點亮燈火', 'KINDLE THE BEACON'],
         story: t.sp && (typeof t.sp.label === 'function' ? t.sp.label() : t.sp.label),
@@ -1990,12 +1991,14 @@ function doInteract() {
   else if (t.kind === 'ascend') startTrip(true);
   else if (t.kind === 'descend') startTrip(false);
   else if (t.kind === 'rise') startTrip('rise');
+  else if (t.kind === 'riseLocked') talk('pillar');
+  else if (t.kind === 'coreWarden') talk('coreWarden');
   else if (t.kind === 'riseHell') startTrip('riseHell');
   else if (t.kind === 'hellGate') talk('gate');
   else if (t.kind === 'story') runSpot(t.sp);
   else if (t.kind === 'purify') { rescue(t.c); interactTarget = null; $('bInteract').classList.add('hidden'); }
   else if (t.kind === 'kindle') { kindle(t.b); interactTarget = null; $('bInteract').classList.add('hidden'); }
-  else if (t.kind === 'ascendLocked') { toast(`<i class="dia"></i>需要 Lv3 才能踏上天梯 · 目前 Lv${P.lv}`); Audio.sfx('ui'); }
+  else if (t.kind === 'ascendLocked') { toast(`<i class="dia"></i>需要 Lv${ASCEND_LV} 才能踏上天梯 · 目前 Lv${P.lv}`); Audio.sfx('ui'); }
   else Audio.sfx('ui');
 }
 // ---- the stairway of light: temple core ⇄ the Empyrean
@@ -2061,7 +2064,7 @@ function lightShrine(s) {
   const n = prog.s.filter(Boolean).length;
   setTimeout(() => regionCard(s.def.name + ' · 已點亮', `SHRINE KINDLED  ${n} / 4`), 900);
   const mem = 'mem' + (n - 1);
-  setTimeout(() => { if (state === 'play' && !prog.talk[mem]) talk(mem, () => { if (n === 4) toast('<i class="dia"></i>四座聖壇俱已點亮 · 前往環光聖所', true); }); }, 2300);
+  setTimeout(() => { if (state === 'play' && !prog.talk[mem]) talk(mem, () => { if (n === 4) toast('<i class="dia"></i>四座聖壇俱已點亮 · 墮翼之丘的守衛在等你', true); }); }, 2300);
   updateQuest(); interactTarget = null; $('bInteract').classList.add('hidden');
 }
 function refreshSockets() {
@@ -2296,6 +2299,7 @@ function questState() {
     else if (!prog.boss3) main = { t: '挑戰傾城遺跡的墮天騎士', tgt: at(EARTH.bossHome, 'boss') };
     else if (!prog.talk.camael) main = { t: '聆聽墮天騎士的殘響', tgt: at(EARTH.bossHome) };
     else main = { t: '乘墜光坑的光柱，前往雲上', tgt: at(EARTH.pillar) };
+    if (!pillarAwake() && !left && !prog.boss3) rows.push({ k: 'hint', t: '墜光坑的光柱還沒有回應' });
     rows.push(task('解救被蝕晶封住的人', r >= R, `${r}/${R}`), task('守住人們的燈火', b >= B, `${b}/${B}`));
     if (left) rows.push(task('挑戰墮天騎士', prog.boss3, '未挑戰'));
     rows.push(feathersRow('earth'));
@@ -2309,10 +2313,11 @@ function questState() {
   } else {
     ch = '第二章 · 光羽之境'; en = 'CHAPTER II';
     const lit = prog.s.filter(Boolean).length;
-    if (!prog.end) main = lit < 4 ? { t: '點亮四座聖壇', n: `${lit}/4`, tgt: nearestShrine } : { t: '前往環光聖所，觸碰聖核', tgt: () => qT(TEMPLE.x, TEMPLE.z) };
+    if (!prog.end && lit < 4) main = { t: '點亮四座聖壇', n: `${lit}/4`, tgt: nearestShrine };
     else if (!prog.boss) main = { t: '挑戰墮翼之丘的守衛', tgt: at(BOSS_HOME, 'boss') };
     else if (!prog.weapons.greatsword) main = { t: '拔出歐菲爾的大劍', tgt: () => qT(swordPlanted.position.x, swordPlanted.position.z) };
-    else if (!prog.boss2) main = P.lv < 3 && !prog.realm ? { t: '收集光羽，升到 Lv3', n: `Lv ${P.lv}/3` } : { t: prog.realm ? '經環光聖所的天梯，返回神域' : '回到環光聖所，踏上天梯', tgt: () => qT(TEMPLE.x, TEMPLE.z) };
+    else if (!prog.end) main = { t: '前往環光聖所，觸碰聖核', tgt: () => qT(TEMPLE.x, TEMPLE.z) };
+    else if (!prog.boss2) main = P.lv < ASCEND_LV && !prog.realm ? { t: `收集光羽，升到 Lv${ASCEND_LV}`, n: `Lv ${P.lv}/${ASCEND_LV}` } : { t: prog.realm ? '經環光聖所的天梯，返回神域' : '回到環光聖所，踏上天梯', tgt: () => qT(TEMPLE.x, TEMPLE.z) };
     else { ch = '第四章 · 墮天巨像'; en = 'CHAPTER IV'; main = { t: '從天緣躍下，前往墮天巨像' }; }
     rows.push(feathersRow('isle'));
   }
@@ -2513,7 +2518,7 @@ function updateHUD(dt) {
   hud.bSkill.classList.toggle('cool', cd > 0);
   hud.skNum.textContent = cd > 0 ? Math.ceil(P.skillCd) : '';
   // jump label
-  const jl = P.grounded || !canWing() ? '跳躍' : P.glide ? '振翼' : '展翼';
+  const jl = P.grounded || !canWing() ? '跳躍' : P.glide ? (has('wings') || TEST.powers ? '振翼' : '收翼') : '展翼';
   if (hud.jl !== jl) { hud.jumpLbl.textContent = jl; hud.jl = jl; hud.bJump.classList.toggle('wing', !P.grounded); }
   // lock-on reticle
   const ret = hud.lockRet;
@@ -2849,22 +2854,24 @@ function beginJourney() {
 // The marker says where to go; when you get there, a voice, an echo or an inscription tells you what to do.
 const STORY = {
   intro: { who: ['父親 · 薩奇爾', 'SACHIEL, YOUR FATHER'], lines: ['……'] },
-  father: { who: ['父親 · 薩奇爾', 'SACHIEL, YOUR FATHER'], lines: ['要出發了？', '……我知道攔不住你。你從小就是這樣。', '這把劍還沒打磨。等你遇到值得守護的東西，它自己會亮。', '還有這個匣子。它跟了我很多年——路上拿到的東西，都放進去。', '別走太遠。……算了。你走多遠都可以，記得回來。'], clue: ['父親的禮物', '一把未打磨的聖劍，和一個跟了父親很多年的聖匣。匣子裡躺著一根不會熄的白羽。'] },
+  father: { who: ['父親 · 薩奇爾', 'SACHIEL, YOUR FATHER'], lines: ['黎恩，要出發了？', '……我知道攔不住你。你從小就是這樣。', '這把劍還沒打磨。等你遇到值得守護的東西，它自己會亮。', '還有這個匣子。它跟了我很多年——路上拿到的東西，都放進去。', '別走太遠。……算了。你走多遠都可以，記得回來。'], clue: ['父親的禮物', '一把未打磨的聖劍，和一個跟了父親很多年的聖匣。匣子裡躺著一根不會熄的白羽。'] },
   fatherAfter: { who: ['父親 · 薩奇爾', 'SACHIEL, YOUR FATHER'], lines: ['城外的怪一天比一天兇。離村子越遠，越要小心。', '……傾城的方向，以前有一位騎士長。'] },
-  mother: { who: ['母親 · 艾琳', 'ELIN, YOUR MOTHER'], lines: ['燈不會熄。', '你想回家的時候，就跟著燈火走。', '……你爸爸年輕的時候，也是這樣說走就走。'] },
+  mother: { who: ['母親 · 艾琳', 'ELIN, YOUR MOTHER'], lines: ['黎恩，燈不會熄。', '你想回家的時候，就跟著燈火走。', '……你爸爸年輕的時候，也是這樣說走就走。'] },
   mem0: { who: ['光的記憶', 'A MEMORY OF LIGHT'], lines: ['……一位手持大劍的守衛，擋在聖所的門前。', '他身後的光，一天比一天微弱。'], clue: ['光的記憶 · 一', '一位手持大劍的守衛，擋在聖所的門前。他身後的光，一天比一天微弱。'] },
   mem1: { who: ['光的記憶', 'A MEMORY OF LIGHT'], lines: ['影子從四面八方湧來。', '守衛一步也沒有退。'], clue: ['光的記憶 · 二', '影子從四面八方湧來，守衛一步也沒有退。'] },
   mem2: { who: ['光的記憶', 'A MEMORY OF LIGHT'], lines: ['「搖籃不能熄。」', '他把自己的光，按進了聖核。'], clue: ['光的記憶 · 三', '「搖籃不能熄。」他把自己的光，按進了聖核。'] },
-  mem3: { who: ['光的記憶', 'A MEMORY OF LIGHT'], lines: ['光一點一點回到聖核……', '守衛的劍，卻再也沒有舉起來。', '——去環光聖所吧。'], clue: ['光的記憶 · 四', '光回到了聖核，守衛的劍卻再也沒有舉起來。他後來去了哪裡？'] },
-  stele: { who: ['環光聖所 · 石刻', 'THE SANCTUM'], lines: ['石刻：「天梯為攜三重光者而開。」', '（三重光……也許是指光羽的力量。）'], clue: ['天梯的石刻', '「天梯為攜三重光者而開。」——收集光羽，升到 Lv3。'] },
+  mem3: { who: ['光的記憶', 'A MEMORY OF LIGHT'], lines: ['光一點一點回到聖核……', '守衛的劍，卻再也沒有舉起來。', '……他還在墮翼之丘。聖核，要等他放下劍。'], clue: ['光的記憶 · 四', '光回到了聖核，守衛的劍卻再也沒有舉起來。他後來去了哪裡？'] },
+  stele: { who: ['環光聖所 · 石刻', 'THE SANCTUM'], lines: ['石刻：「天梯為攜五重光者而開。」', '（五重光……也許是指光羽的力量。）'], clue: ['天梯的石刻', '「天梯為攜五重光者而開。」——收集光羽，升到 Lv5。'] },
+  pillar: { who: ['墜光坑 · 光柱', 'THE PILLAR OF FALLEN LIGHT'], lines: ['光柱微微亮著，卻沒有回應你。', '晨鐘堡的老人說過——傾城遺跡的騎士長，當年就是從這道光柱降下來的。'], clue: ['不回應的光柱', '墜光坑的光柱不回應你。傾城遺跡的騎士長，當年就是從這裡降下來的。'] },
+  coreWarden: { who: ['環光聖所 · 聖核', 'THE SACRED CORE'], lines: ['聖核的光，被一道深深的劍痕封住了。', '墮翼之丘的守衛……還沒有放下他的劍。'] },
   cradle: { who: ['環光聖所 · 聖核', 'THE SACRED CORE'], lines: ['聖核的中心是空的，只留下一個人形的凹痕。', '旁邊刻著一個名字，被劃掉，又被人重新寫上——「薩奇爾」。', '……父親？', '（聖匣自己打開了。那根白羽化成光，融進你的背。）'], clue: ['空的搖籃', '天使誕生的搖籃。石刻上「薩奇爾」這個名字被劃掉又重新寫上——父親是從這裡出生的。'] },
-  ophiel: { who: ['歐菲爾的殘響', 'ECHO OF OPHIEL'], lines: ['……你身上，有我守過的光。', '你父親，是從我守的搖籃出生的。', '這把劍已經守不住任何東西了。帶走它，去守你要守的。'], clue: ['墮光守衛的大劍', '歐菲爾守過的搖籃，生下了你的父親。他把大劍留給了你。'] },
+  ophiel: { who: ['歐菲爾的殘響', 'ECHO OF OPHIEL'], lines: ['……你身上，有我守過的光。', '你父親，是從我守的搖籃出生的。', '這把劍已經守不住任何東西了。帶走它，去守你要守的。', '然後去聖核吧。那裡刻著你父親的名字。'], clue: ['墮光守衛的大劍', '歐菲爾守過的搖籃，生下了你的父親。他把大劍留給了你。'] },
   throne: { who: ['穹頂聖庭 · 空玉座', 'THE EMPTY THRONE'], lines: ['玉座上只有灰塵。', '扶手上刻著一行字：「吾在下方。」'], clue: ['空玉座', '神域之主的玉座是空的。扶手上刻著：「吾在下方。」'] },
   vault: { who: ['星淵寶庫 · 名冊', 'THE STARDEEP VAULT'], lines: ['一本取光的名冊。封面刻著：「封印以光為食。」', '其中一頁，一個名字被劃掉了——「薩奇爾」。', '旁邊有一行清秀的字：「放他走。」'], clue: ['取光的名冊', '「封印以光為食。」名冊上，父親的名字被劃掉，旁邊寫著「放他走」。'] },
   astraea: { who: ['阿斯特萊亞的殘響', 'ECHO OF ASTRAEA'], lines: ['我判了祂有罪。然後，判了我自己。', '你父親的名字，是我劃掉的。……他過得好嗎？', '祂不在這裡。去下面找祂——在那道裂縫的上方。', '我的槍，留給你。'], clue: ['審判者最後的判決', '阿斯特萊亞判了神域之主有罪，然後判了自己；父親的名字也是她劃掉的。「去下面找祂——在那道裂縫的上方。」'] },
-  camael: { who: ['卡麥爾的殘響', 'ECHO OF CAMAEL'], lines: ['你身上有他的光……薩奇爾，我的副官。', '他還活著？……那就好。', '我守的城，建在鎖鏈上。那心跳，不是我的。', '去墜光坑吧。那道光柱，會認得你的血。', '還有——別讓祂一個人跪著。'], clue: ['騎士長的遺言', '「你身上有他的光——薩奇爾，我的副官。」「去墜光坑，光柱會認得你的血。」「別讓祂一個人跪著。」'] },
+  camael: { who: ['卡麥爾的殘響', 'ECHO OF CAMAEL'], lines: ['你身上有他的光……薩奇爾，我的副官。', '他還活著？……那就好。', '我守的城，建在鎖鏈上。那心跳，不是我的。', '去墜光坑吧。我替你喚醒了光柱——它會認得你的血。', '還有——別讓祂一個人跪著。'], clue: ['騎士長的遺言', '「你身上有他的光——薩奇爾，我的副官。」「去墜光坑，光柱會認得你的血。」「別讓祂一個人跪著。」'] },
   seals: { who: ['墮天巨像', 'THE FALLEN COLOSSUS'], lines: () => ['巨像雙手握著一把劍，劍柄上有三個紋章：盾、翼、誓。', ...SEALS.filter((q) => !prog[q.key]).map((q) => q.dark), SEALS.every((q) => prog[q.key]) ? '三個紋章都在發光。' : '也許要讓三個紋章都亮起來。'], clue: ['巨像的三個紋章', '巨像手中的劍柄上有三個紋章：盾、翼、誓。分別由墮翼之丘的守衛、天上的審判者、傾城遺跡的騎士守著。'] },
-  colossus: { who: ['神域之主', 'THE LORD OF THE EMPYREAN'], lines: ['（盾、翼、誓——三個紋章逐一亮起。）', '……你終於來了。薩奇爾的孩子。', '天的律法綁得住每一個天使，卻綁不住你。', '門後面，是一切瘴氣的源頭。拿我的劍去，打開它，結束這一切。', '（巨像的手鬆開了。一把劍落在你面前。）'], clue: ['天樞之劍', '神域之主交給你的劍。「天樞」——天的樞紐。只有它能真正傷及地獄之物。「天的律法綁不住你。」'] },
+  colossus: { who: ['神域之主', 'THE LORD OF THE EMPYREAN'], lines: ['（盾、翼、誓——三個紋章逐一亮起。）', '……你終於來了。薩奇爾的孩子——黎恩。', '天的律法綁得住每一個天使，卻綁不住你。', '門後面，是一切瘴氣的源頭。拿我的劍去，打開它，結束這一切。', '（巨像的手鬆開了。一把劍落在你面前。）'], clue: ['天樞之劍', '神域之主交給你的劍。「天樞」——天的樞紐。只有它能真正傷及地獄之物。「天的律法綁不住你。」'] },
   colossusAfter: { who: ['墮天巨像', 'THE FALLEN COLOSSUS'], lines: ['巨像一動也不動。', '胸口多了一道細細的裂縫，正微微發光。', '「……不要回頭。」'] },
   abaddon: { who: ['亞巴頓的殘響', 'ECHO OF ABADDON'], lines: ['天樞……祂終於把它交出來了。', '你知道打開這扇門，會發生什麼嗎？', '……不，你不知道。祂沒有告訴你。', '去吧。我守了一千年，就是在等一個敢打開它的人。'], clue: ['守門者的話', '「你知道打開這扇門會發生什麼嗎？……祂沒有告訴你。」'] },
   gate: { who: ['冥門', 'THE ABYSSAL GATE'], lines: () => (prog.boss4 ? ['門上的鎖孔，正好是一把劍的形狀。', '——第一部 · 完。', '第二部「人間煉獄」製作中。'] : ['冥門紋絲不動。門後傳來低沉的心跳……', prog.hellBlade ? '門前的守衛還在。' : '凡光打不開它。需要神域之主的武器。']) },
@@ -3039,8 +3046,8 @@ function showWeapon(w) {
 }
 
 // ------------------------------------------------------------------ the reliquary (聖匣): the small light-casket the seraph carries
-const WING_INFO = { glyph: '羽', name: '天使之翼', en: "YOUR FATHER'S WINGS", how: '光羽之境 · 環光聖所的聖核', short: '跳起後再按「展翼」滑翔 · 不用時會收起',
-  desc: '聖匣裡父親的白羽，在聖核中甦醒，化成你背上的翅膀。跳起後再按「展翼」滑翔，滑翔中「振翼」向上飛；不用的時候，翅膀會收起來。' };
+const WING_INFO = { glyph: '羽', name: '天使之翼', en: "YOUR FATHER'S WINGS", how: '光羽之境 · 環光聖所的聖核', short: '跳起後再按「展翼」滑翔 · 還不能向上飛',
+  desc: '聖匣裡父親的白羽，在聖核中甦醒，化成你背上的翅膀。跳起後再按「展翼」滑翔；不用的時候，翅膀會收起來。現在還只能滑翔——要真正飛起來，需要更強的翅膀。' };
 const WEAPON_INFO = {
   sword: { glyph: '劍', name: '未打磨的聖劍', en: 'THE UNPOLISHED HOLY SWORD', stats: [2, 3, 3], how: '晨鐘堡 · 父親給的',
     moves: '斬擊 · 斬擊 · 迴旋斬 · 突擊', short: '父親給的劍 · 還沒打磨',
@@ -3168,8 +3175,7 @@ function warpTo(id) {
   const y0 = yHint !== undefined ? yHint + 2 : Math.max(li ? -1e9 : 0, C.groundAtL(x, z, li)) + 1.5;
   P.pos.set(x, y0, z); syncLayer();
   const h = support(x, z, y0 + 1).h; if (h > -1e8) P.pos.y = h + 0.3;
-  if (L !== 'isle') prog.end = true;
-  if (L === 'realm') prog.realm = true;
+  if (L === 'realm') prog.realm = true; // jumping ahead marks the place as visited, nothing more
   if (li) prog.earth = true;
   if (L === 'hell') prog.hell = true;
   save();
@@ -3236,6 +3242,8 @@ function initTestMode() {
   });
   syncTestUI();
 }
+// the crater's pillar only answers once Camael has woken it (older journeys that already went up keep it)
+const pillarAwake = () => !!(prog.talk.camael || prog.end || prog.realm || TEST.powers);
 function placeAtStart() {
   P.pos.copy(START); P.yaw = START_YAW; P.vel.set(0, 0, 0);
   P.inEarth = true; P.inRealm = false; P.inHell = false;
@@ -3496,4 +3504,4 @@ addEventListener('resize', resize);
 addEventListener('orientationchange', () => setTimeout(resize, 250));
 document.addEventListener('visibilitychange', () => { if (Audio.ctx) { if (document.hidden) Audio.ctx.suspend(); else Audio.ctx.resume(); } });
 init().catch((e) => { console.error(e); $('loadMsg').textContent = '載入失敗：' + e.message; });
-window.__LF = { talk: (id) => talk(id), dlg: () => DLG, dlgNext: () => dlgNext(), bag: (t) => openBag(t), spots: () => STORY_SPOTS, warp: (id) => warpTo(id), test: TEST, quest: () => QS, layer: () => C.LAYER.cur, hell: () => HELL, sites: () => ({ captives, beacons, folk }), kill: (sh) => killShade(sh), interact: () => doInteract(), dyn: () => ({ ...dyn, pr: renderer.getPixelRatio() }), levelUp: (n) => levelUp(n), showPower: (k) => showPower(k), breakables, equipWeapon: (w) => equipWeapon(w), calls: () => { renderer.info.autoReset = false; renderer.info.reset(); composer.render(0.016); const r = { ...renderer.info.render }; renderer.info.autoReset = true; return r; }, pause: (b) => (paused = b), FX, slow: () => (DT_MAX = 0.05), act: { attackDown, attackUp, lightAttack, doLock, doHeal, startAttack, perfectDodge, doAttack, doJump, doSkill, doDodge, doInteract, openMap, openSettings, damageShade, regionCard, toast }, fast: () => (DT_MAX = 0.25), THREE, scene, composer, q: (o) => { Object.assign(QUAL[settings.quality], o); applyQuality(); }, P, CAM, W, hero: () => hero, boss: () => boss, state: () => state, prog, shades, feathers, setState: (s) => (state = s), camera, renderer };
+window.__LF = { EARTH, talk: (id) => talk(id), dlg: () => DLG, dlgNext: () => dlgNext(), bag: (t) => openBag(t), spots: () => STORY_SPOTS, warp: (id) => warpTo(id), test: TEST, quest: () => QS, layer: () => C.LAYER.cur, hell: () => HELL, sites: () => ({ captives, beacons, folk }), kill: (sh) => killShade(sh), interact: () => doInteract(), dyn: () => ({ ...dyn, pr: renderer.getPixelRatio() }), levelUp: (n) => levelUp(n), showPower: (k) => showPower(k), breakables, equipWeapon: (w) => equipWeapon(w), calls: () => { renderer.info.autoReset = false; renderer.info.reset(); composer.render(0.016); const r = { ...renderer.info.render }; renderer.info.autoReset = true; return r; }, pause: (b) => (paused = b), FX, slow: () => (DT_MAX = 0.05), act: { attackDown, attackUp, lightAttack, doLock, doHeal, startAttack, perfectDodge, doAttack, doJump, doSkill, doDodge, doInteract, openMap, openSettings, damageShade, regionCard, toast }, fast: () => (DT_MAX = 0.25), THREE, scene, composer, q: (o) => { Object.assign(QUAL[settings.quality], o); applyQuality(); }, P, CAM, W, hero: () => hero, boss: () => boss, state: () => state, prog, shades, feathers, setState: (s) => (state = s), camera, renderer };
