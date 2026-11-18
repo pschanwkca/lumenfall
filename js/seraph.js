@@ -70,6 +70,18 @@ export function makeSeraphMats(fallen) {
   };
 }
 
+// the hero: a human warrior — cream tunic, leather and steel, brown hair. The angel only shows when the wings open.
+export function makeWarriorMats() {
+  const M = makeSeraphMats(false);
+  M.dress = rim(new THREE.MeshStandardMaterial({ color: '#ece4d2', roughness: 0.7, side: THREE.DoubleSide }), '#fff1d2', 0.45);
+  M.white = rim(new THREE.MeshStandardMaterial({ color: '#7d776c', roughness: 0.75 }), '#e8dcc4', 0.3);
+  M.hair = rim(new THREE.MeshStandardMaterial({ color: '#5b4434', roughness: 0.55, side: THREE.DoubleSide }), '#d9b98e', 0.35);
+  M.leather = new THREE.MeshStandardMaterial({ color: '#6e5038', roughness: 0.68, metalness: 0.08 });
+  M.steel = rim(new THREE.MeshStandardMaterial({ color: '#c3c7cf', roughness: 0.32, metalness: 0.82 }), '#ffffff', 0.25);
+  M.sash = new THREE.MeshStandardMaterial({ map: TEX.sash, color: '#e9dcc0', transparent: true, side: THREE.DoubleSide, depthWrite: false, roughness: 0.75, emissive: '#fff6e8', emissiveIntensity: 0.05 });
+  return M;
+}
+
 // ---------------------------------------------------------------- placeholder skinned body
 function capsuleBetween(a, b, r) {
   const d = new V3().subVectors(b, a), L = d.length();
@@ -119,7 +131,8 @@ function skinPart(g, cands, custom) {
   g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
   return g;
 }
-export function buildBody(M) {
+export function buildBody(M, style) {
+  const war = style === 'warrior';
   const bones = {}, list = [];
   for (const n of BONES) { const b = new THREE.Bone(); b.name = 'mixamorig' + n; bones[n] = b; list.push(b); }
   for (const n of BONES) {
@@ -131,24 +144,32 @@ export function buildBody(M) {
   const add = (geo, mat, cands, custom) => parts.push({ g: skinPart(geo, cands, custom), m: mat });
   const BI = (n) => BONES.indexOf(n);
   // torso & dress
-  add(lathe([[0.122, 0.9], [0.118, 0.98], [0.11, 1.06], [0.116, 1.14], [0.133, 1.24], [0.14, 1.32], [0.128, 1.39], [0.088, 1.43], [0.048, 1.46], [0.038, 1.49]], 26, 0.74), 'dress', ['Hips', 'Spine', 'Spine1', 'Spine2', 'Neck', 'LeftShoulder', 'RightShoulder']);
-  add(lathe([[0.121, 1.055], [0.117, 1.09], [0.119, 1.13], [0.126, 1.16]], 26, 0.77), 'gold', ['Spine', 'Spine1', 'Spine2']);
-  { const g = new THREE.TorusGeometry(0.128, 0.006, 6, 40); g.rotateX(Math.PI / 2); g.scale(1, 1, 0.76); g.translate(0, 1.245, 0); add(g, 'gold', ['Spine2']); }
-  { const g = new THREE.OctahedronGeometry(1, 0); g.scale(0.058, 0.11, 0.016); g.translate(0, 1.31, 0.103); add(g, 'gold', ['Spine2']); }
-  { const g = new THREE.SphereGeometry(0.018, 10, 8); g.translate(0, 1.335, 0.112); add(g, 'gem', ['Spine2']); }
+  if (war) add(lathe([[0.128, 0.9], [0.126, 0.98], [0.124, 1.06], [0.132, 1.14], [0.152, 1.24], [0.162, 1.32], [0.148, 1.39], [0.1, 1.43], [0.05, 1.46], [0.04, 1.49]], 26, 0.8), 'dress', ['Hips', 'Spine', 'Spine1', 'Spine2', 'Neck', 'LeftShoulder', 'RightShoulder']);
+  else add(lathe([[0.122, 0.9], [0.118, 0.98], [0.11, 1.06], [0.116, 1.14], [0.133, 1.24], [0.14, 1.32], [0.128, 1.39], [0.088, 1.43], [0.048, 1.46], [0.038, 1.49]], 26, 0.74), 'dress', ['Hips', 'Spine', 'Spine1', 'Spine2', 'Neck', 'LeftShoulder', 'RightShoulder']);
+  if (war) {
+    // leather belt with a small gold buckle, a strap across the chest, steel pauldrons
+    add(lathe([[0.134, 0.975], [0.131, 1.0], [0.131, 1.03], [0.134, 1.05]], 26, 0.82), 'leather', ['Hips', 'Spine']);
+    { const g = new THREE.BoxGeometry(0.05, 0.05, 0.012); g.translate(0, 1.012, 0.108); add(g, 'gold', ['Hips', 'Spine']); }
+    { const g = new THREE.TorusGeometry(0.15, 0.011, 6, 36); g.scale(1, 1.25, 0.72); g.rotateZ(0.62); g.translate(0, 1.2, 0); add(g, 'leather', ['Spine1', 'Spine2']); }
+    for (const sx of [1, -1]) { const g = new THREE.SphereGeometry(0.075, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.55); g.scale(1.1, 0.75, 1.0); g.rotateZ(-sx * 0.35); g.translate(sx * 0.17, 1.415, 0); add(g, 'steel', [sx > 0 ? 'LeftShoulder' : 'RightShoulder', sx > 0 ? 'LeftArm' : 'RightArm', 'Spine2']); }
+  } else add(lathe([[0.121, 1.055], [0.117, 1.09], [0.119, 1.13], [0.126, 1.16]], 26, 0.77), 'gold', ['Spine', 'Spine1', 'Spine2']);
+  if (!war) { const g = new THREE.TorusGeometry(0.128, 0.006, 6, 40); g.rotateX(Math.PI / 2); g.scale(1, 1, 0.76); g.translate(0, 1.245, 0); add(g, 'gold', ['Spine2']); }
+  if (!war) { const g = new THREE.OctahedronGeometry(1, 0); g.scale(0.058, 0.11, 0.016); g.translate(0, 1.31, 0.103); add(g, 'gold', ['Spine2']); }
+  { const g = new THREE.SphereGeometry(war ? 0.014 : 0.018, 10, 8); g.translate(0, war ? 1.34 : 1.335, war ? 0.13 : 0.112); add(g, 'gem', ['Spine2']); } // the warrior wears his father's light as a small pendant
   { const g = new THREE.TorusGeometry(0.045, 0.011, 6, 20); g.rotateX(Math.PI / 2); g.translate(0, 1.47, 0); add(g, 'gold', ['Neck']); }
   // neck + head
   add(capsuleBetween(new V3(0, 1.43, 0), new V3(0, 1.55, 0.005), 0.033), 'skin', ['Spine2', 'Neck', 'Head']);
   { const g = new THREE.SphereGeometry(0.1, 26, 20); g.scale(0.95, 1.07, 1.0); g.translate(0, 1.625, 0.01); add(g, 'skin', ['Head']); }
-  { const g = new THREE.SphereGeometry(0.112, 26, 18, Math.PI / 2 + 0.95, Math.PI * 2 - 1.9, 0, Math.PI * 0.8); g.scale(1.03, 1.06, 1.1); g.translate(0, 1.64, -0.004); add(g, 'hair', ['Head']); }
+  if (war) { const g = new THREE.SphereGeometry(0.108, 26, 16, Math.PI / 2 + 1.2, Math.PI * 2 - 2.4, 0, Math.PI * 0.62); g.scale(1.04, 1.04, 1.08); g.translate(0, 1.645, -0.006); add(g, 'hair', ['Head']); }
+  else { const g = new THREE.SphereGeometry(0.112, 26, 18, Math.PI / 2 + 0.95, Math.PI * 2 - 1.9, 0, Math.PI * 0.8); g.scale(1.03, 1.06, 1.1); g.translate(0, 1.64, -0.004); add(g, 'hair', ['Head']); }
   { const g = new THREE.SphereGeometry(0.113, 26, 10, 0, Math.PI * 2, 0, 0.95); g.rotateX(0.28); g.translate(0, 1.637, 0.008); add(g, 'hair', ['Head']); }
-  { const g = new THREE.CylinderGeometry(0.103, 0.099, 0.028, 28, 1, true, -1.35, 2.7); g.translate(0, 1.628, 0.012); add(g, 'gold', ['Head']); }
-  for (const sx of [1, -1]) { // side locks framing the face
+  if (!war) { const g = new THREE.CylinderGeometry(0.103, 0.099, 0.028, 28, 1, true, -1.35, 2.7); g.translate(0, 1.628, 0.012); add(g, 'gold', ['Head']); }
+  for (const sx of war ? [] : [1, -1]) { // side locks framing the face
     const g = new THREE.CylinderGeometry(0.03, 0.006, 0.3, 8, 4); const p = g.attributes.position;
     for (let i = 0; i < p.count; i++) { const y = p.getY(i); p.setZ(i, p.getZ(i) * 0.45 + (0.15 - y) * 0.08); p.setX(i, p.getX(i) + Math.sin((0.15 - y) * 5) * 0.012 * sx); }
     g.computeVertexNormals(); g.translate(sx * 0.098, 1.52, 0.035); add(g, 'hair', ['Head']);
   }
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < (war ? 0 : 9); i++) {
     const f = i / 8 - 0.5, g = new THREE.OctahedronGeometry(1, 0);
     g.scale(0.016, 0.065, 0.006); g.rotateX(-0.5); g.rotateZ(-f * 2.2);
     g.translate(Math.sin(f * 2.6) * 0.115, 1.715 + Math.cos(f * 2.6) * 0.02, -0.03 - Math.cos(f * 2.6) * 0.03);
@@ -160,10 +181,11 @@ export function buildBody(M) {
     add(capsuleBetween(tp(s + 'Arm'), tp(s + 'ForeArm'), 0.039), 'skin', [s + 'Shoulder', s + 'Arm', s + 'ForeArm']);
     { const g = new THREE.TorusGeometry(0.044, 0.008, 6, 16); g.rotateY(Math.PI / 2); g.translate(sx * 0.23, 1.4, 0); add(g, 'gold', [s + 'Arm']); }
     add(capsuleBetween(tp(s + 'ForeArm'), tp(s + 'Hand'), 0.032), 'skin', [s + 'Arm', s + 'ForeArm', s + 'Hand']);
-    { const g = new THREE.CylinderGeometry(0.048, 0.115, 0.27, 16, 1, true); g.rotateZ(-sx * Math.PI / 2); g.translate(sx * 0.56, 1.4, 0); add(g, 'sheer', [s + 'ForeArm']); }
+    if (war) { const g = new THREE.CylinderGeometry(0.043, 0.04, 0.16, 12); g.rotateZ(-sx * Math.PI / 2); g.translate(sx * 0.6, 1.4, 0); add(g, 'leather', [s + 'ForeArm']); }
+    else { const g = new THREE.CylinderGeometry(0.048, 0.115, 0.27, 16, 1, true); g.rotateZ(-sx * Math.PI / 2); g.translate(sx * 0.56, 1.4, 0); add(g, 'sheer', [s + 'ForeArm']); }
     { const g = new THREE.SphereGeometry(0.036, 10, 8); g.scale(1.45, 0.8, 0.95); g.translate(sx * 0.705, 1.4, 0); add(g, 'skin', [s + 'ForeArm', s + 'Hand']); }
     add(capsuleBetween(tp(s + 'UpLeg'), tp(s + 'Leg'), 0.062), 'white', ['Hips', s + 'UpLeg', s + 'Leg']);
-    add(capsuleBetween(tp(s + 'Leg'), tp(s + 'Foot'), 0.046), 'white', [s + 'UpLeg', s + 'Leg', s + 'Foot']);
+    add(capsuleBetween(tp(s + 'Leg'), tp(s + 'Foot'), war ? 0.054 : 0.046), war ? 'leather' : 'white', [s + 'UpLeg', s + 'Leg', s + 'Foot']);
     { const g = new THREE.OctahedronGeometry(1, 0); g.scale(0.05, 0.035, 0.012); g.translate(sx * 0.09, 0.54, 0.055); add(g, 'gold', [s + 'Leg']); }
     { const g = new THREE.CylinderGeometry(0.008, 0.044, 0.22, 10); g.rotateX(Math.PI / 2 + 0.2); g.translate(sx * 0.09, 0.055, 0.05); add(g, 'gold', [s + 'Foot', s + 'ToeBase']); }
   }
@@ -172,9 +194,15 @@ export function buildBody(M) {
     const down = clamp((1.0 - p.y) / 0.42, 0, 1), side = clamp(Math.abs(p.x) / 0.18, 0, 1) * down * 0.42;
     return [[BI('Hips'), 1 - side], [BI(p.x >= 0 ? 'LeftUpLeg' : 'RightUpLeg'), side]];
   };
+  if (war) {
+    // a short tunic skirt over the trousers, split at the sides
+    add(pleat(lathe([[0.132, 1.0], [0.16, 0.94], [0.2, 0.86], [0.225, 0.8]], 40), 8, 0.05, 1.0, 0.8), 'dress', null, skirtW);
+    { const g = new THREE.TorusGeometry(0.225, 0.006, 6, 40); g.rotateX(Math.PI / 2); g.translate(0, 0.8, 0); add(g, 'gold', null, skirtW); }
+  } else {
   add(pleat(lathe([[0.122, 1.0], [0.163, 0.92], [0.24, 0.79], [0.305, 0.67], [0.33, 0.62]], 56), 14, 0.07, 0.98, 0.62), 'dress', null, skirtW);
   { const g = new THREE.TorusGeometry(0.33, 0.009, 6, 48); g.rotateX(Math.PI / 2); g.translate(0, 0.62, 0); add(g, 'gold', null, skirtW); }
   add(pleat(lathe([[0.13, 1.0], [0.2, 0.88], [0.32, 0.62], [0.44, 0.34], [0.53, 0.14]], 40, 1, Math.PI - 1.9, 3.8), 9, 0.12, 1.0, 0.2), 'sheer', null, (p) => [[BI('Hips'), 0.85], [BI(p.x >= 0 ? 'LeftUpLeg' : 'RightUpLeg'), 0.15]]);
+  }
 
   // merge by material
   const order = [], buckets = {};
@@ -447,7 +475,8 @@ const _p = new V3(), _q = new Q(), _q2 = new Q(), _v = new V3(), _m = new THREE.
 export class SeraphActor {
   constructor(scene, opt = {}) {
     this.scene = scene; this.opt = opt;
-    this.M = makeSeraphMats(opt.fallen);
+    this.M = opt.style === 'warrior' ? makeWarriorMats() : makeSeraphMats(opt.fallen);
+    this.angel = opt.style === 'warrior' ? 0 : 1; // how far the angel shows: wings, halo, feather mantle
     this.root = new THREE.Group(); scene.add(this.root);
     this.scale = opt.scale || 1;
     this.anim = new SeraphAnimator();
@@ -458,7 +487,7 @@ export class SeraphActor {
   }
   useDefaultBody() {
     if (this.model) this.root.remove(this.model);
-    const { mesh, bones } = buildBody(this.M);
+    const { mesh, bones } = buildBody(this.M, this.opt.style);
     this.model = new THREE.Group(); this.model.add(mesh); this.model.scale.setScalar(this.scale);
     this.root.add(this.model);
     this.rig = new HumanoidRig(this.model, bones);
@@ -526,7 +555,7 @@ export class SeraphActor {
       pivot.add(fm);
     }
     bakeStatic(mantle);
-    this.socket('Spine2', new V3(0, 0.2, 0)).add(mantle);
+    this.socket('Spine2', new V3(0, 0.2, 0)).add(mantle); this.mantle = mantle;
     // halo
     const halo = new THREE.Group();
     const hr = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.007, 8, 72), M.goldGlow); halo.add(hr);
@@ -547,7 +576,7 @@ export class SeraphActor {
     this.cloths = [];
     if (!this.opt.noCloth) {
       const s = this.scale;
-      this.hair = new Cloth(4, 9, 0.2 * s, 0.85 * s, M.hair, { taper: 0.55, grav: -8 });
+      this.hair = new Cloth(4, this.opt.style === 'warrior' ? 3 : 9, 0.2 * s, (this.opt.style === 'warrior' ? 0.16 : 0.85) * s, M.hair, { taper: 0.55, grav: -8 });
       this.sashL = new Cloth(2, 12, 0.2 * s, 1.35 * s, M.sash, { taper: 0.1, grav: -6.5 });
       this.sashR = new Cloth(2, 12, 0.2 * s, 1.35 * s, M.sash, { taper: 0.1, grav: -6.5 });
       for (const c of [this.hair, this.sashL, this.sashR]) { this.scene.add(c.mesh); this.cloths.push(c); }
@@ -584,7 +613,27 @@ export class SeraphActor {
     this.tipLocal = [new V3(0, 0, 2.0), new V3(0, 0, 0.5)];
     return g;
   }
-  buildWeapon(kind) { return kind === 'greatsword' ? this.buildGreatsword() : kind === 'tianshu' ? this.buildLongsword() : this.buildSpear(); }
+  buildWeapon(kind) { return kind === 'greatsword' ? this.buildGreatsword() : kind === 'tianshu' ? this.buildLongsword() : kind === 'sword' ? this.buildSword(this.opt.swordLit) : this.buildSpear(); }
+  // the holy sword his father gave him: dull grey steel until the cradle's light polishes it
+  buildSword(lit) {
+    const M = this.M, g = new THREE.Group();
+    const leather = new THREE.MeshStandardMaterial({ color: '#5e4330', roughness: 0.7 });
+    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.026, 0.3, 8), leather); grip.rotation.x = Math.PI / 2; grip.position.z = -0.02; g.add(grip);
+    const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.04, 10, 8), lit ? M.gem : M.gold); pommel.position.z = -0.19; g.add(pommel);
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.045, 0.06), M.gold); guard.position.z = 0.15; g.add(guard);
+    const shape = new THREE.Shape();
+    shape.moveTo(-0.06, 0); shape.lineTo(0.06, 0); shape.lineTo(0.052, 1.08); shape.lineTo(0, 1.24); shape.lineTo(-0.052, 1.08); shape.closePath();
+    const bg = new THREE.ExtrudeGeometry(shape, { depth: 0.016, bevelEnabled: true, bevelThickness: 0.009, bevelSize: 0.009, bevelSegments: 1 });
+    bg.translate(0, 0, -0.008); bg.rotateX(Math.PI / 2); bg.translate(0, 0, 0.18);
+    g.add(new THREE.Mesh(bg, lit ? new THREE.MeshStandardMaterial({ color: '#f6f2e8', metalness: 0.8, roughness: 0.2, emissive: '#ffd98c', emissiveIntensity: 0.35 })
+      : new THREE.MeshStandardMaterial({ color: '#8e9198', metalness: 0.55, roughness: 0.62 })));
+    const fuller = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.024, 0.95), lit ? M.goldGlow : new THREE.MeshStandardMaterial({ color: '#6f7278', roughness: 0.7 })); fuller.position.z = 0.68; g.add(fuller);
+    g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    bakeStatic(g);
+    g.scale.setScalar(this.scale * 0.95);
+    this.tipLocal = [new V3(0, 0, 1.42), new V3(0, 0, 0.4)];
+    return g;
+  }
   // 天樞 · the Lord's own sword: slender, silver-white, a cold blue light down its core
   buildLongsword() {
     const M = this.M, g = new THREE.Group();
@@ -627,9 +676,11 @@ export class SeraphActor {
     for (const w of this.wings) {
       const s = w.side;
       w.root.rotation.set(c.fold * 0.42 - c.wLift * 0.3, s * c.fold * 1.32, s * (0.22 + c.wLift - c.fold * 0.18 + c.flap));
-      w.root.scale.setScalar(c.wScale);
+      w.root.scale.setScalar(Math.max(0.001, c.wScale * this.angel));
     }
     this.halo.rotation.z = this.anim.t * 0.25;
+    this.halo.scale.setScalar(Math.max(0.001, this.angel)); this.halo.visible = this.angel > 0.02;
+    if (this.mantle) { this.mantle.scale.setScalar(Math.max(0.001, this.angel)); this.mantle.visible = this.angel > 0.02; }
     this.updateWeapon(dt, S);
     this.root.updateMatrixWorld(true);
     this.updateCloth(dt, S);

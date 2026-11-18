@@ -621,7 +621,7 @@ export function buildEarth(scene) {
     { id: 'cSwampA', x: -420, z: 92, guards: [[6, 4, 'bomber'], [-5, 6], [2, -8, 'archer']], line: '……光？是天上的光嗎？' },
     { id: 'cSwampB', x: -352, z: 192, guards: [[6, -3], [-6, -4]], line: '我的燈……我以為再也點不著了。' },
     { id: 'cWood', x: -262, z: 214, guards: [[5, 5], [-6, 2, 'archer']], line: '森林一直在低語，叫我不要睡著。' },
-    { id: 'cField', x: 128, z: 236, guards: [[6, 2], [-4, -6]], line: '天使大人……您不是來懲罰我們的吧？' },
+    { id: 'cField', x: 128, z: 236, guards: [[6, 2], [-4, -6]], line: '你的眼睛……和你父親一樣，會發光。' },
     { id: 'cRuins', x: -214, z: -168, guards: [[6, 4, 'charger'], [-6, 3], [0, -8, 'archer']], line: '騎士長倒下那天，我們就再沒見過光。' },
     { id: 'cRift', x: 74, z: -396, guards: [[6, 5, 'charger'], [-6, 4, 'bomber'], [3, -7, 'archer']], line: '裂谷裡……有東西在叫我的名字。' },
   ];

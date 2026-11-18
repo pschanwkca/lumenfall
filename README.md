@@ -30,27 +30,27 @@ three.js r160 and fonts load from CDNs.
 
 ## World
 
-- **天上神域 The Empyrean** — floating isles above the island; reached from the Sanctum (Lv 3) or by flight
-- **光羽之境 The Isle** — the prologue island: shrines, Mirror Lake, Heaven's Gate, Elder Tree
-- **人間 The Mortal World** — beneath the cloud sea, 1.28 km ringed by mountains and opening onto the eastern sea:
-  - 晨鐘堡 Belldawn Hold (walled town that fills with people and light), 燈塔港 lighthouse harbour, 霜脊修道院 mountain abbey,
-    麥原守望塔 field watch, 傾城遺跡 the fallen keep, 瘴氣沼澤 the miasma mire, 低語森林 the whispering wood, 墜光坑 the crater of fallen light
-  - 墮天裂谷 the rift, with the 墮天巨像 fallen colossus kneeling over it — the sealed way down to hell
-  - Six people sealed in miasma crystal (clear the guards, purify, they walk home) and three beacons to defend through waves of beasts
-  - Chunked terrain with two levels of detail, distance culling for scenery
-- **地獄 The Abyss** — beneath the rift, only the forecourt is open for now (one way in: drop into the rift):
-  - 墜落之地 the landing, with a light pillar back to the mortal world; 熔河 the burning river and its rib-bone bridge
-  - 守門者之環 the Keeper's Ring, held by **冥門守衛 · 亞巴頓 Abaddon**, and behind it the sealed 冥門 Abyssal Gate
-  - Everything here shrugs off ordinary light: until the 神域之主 gives you their weapon (after the story), hell monsters and
-    Abaddon take ~8% damage and hit you three times as hard. Beatable by a very patient player, not a place to farm
-- Each world has its own air: isle (pale gold), Empyrean (cool, high), mortal world (warm haze that turns green in the mire,
-  icy at the abbey, rust-red at the rift, salt-blue at the coast), hell (ember dark)
+The hero is a young warrior of Belldawn: to everyone a plain human, in truth the son of an angel (Sachiel, once Camael's
+lieutenant, who fled the list of angels whose light was to be fed to the seal) and a human lamp-keeper (Elin).
+He sets out with an unpolished holy sword and his father's reliquary. Everything is open from the start; monsters grow
+with the story: weakest by Belldawn's gate, stronger the farther out, then the isle, the Empyrean and hell.
+
+| Chapter | Where | Boss | What you get |
+|---|---|---|---|
+| Prologue | 晨鐘堡 Belldawn (start) | — | 未打磨的聖劍, 聖匣 (from the father) |
+| I | 人間 the mortal world | 卡麥爾 Camael (傾城遺跡) | 騎士之誓; the crater's light pillar takes you up |
+| II | 光羽之境 the isle | 歐菲爾 Ophiel (墮翼之丘) | 天使之翼 + the sword polished (at the core), 墮光大劍, 守衛之盾 |
+| III | 天上神域 the Empyrean | 阿斯特萊亞 Astraea | 審判之翼, 審判之槍 |
+| IV | 墮天巨像 · 地獄前庭 | 亞巴頓 Abaddon | 天樞之劍 (three seals on the colossus) |
+
+- The wings only appear while used (glide, flap, air dash, holy ring) and fold away otherwise; no halo until then
+- Mortal world terrain: 1.28 km with Belldawn Hold, the harbour, the abbey, the fallen keep, the mire, the rift and the colossus
 - Jump off any layer to fall to the one below; light pillars carry you back up
 
 ## Systems
 
 - Skinned seraph (Mixamo-compatible; upload a GLB in Settings), cloth, combo / charge / perfect dodge / counter
-- Three bosses, each granting a power (Aegis, Wings, Oath) that opens sealed areas; the Warden's greatsword; Abaddon guards hell
+- Four bosses in story order (Camael, Ophiel, Astraea, Abaddon), each granting a power; Abaddon guards hell
 - 13 kinds of minion with their own HP, speed and tells: shades, archers, armoured brutes (slam), stalkers (fast, fragile),
   shielded guards (front block, break with a charged hit), healer priests, horned chargers, swollen bombers (explode),
   cinder soldiers, purgatory demons and ash archers. Each world dresses them differently (gilt, silver, bone, obsidian)
@@ -79,7 +79,8 @@ people, beacons, codex) and clues. Locked slots show where to look.
 
 | Weapon | Found | Feel |
 |---|---|---|
-| 聖槍 Holy lance | from the start | two quick long thrusts, spin sweep, lunge; white-gold light |
+| 未打磨的聖劍 → 聖劍 | from the father; polished at the sanctum core | balanced slashes; dull grey, then gold |
+| 審判之槍 Spear of judgement | Astraea's echo | two quick long thrusts, spin sweep, lunge; white-gold light |
 | 墮光大劍 Ophiel's greatsword | before Ophiel's statue | two-handed cleaves, slow spin, overhead slam that hits everything around the impact; molten orange light, heavy hit-stop |
 | 天樞之劍 Tianshu | the colossus, all three seals | quick slashes; needed to hurt anything in hell; silver-blue light |
 
