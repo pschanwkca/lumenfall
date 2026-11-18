@@ -574,6 +574,18 @@ html.desk #siegeBar{width:min(420px,calc(var(--vw)*34))}
     addEventListener('DOMContentLoaded', () => window.__layoutStage());
   }
 })();
+// if the game files fail to arrive or throw while loading, say so on the loading screen instead of spinning forever
+(() => {
+  const show = (msg) => { const el = document.getElementById('loadMsg'); if (el && !(window.__LF && window.__LF.state() !== 'loading')) el.textContent = msg; };
+  addEventListener('error', (e) => {
+    const t = e.target;
+    if (t && t.tagName === 'SCRIPT') show('遊戲檔案未能載入 · 請重新整理頁面');
+    else if (e.message && !(window.__LF && window.__LF.state() !== 'loading')) show('載入失敗：' + e.message);
+  }, true);
+  addEventListener('unhandledrejection', (e) => show('載入失敗：' + ((e.reason && e.reason.message) || e.reason)));
+  setTimeout(() => { if (!window.__LF) show('遊戲檔案未能載入 · 請重新整理頁面'); }, 25000);
+  setTimeout(() => { if (window.__LF && window.__LF.state() === 'loading') show('首次載入需要較長時間（準備光影中），請稍候…'); }, 12000);
+})();
 </script>
 </head>
 <body>

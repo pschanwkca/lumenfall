@@ -2574,7 +2574,11 @@ async function init() {
   FX.sparks.m.uniforms.uPR.value = FX.smoke.m.uniforms.uPR.value = renderer.getPixelRatio();
   setLoad(0.9, '熾天使甦醒…');
   await wait();
-  try { renderer.compile(scene, camera); } catch (e) {}
+  // compile every shader up front (the human world too), asynchronously where the browser allows it,
+  // so the page stays responsive here and dropping into the world below doesn't hitch
+  EARTH.root.visible = true;
+  try { if (renderer.compileAsync) await renderer.compileAsync(scene, camera); else renderer.compile(scene, camera); } catch (e) { try { renderer.compile(scene, camera); } catch (_) {} }
+  EARTH.root.visible = false;
   setLoad(1);
   state = 'landing';
   clock.getDelta();
