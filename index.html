@@ -439,6 +439,88 @@ body.boss #toasts{top:calc(var(--st) + 54px)}
 .glb{display:flex;gap:8px;align-items:center}
 .glb .lbtn{cursor:pointer}
 .mini{margin:6px 0 0;font:400 11px/1.7 var(--serif);color:var(--ink-s);letter-spacing:.05em}
+
+/* ================= DESKTOP (html.desk) — landscape stage + keyboard & mouse HUD ================= */
+html.desk .t-only,html.touch .d-only{display:none!important}
+html.touch #dbar{display:contents}
+html.touch .act .cap{display:contents}
+html.touch .act .key,html.touch #bFull{display:none}
+#stage{position:fixed;inset:0;overflow:hidden}
+html.desk body{background:radial-gradient(ellipse 80% 60% at 50% 50%,#f7f2e9 0%,#e9e1d2 64%,#dcd2bf 100%)}
+html.desk #stage{inset:auto;left:0;top:0;transform-origin:0 0;background:#ece6db}
+html.desk.boxed #stage{box-shadow:0 0 0 1px rgba(198,162,90,.6),0 0 0 5px rgba(255,255,255,.4),0 0 0 6px rgba(198,162,90,.22),0 26px 70px rgba(80,60,25,.26)}
+#lbox{display:none}
+html.desk.roomy #lbox{display:block;position:fixed;inset:0;pointer-events:none}
+#lbox .t,#lbox .b{position:absolute;left:0;right:0;height:var(--boxh);display:flex;align-items:center;justify-content:center;gap:14px}
+#lbox .t{top:0}#lbox .b{bottom:0}
+#lbox .t span{font:600 11px var(--cin);letter-spacing:.55em;padding-left:.55em;color:var(--gold-d)}
+#lbox .t .cn{font:500 12px var(--serif);letter-spacing:.6em;color:var(--ink-s)}
+#lbox .t i{width:70px;height:1px;background:linear-gradient(90deg,transparent,var(--gold))}
+#lbox .t i:last-child{background:linear-gradient(90deg,var(--gold),transparent)}
+#lbox .t b{width:5px;height:5px;transform:rotate(45deg);background:var(--gold)}
+#lbox .b .hint{font:400 12px var(--serif);letter-spacing:.22em;color:var(--ink-s)}
+#lbox .b .lbtn{pointer-events:auto;padding:7px 16px}
+/* viewport units follow the stage, not the window */
+html.desk #haloUI{width:min(calc(var(--vh)*92),600px);height:min(calc(var(--vh)*92),600px)}
+html.desk .brand{left:calc(var(--vw)*6);max-width:min(calc(var(--vw)*50),620px)}
+html.desk .logo{font-size:clamp(30px,min(calc(var(--vw)*5),calc(var(--vh)*10.5)),72px);padding-right:.2em}
+html.desk .brand .cn{font-size:clamp(16px,calc(var(--vw)*2.3),22px)}
+html.desk .tag{font-size:clamp(14px,calc(var(--vw)*1.7),17px)}
+html.desk #tapHint{bottom:calc(var(--vh)*9)}
+html.desk #mapOv .mapbox{max-width:calc(var(--vw)*62)}
+html.desk #mapOv .panel{max-height:min(100%,700px)}
+html.desk #setOv .panel{width:min(600px,calc(var(--vw)*94))!important}
+html.desk #howOv .panel{width:min(720px,calc(var(--vw)*96))}
+html.desk .big .k2{font-size:clamp(26px,calc(var(--vw)*4.6),44px)}
+html.desk .big .k3{font-size:clamp(13px,calc(var(--vw)*1.8),16px)}
+html.desk #lvUp{width:min(440px,calc(var(--vw)*80))}
+html.desk #bossBar{width:min(600px,calc(var(--vw)*46))}
+html.desk #rotate,html.desk #joy{display:none!important}
+/* keycap */
+.key{display:inline-grid;place-items:center;min-width:17px;height:17px;padding:0 4px;border-radius:3px;font:600 8.5px/1 var(--cin);font-style:normal;letter-spacing:.06em;color:var(--ink);vertical-align:middle;
+  background:linear-gradient(180deg,#fffdf7,#efe4c8);box-shadow:inset 0 0 0 1px rgba(160,124,58,.85),inset 0 -2px 0 rgba(160,124,58,.22),0 1px 3px rgba(60,40,10,.22)}
+.key+.key{margin-left:3px}
+.key.m{padding:0 3px}
+.key .ms{width:10px;height:13px;fill:none;stroke:#5c4520;stroke-width:1.15}
+.key .ms .fb{fill:#d2ad5f;stroke:none}
+/* hotbar */
+html.desk #dbar{position:absolute;left:50%;bottom:calc(var(--sb) + 34px);transform:translateX(-50%);display:flex;align-items:center;gap:24px;pointer-events:none}
+html.desk #dbar .act{position:relative;left:auto;right:auto;top:auto;bottom:auto;width:52px;height:52px;flex:none;overflow:visible}
+html.desk #dbar #bAtk{width:66px;height:66px;order:3}
+html.desk #bHeal{order:1} html.desk #bSkill{order:2} html.desk #bDodge{order:4} html.desk #bJump{order:5} html.desk #bLock{order:6}
+html.desk #dbar .act svg.i{width:44%;height:44%}
+html.desk #dbar .act .cap{position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:5px;white-space:nowrap;padding:0;letter-spacing:0}
+html.desk #dbar .act .cap span{font:600 10.5px var(--serif);letter-spacing:.16em;padding:0;color:#4a3b1f!important;text-shadow:0 0 5px #fff,0 0 2px #fff}
+html.desk #dbar #bAtk .cap{top:calc(100% + 1px)}
+html.desk #dbar .act .cap{padding:2px 12px;background:linear-gradient(90deg,rgba(252,249,242,0),rgba(252,249,242,.82) 22%,rgba(252,249,242,.82) 78%,rgba(252,249,242,0))}
+html.desk #bInteract.locked .key{opacity:.45}
+html.desk #bHeal b{right:-4px;bottom:auto;top:-4px}
+html.desk .act:hover{background:radial-gradient(circle at 50% 34%,rgba(255,253,246,.62),rgba(255,250,238,.26) 72%)!important}
+html.desk .ic:hover{transform:scale(1.07)}
+html.desk #hpw{bottom:calc(var(--sb) + 136px);width:400px}
+html.desk #lvw{left:calc(var(--sl) + 116px)!important}
+html.desk #lvw .n{font-size:10px;color:#6e511c;padding:1px 10px 1px 4px;background:linear-gradient(90deg,rgba(252,249,242,.8) 70%,rgba(252,249,242,0))}
+/* top-right key hints */
+html.desk #topr{gap:12px}
+html.desk #topr .ic{position:relative}
+html.desk #topr .ic[data-key]:after{content:attr(data-key);position:absolute;left:50%;top:calc(100% + 4px);transform:translateX(-50%);min-width:15px;height:14px;padding:0 3px;border-radius:2px;
+  font:600 7.5px/14px var(--cin);letter-spacing:.06em;color:var(--ink);text-align:center;background:linear-gradient(180deg,#fffdf7,#efe4c8);box-shadow:inset 0 0 0 1px rgba(160,124,58,.7)}
+#bFull .fso{display:none}
+html.fs #bFull .fsi{display:none} html.fs #bFull .fso{display:block}
+/* interact prompt beside the crosshair line */
+html.desk #bInteract{right:auto;bottom:auto;left:calc(50% + 64px);top:57%;padding:8px 20px 8px 10px;gap:10px}
+html.desk #bInteract .dia{display:none}
+html.desk #bInteract .key{height:24px;min-width:24px;font-size:12px}
+/* click-to-look hint */
+#plHint{position:absolute;left:50%;top:66%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;padding:7px 26px;white-space:nowrap;pointer-events:none;
+  font:500 12.5px var(--serif);letter-spacing:.22em;color:var(--ink);background:linear-gradient(90deg,rgba(252,249,242,0),rgba(252,249,242,.9) 18%,rgba(252,249,242,.9) 82%,rgba(252,249,242,0));animation:breathe 2.6s ease-in-out infinite}
+html.locked #plHint{display:none}
+html.dragcam #touch{cursor:grab} html.dragging #touch{cursor:grabbing}
+html.nohud #hud{opacity:0!important}
+/* how-to keycaps */
+.cols dt .key{font-size:8px}
+html.desk .cols{grid-template-columns:1fr 1.1fr}
+html.desk .cols dl{grid-template-columns:96px 1fr;align-items:center}
 </style>
 <script>
 (() => {
@@ -451,9 +533,39 @@ body.boss #toasts{top:calc(var(--st) + 54px)}
   document.addEventListener('contextmenu', (e) => e.preventDefault());
   document.addEventListener('selectstart', (e) => { if (!e.target.closest || !e.target.closest('input,textarea')) e.preventDefault(); });
 })();
+// desktop vs touch: desktop always plays in a landscape stage with its own keyboard & mouse HUD
+(() => {
+  const q = location.search, R = document.documentElement;
+  const desk = /[?&]ui=desk/.test(q) || (!/[?&]ui=touch/.test(q) && matchMedia('(hover:hover) and (pointer:fine)').matches);
+  R.classList.add(desk ? 'desk' : 'touch');
+  window.__DESK = desk;
+  const V = (window.__VIEW = { w: innerWidth, h: innerHeight, s: 1, y: 0, box: false });
+  window.__layoutStage = () => {
+    const w = innerWidth, h = innerHeight;
+    if (!desk) { V.w = w; V.h = h; V.s = 1; V.y = 0; V.box = false; return V; }
+    const sh = Math.min(h, Math.round(w / 1.45));             // never narrower than a landscape 1.45 : 1
+    const s = sh > 820 ? Math.min(sh / 820, 1.6) : sh < 600 ? sh / 600 : 1; // UI keeps its proportions on any window
+    V.s = s; V.w = Math.round(w / s); V.h = Math.round(sh / s); V.y = Math.round((h - sh) / 2); V.box = h - sh > 2;
+    const st = document.getElementById('stage');
+    if (st) { st.style.width = V.w + 'px'; st.style.height = V.h + 'px'; st.style.transform = `translate(0px, ${V.y}px) scale(${s})`; }
+    R.classList.toggle('boxed', V.box); R.classList.toggle('roomy', V.y > 46); R.style.setProperty('--boxh', V.y + 'px');
+    R.style.setProperty('--vw', V.w / 100 + 'px'); R.style.setProperty('--vh', V.h / 100 + 'px');
+    return V;
+  };
+  if (desk) {
+    // portrait / short-screen layouts are for phones only
+    for (const sh of document.styleSheets) {
+      let rules; try { rules = sh.cssRules; } catch (e) { continue; }
+      for (let i = rules.length - 1; i >= 0; i--) { const r = rules[i]; if (r.media && /orientation|max-height/.test(r.media.mediaText)) sh.deleteRule(i); }
+    }
+    addEventListener('DOMContentLoaded', () => window.__layoutStage());
+  }
+})();
 </script>
 </head>
 <body>
+<div id="lbox"><div class="t"><i></i><span>LUMENFALL</span><b></b><span class="cn">光羽之境</span><i></i></div><div class="b"><span class="hint">放大視窗或全螢幕，畫面會更闊</span><button id="lbFull" class="lbtn"><span>全螢幕</span><small>FULLSCREEN</small></button></div></div>
+<div id="stage">
 <canvas id="c"></canvas>
 <div id="touch"></div>
 
@@ -473,25 +585,29 @@ body.boss #toasts{top:calc(var(--st) + 54px)}
   </div>
   <div id="quest" class="ctl"><div class="qt"><i class="dia"></i><span id="qTitle">序章 · 光羽降臨</span></div><div id="qObj"></div></div>
   <div id="topr" class="ctl">
-    <button class="ic" id="bCodex" aria-label="墮天錄"><svg viewBox="0 0 24 24"><path d="M5 4.5h10.5a3 3 0 0 1 3 3v12H8a3 3 0 0 1-3-3z"/><path d="M5 16.5a3 3 0 0 1 3-3h10.5"/><path d="M11.8 6.8c1.2 1 1.2 2.6 0 3.6c-1.2-1-1.2-2.6 0-3.6z"/></svg></button>
-    <button class="ic" id="bMap" aria-label="地圖"><svg viewBox="0 0 24 24"><path d="M3.5 6.5 9 4.5l6 2 5.5-2v13L15 19.5l-6-2-5.5 2z"/><path d="M9 4.5v13M15 6.5v13"/></svg></button>
+    <button class="ic" id="bCodex" aria-label="墮天錄" data-key="B"><svg viewBox="0 0 24 24"><path d="M5 4.5h10.5a3 3 0 0 1 3 3v12H8a3 3 0 0 1-3-3z"/><path d="M5 16.5a3 3 0 0 1 3-3h10.5"/><path d="M11.8 6.8c1.2 1 1.2 2.6 0 3.6c-1.2-1-1.2-2.6 0-3.6z"/></svg></button>
+    <button class="ic" id="bMap" aria-label="地圖" data-key="M"><svg viewBox="0 0 24 24"><path d="M3.5 6.5 9 4.5l6 2 5.5-2v13L15 19.5l-6-2-5.5 2z"/><path d="M9 4.5v13M15 6.5v13"/></svg></button>
     <button class="ic" id="bSnd" aria-label="聲音"><svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path class="on" d="M15.5 9a4.5 4.5 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11"/><path class="off" d="M16 9.5l5 5M21 9.5l-5 5"/></svg></button>
-    <button class="ic" id="bSet" aria-label="設定"><svg viewBox="0 0 24 24"><path d="M12 2.8l1.6 5.6 5.6-1.6-3.6 4.6 3.6 4.6-5.6-1.6L12 20l-1.6-5.6-5.6 1.6 3.6-4.6-3.6-4.6 5.6 1.6z"/><circle cx="12" cy="11.4" r="2.2"/></svg></button>
+    <button class="ic" id="bFull" aria-label="全螢幕"><svg viewBox="0 0 24 24"><path class="fsi" d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/><path class="fso" d="M9 4v5H4M20 9h-5V4M15 20v-5h5M4 15h5v5"/></svg></button>
+    <button class="ic" id="bSet" aria-label="設定" data-key="ESC"><svg viewBox="0 0 24 24"><path d="M12 2.8l1.6 5.6 5.6-1.6-3.6 4.6 3.6 4.6-5.6-1.6L12 20l-1.6-5.6-5.6 1.6 3.6-4.6-3.6-4.6 5.6 1.6z"/><circle cx="12" cy="11.4" r="2.2"/></svg></button>
   </div>
   <div id="lvw" class="ctl"><span class="lv"><span>LV</span><b id="lvB">1</b></span><div class="xp"><i id="xpF"></i></div><span class="n" id="xpN">0 / 3</span></div>
   <div id="lvUp" class="hidden"><div class="emb"><svg viewBox="0 0 132 132"><g class="fx"><path transform="rotate(0 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(30 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(60 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(90 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(120 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(150 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(180 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(210 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(240 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(270 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(300 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(330 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/></g><circle class="r1" cx="66" cy="66" r="44"/><g class="r1"><path transform="rotate(0 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(15 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(30 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(45 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(60 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(75 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(90 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(105 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(120 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(135 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(150 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(165 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(180 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(195 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(210 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(225 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(240 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(255 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(270 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(285 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(300 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(315 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(330 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(345 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/></g><circle class="r2" cx="66" cy="66" r="52"/><circle class="r1" cx="66" cy="66" r="36" opacity=".5"/></svg><div class="num"><small id="lvSmall">LEVEL</small><b id="lvNum">2</b><em id="lvFromRow">Lv <span id="lvFrom">1</span> →</em></div></div><div class="k" id="lvK">LEVEL UP</div><div class="t" id="lvT">光羽之力 · 增強</div><ul id="lvStats"></ul><div class="perk" id="lvPerk"></div></div>
   <div id="hpw" class="ctl"><span class="l">HP</span><div class="bar"><div id="hpd"></div><div id="hpf"></div></div><span id="hpn">100 / 100</span></div>
   <svg id="stam" viewBox="0 0 44 44"><defs><linearGradient id="stg" x1="0" x2="1"><stop offset="0" stop-color="#e6c57a"/><stop offset="1" stop-color="#fff6dc"/></linearGradient></defs><circle class="tr" cx="22" cy="22" r="18"/><circle id="stArc" class="ar" cx="22" cy="22" r="18"/></svg>
   <div id="joy" class="ctl"><div id="joyBase"><div id="joyKnob"></div></div></div>
-  <button class="act ctl" id="bAtk"><svg class="i" viewBox="0 0 24 24"><path d="M4.5 19.5 16.2 7.8"/><path d="M14.6 6.2 20 4l-2.2 5.4-1.6-1.6z" fill="currentColor"/><path d="M13.2 4.6c1.3.2 2.4.8 3 1.6M19.4 10.8c-.2-1.3-.8-2.4-1.6-3"/><path d="M6.2 15.6l2.2 2.2"/></svg><span id="atkLbl">攻擊</span></button>
-  <button class="act ctl" id="bLock" aria-label="鎖定"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5.2"/><path d="M12 2.5v4.2M12 17.3v4.2M2.5 12h4.2M17.3 12h4.2"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg></button>
-  <button class="act ctl" id="bHeal" aria-label="光露"><svg class="i" viewBox="0 0 24 24"><path d="M9.6 3.5h4.8M10.5 3.5v4.4L6.9 13.2a5.4 5.4 0 1 0 10.2 0l-3.6-5.3V3.5"/><path d="M8.3 15.4c2 .9 5.4.9 7.4 0"/></svg><b id="healN">3</b></button>
-  <button class="act ctl" id="bSkill"><svg class="cd" viewBox="0 0 64 64"><circle id="skCd" cx="32" cy="32" r="16" style="stroke-dashoffset:100.53"/></svg><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.6"/><circle cx="12" cy="12" r="8.2" stroke-dasharray="1.6 2.4"/><path d="M12 1.5v2.4M12 20.1v2.4M1.5 12h2.4M20.1 12h2.4"/></svg><span>聖環</span><b id="skNum"></b></button>
-  <button class="act ctl" id="bDodge"><svg class="i" viewBox="0 0 24 24"><path d="M19.5 4.5C12 5 6.5 9.8 4.5 19.5c3-4.4 6.4-7 10.6-8.2"/><path d="M19.5 4.5c-.5 4.8-3 8.6-7.6 10.8"/><path d="M9 14.5l-2 1M11 12.4l-2.6.4M13.2 10.6l-2.6-.2"/></svg><span>閃避</span></button>
-  <button class="act ctl" id="bJump"><svg class="i" viewBox="0 0 24 24"><path d="M12 20V8.5M8.5 11.5 12 8l3.5 3.5"/><path d="M12 4.5c-3-1.5-6.8-1-9 1.5 2.6-.4 4.5.4 5.6 1.6"/><path d="M12 4.5c3-1.5 6.8-1 9 1.5-2.6-.4-4.5.4-5.6 1.6"/></svg><span id="jumpLbl">跳躍</span></button>
-  <button id="bInteract" class="ctl hidden"><i class="dia"></i><span class="t"><b id="intLbl">點亮聖壇</b><small id="intSub">KINDLE THE SHRINE</small></span></button>
+  <div id="dbar">
+  <button class="act ctl" id="bAtk"><svg class="i" viewBox="0 0 24 24"><path d="M4.5 19.5 16.2 7.8"/><path d="M14.6 6.2 20 4l-2.2 5.4-1.6-1.6z" fill="currentColor"/><path d="M13.2 4.6c1.3.2 2.4.8 3 1.6M19.4 10.8c-.2-1.3-.8-2.4-1.6-3"/><path d="M6.2 15.6l2.2 2.2"/></svg><span class="cap"><i class="key m"><svg class="ms" viewBox="0 0 12 16"><path class="fb" d="M6 1.2A4.8 4.8 0 0 0 1.2 6v.6H6z"/><rect x="1.2" y="1.2" width="9.6" height="13.6" rx="4.8"/><path d="M6 1.2v5.4M1.2 6.6h9.6"/></svg></i><span id="atkLbl">攻擊</span></span></button>
+  <button class="act ctl" id="bLock" aria-label="鎖定"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5.2"/><path d="M12 2.5v4.2M12 17.3v4.2M2.5 12h4.2M17.3 12h4.2"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg><span class="cap d-only"><i class="key">TAB</i><span>鎖定</span></span></button>
+  <button class="act ctl" id="bHeal" aria-label="光露"><svg class="i" viewBox="0 0 24 24"><path d="M9.6 3.5h4.8M10.5 3.5v4.4L6.9 13.2a5.4 5.4 0 1 0 10.2 0l-3.6-5.3V3.5"/><path d="M8.3 15.4c2 .9 5.4.9 7.4 0"/></svg><b id="healN">3</b><span class="cap d-only"><i class="key">R</i><span>光露</span></span></button>
+  <button class="act ctl" id="bSkill"><svg class="cd" viewBox="0 0 64 64"><circle id="skCd" cx="32" cy="32" r="16" style="stroke-dashoffset:100.53"/></svg><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.6"/><circle cx="12" cy="12" r="8.2" stroke-dasharray="1.6 2.4"/><path d="M12 1.5v2.4M12 20.1v2.4M1.5 12h2.4M20.1 12h2.4"/></svg><span class="cap"><i class="key">Q</i><span>聖環</span></span><b id="skNum"></b></button>
+  <button class="act ctl" id="bDodge"><svg class="i" viewBox="0 0 24 24"><path d="M19.5 4.5C12 5 6.5 9.8 4.5 19.5c3-4.4 6.4-7 10.6-8.2"/><path d="M19.5 4.5c-.5 4.8-3 8.6-7.6 10.8"/><path d="M9 14.5l-2 1M11 12.4l-2.6.4M13.2 10.6l-2.6-.2"/></svg><span class="cap"><i class="key m"><svg class="ms" viewBox="0 0 12 16"><path class="fb" d="M6 1.2A4.8 4.8 0 0 1 10.8 6v.6H6z"/><rect x="1.2" y="1.2" width="9.6" height="13.6" rx="4.8"/><path d="M6 1.2v5.4M1.2 6.6h9.6"/></svg></i><span>閃避</span></span></button>
+  <button class="act ctl" id="bJump"><svg class="i" viewBox="0 0 24 24"><path d="M12 20V8.5M8.5 11.5 12 8l3.5 3.5"/><path d="M12 4.5c-3-1.5-6.8-1-9 1.5 2.6-.4 4.5.4 5.6 1.6"/><path d="M12 4.5c3-1.5 6.8-1 9 1.5-2.6-.4-4.5.4-5.6 1.6"/></svg><span class="cap"><i class="key wide">SPACE</i><span id="jumpLbl">跳躍</span></span></button>
+  </div>
+  <button id="bInteract" class="ctl hidden"><i class="dia"></i><i class="key d-only">E</i><span class="t"><b id="intLbl">點亮聖壇</b><small id="intSub">KINDLE THE SHRINE</small></span></button>
   <div id="region"><div class="orn"><i></i><b></b><i></i></div><div id="regCn"></div><div id="regEn"></div></div>
   <div id="toasts"></div>
+  <div id="plHint" class="d-only hidden"><i class="key m"><svg class="ms" viewBox="0 0 12 16"><path class="fb" d="M6 1.2A4.8 4.8 0 0 0 1.2 6v.6H6z"/><rect x="1.2" y="1.2" width="9.6" height="13.6" rx="4.8"/><path d="M6 1.2v5.4M1.2 6.6h9.6"/></svg></i><span>點擊畫面 · 用滑鼠控制視角</span></div>
   <div id="lockRet"><i></i><div class="hpm"><b id="lockHp"></b></div></div>
   <div id="dnums"></div>
   <div id="bigText"><div class="cn"></div><div class="en"></div></div>
@@ -524,9 +640,9 @@ body.boss #toasts{top:calc(var(--st) + 54px)}
       <button data-act="settings"><span class="c">設定</span><span class="e">SETTINGS</span></button>
     </nav>
   </div>
-  <div id="tapHint"><span class="c">觸碰開始</span><span class="e">TAP TO BEGIN</span></div>
-  <div class="corner bl">PROTOTYPE · v0.6.1 · 人間</div>
-  <div class="corner br">MOBILE · LANDSCAPE</div>
+  <div id="tapHint"><span class="c t-only">觸碰開始</span><span class="e t-only">TAP TO BEGIN</span><span class="c d-only">點擊或按任意鍵開始</span><span class="e d-only">PRESS ANY KEY</span></div>
+  <div class="corner bl">PROTOTYPE · v0.6.2 · 人間</div>
+  <div class="corner br t-only">MOBILE · LANDSCAPE</div><div class="corner br d-only">DESKTOP · KEYBOARD &amp; MOUSE</div>
 </div>
 
 <!-- ============ OVERLAYS ============ -->
@@ -557,6 +673,7 @@ body.boss #toasts{top:calc(var(--st) + 54px)}
     <div class="row"><div class="k">畫質<small>GRAPHICS</small></div><div class="seg"><button data-q="low">流暢</button><button data-q="mid">均衡</button><button data-q="high">極致</button></div></div>
     <div class="row"><div class="k">語言<small>LANGUAGE</small></div><div class="seg"><button data-lang="zh">繁中</button><button data-lang="ja">日本語</button></div></div>
     <div class="row"><div class="k">聲音<small>SOUND</small></div><button class="tog" id="sndToggle"><em>開啟</em><i></i></button></div>
+    <div class="row d-only"><div class="k">滑鼠靈敏度<small>MOUSE SENSITIVITY</small></div><div class="seg"><button data-sens="0.6">低</button><button data-sens="1">中</button><button data-sens="1.5">高</button></div></div>
     <div class="row"><div class="k">鏡頭自動跟隨<small>AUTO CAMERA</small></div><button class="tog" id="camToggle"><em>關閉</em><i></i></button></div>
     <div class="row"><div class="k">角色模型<small>CHARACTER MODEL</small></div><div class="glb"><label class="lbtn" for="glbIn"><span>上載 GLB</span><small>UPLOAD</small></label><input type="file" id="glbIn" accept=".glb,.gltf" hidden><button class="lbtn" id="glbReset"><span>還原</span></button></div></div>
     <p class="mini" id="glbStat">支援 Mixamo 標準骨架嘅人形模型（例如 Tripo 綁骨後匯出嘅 GLB）。</p>
@@ -573,25 +690,38 @@ body.boss #toasts{top:calc(var(--st) + 54px)}
   <div class="panel">
     <h2>操作說明<small>HOW TO PLAY</small></h2>
     <div class="sep"></div>
-    <div class="cols">
-      <div><h3>TOUCH</h3><dl>
+    <div class="cols t-only">
+      <div><h3>MOVE · VIEW</h3><dl>
         <dt>左側拖曳</dt><dd>移動（推到盡為奔跑）</dd>
         <dt>右側拖曳</dt><dd>轉動視角</dd>
+        <dt>跳躍／展翼</dt><dd>空中按展翼滑翔，再按振翼上升</dd>
+        <dt>空中閃避</dt><dd>收翼俯衝</dd>
+        <dt>互動</dt><dd>靠近聖壇、聖核時出現</dd></dl></div>
+      <div><h3>COMBAT</h3><dl>
         <dt>攻擊</dt><dd>連按四段槍舞・長按蓄力重擊</dd>
         <dt>閃避</dt><dd>剛好避開 → 聖時慢動作</dd>
         <dt>聖裁</dt><dd>聖時內按攻擊，發動反擊</dd>
         <dt>鎖定</dt><dd>鎖定最近敵人／大型 Boss</dd>
-        <dt>聖環　聖瓶</dt><dd>範圍淨化　回復生命</dd>
-        <dt>跳躍／展翼</dt><dd>空中按展翼滑翔，再按振翼上升</dd>
-        <dt>空中閃避</dt><dd>收翼俯衝</dd></dl></div>
-      <div><h3>KEYBOARD</h3><dl>
-        <dt>WASD</dt><dd>移動</dd>
-        <dt>拖曳滑鼠</dt><dd>轉動視角，點擊攻擊</dd>
-        <dt>J / K</dt><dd>攻擊（長按蓄力）／聖環</dd>
-        <dt>L　R</dt><dd>鎖定　聖瓶</dd>
-        <dt>Shift</dt><dd>閃避</dd>
-        <dt>Space</dt><dd>跳躍／展翼／振翼</dd>
-        <dt>E　M</dt><dd>互動　地圖</dd></dl></div>
+        <dt>聖環　聖瓶</dt><dd>範圍淨化　回復生命</dd></dl></div>
+    </div>
+    <div class="cols d-only">
+      <div><h3>MOVE · VIEW</h3><dl>
+        <dt><i class="key">W</i><i class="key">A</i><i class="key">S</i><i class="key">D</i></dt><dd>移動　<i class="key">CTRL</i> 慢行</dd>
+        <dt>滑鼠</dt><dd>轉動視角（點擊畫面鎖定滑鼠）</dd>
+        <dt>滾輪</dt><dd>拉近／拉遠鏡頭</dd>
+        <dt><i class="key wide">SPACE</i></dt><dd>跳躍・空中展翼・再按振翼</dd>
+        <dt><i class="key">E</i></dt><dd>互動</dd>
+        <dt><i class="key">M</i><i class="key">B</i></dt><dd>地圖　墮天錄</dd>
+        <dt><i class="key">H</i></dt><dd>隱藏介面（拍照模式）</dd>
+        <dt><i class="key">ESC</i></dt><dd>暫停・設定・釋放滑鼠</dd></dl></div>
+      <div><h3>COMBAT</h3><dl>
+        <dt>左鍵</dt><dd>連按四段槍舞・長按蓄力重擊</dd>
+        <dt>右鍵 <i class="key">SHIFT</i></dt><dd>閃避・剛好避開觸發聖時</dd>
+        <dt>聖時＋左鍵</dt><dd>聖裁反擊</dd>
+        <dt><i class="key">Q</i></dt><dd>聖環・範圍淨化</dd>
+        <dt><i class="key">R</i></dt><dd>光露・回復生命</dd>
+        <dt><i class="key">TAB</i> 中鍵</dt><dd>鎖定最近敵人／大型 Boss</dd>
+        <dt>空中右鍵</dt><dd>收翼俯衝</dd></dl></div>
     </div>
     <p class="note">收集光羽就會升 Lv（生命、攻擊提升）。點亮四座聖壇、喚醒聖所後，<br>Lv3 以上可以由聖核踏上天梯，升往天上神域，挑戰審判之環的審判者。</p>
     <button class="ic x" data-close aria-label="關閉"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
@@ -641,6 +771,7 @@ body.boss #toasts{top:calc(var(--st) + 54px)}
     ln.setAttribute('class','tk');ln.setAttribute('opacity',i%6===0?.9:.35);m.appendChild(ln);}
 })();
 </script>
+</div>
 <script type="module" src="./js/main.js"></script>
 </body>
 </html>

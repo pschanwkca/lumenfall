@@ -1,6 +1,6 @@
 # LUMENFALL · 光羽之境
 
-A seraphic open-world exploration prototype for mobile (landscape) — built with three.js, no build step.
+A seraphic open-world exploration prototype for mobile (landscape) and desktop — built with three.js, no build step.
 
 ## Run locally
 
@@ -11,6 +11,22 @@ python3 -m http.server 8080
 ```
 
 three.js r160 and fonts load from CDNs.
+
+## Platforms
+
+- **Mobile** — landscape, touch joystick + action buttons
+- **Desktop** — always a landscape stage (letterboxed in tall windows), its own keyboard & mouse HUD, pointer-lock mouse look (drag-to-look fallback), adaptive resolution
+- Force a layout with `?ui=desk` or `?ui=touch`
+
+| Desktop | |
+|---|---|
+| WASD / mouse | move / look (click to grab the mouse, Esc to pause) |
+| Left click | attack, hold to charge |
+| Right click / Shift | dodge (air: dive) |
+| Space | jump, glide, flap |
+| Q · R · Tab / middle click | holy ring · heal · lock on |
+| E · M · B · H | interact · map · codex · hide HUD |
+| Wheel | camera distance |
 
 ## World
 

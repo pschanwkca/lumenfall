@@ -16,19 +16,21 @@ import { createBoss, BOSS_HOME } from './boss.js';
 
 const { clamp, lerp, smooth, damp, dampAngle, angDiff, easeOut, easeInOut, mulberry, groundAt, LAKE, TEMPLE, WINGP, SHRINES, SPAWN, edgeR, TEX, grid, GN } = C;
 const $ = (id) => document.getElementById(id);
-const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+const DESK = !!window.__DESK; // decided in index.html: desktop = fine pointer + hover
+const isTouch = !DESK;
+const VIEW = window.__VIEW || { w: innerWidth, h: innerHeight, s: 1 }; // logical stage size (desktop stage is letterboxed to landscape)
 
 // ------------------------------------------------------------------ settings & save
 const QUAL = {
-  low: { pr: 1.0, bloom: false, refl: false, shadow: false, grass: 6000, flowers: 1200, refScale: 0, samples: 0 },
-  mid: { pr: 1.35, bloom: true, refl: true, shadow: true, grass: 10000, flowers: 2000, refScale: 0.3, samples: 2 },
-  high: { pr: 1.8, bloom: true, refl: true, shadow: true, grass: 15000, flowers: 2600, refScale: 0.45, samples: 4 },
+  low: { pr: 1.0, bloom: false, refl: false, shadow: false, grass: 6000, flowers: 1200, refScale: 0, samples: 0, mp: 1.3 },
+  mid: { pr: 1.35, bloom: true, refl: true, shadow: true, grass: 10000, flowers: 2000, refScale: 0.3, samples: 2, mp: 2.4 },
+  high: { pr: 1.8, bloom: true, refl: true, shadow: true, grass: 15000, flowers: 2600, refScale: 0.45, samples: 4, mp: 4.2 },
 };
 const store = {
   get(k, d) { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? d; } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
 };
-const settings = Object.assign({ quality: isTouch ? 'mid' : 'high', sound: true, autoCam: false, lang: 'zh' }, store.get('lumenfall_settings', {}));
+const settings = Object.assign({ quality: isTouch ? 'mid' : 'high', sound: true, autoCam: false, lang: 'zh', sens: 1 }, store.get('lumenfall_settings', {}));
 let prog = Object.assign({ f: [], s: [false, false, false, false], end: false, boss: false, boss2: false, boss3: false, realm: false, earth: false, weapon: 'spear', kills: {}, seen: {}, broken: {} }, store.get('lumenfall_progress', {}));
 const save = () => store.set('lumenfall_progress', prog);
 let Q = QUAL[settings.quality] || QUAL.mid;
@@ -41,7 +43,7 @@ renderer.toneMappingExposure = 0.86;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, 0.1, 2600);
+const camera = new THREE.PerspectiveCamera(58, VIEW.w / VIEW.h, 0.1, 2600);
 camera.layers.enable(1); camera.layers.enable(2);
 const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: Q.samples }));
 composer.addPass(new RenderPass(scene, camera));
@@ -53,9 +55,14 @@ composer.addPass(new OutputPass());
 const grade = new ShaderPass(GradeShader);
 composer.addPass(grade);
 
+// desktop: resolution follows a pixel budget and drops / recovers automatically to hold the frame rate
+const dyn = { scale: 1, acc: 0, n: 0, last: 0, on: DESK && !window.__noDyn };
 function resize() {
-  const w = innerWidth, h = innerHeight;
-  const pr = Math.min(devicePixelRatio || 1, Q.pr);
+  const V = window.__layoutStage ? window.__layoutStage() : VIEW;
+  const w = V.w, h = V.h;
+  let pr = Math.min(devicePixelRatio || 1, Q.pr) * (V.s || 1);
+  if (DESK) { const px = w * h * pr * pr, cap = (Q.mp || 2.4) * 1e6; if (px > cap) pr *= Math.sqrt(cap / px); pr *= dyn.scale; }
+  pr = Math.max(0.5, pr);
   renderer.setPixelRatio(pr);
   renderer.setSize(w, h, false);
   composer.setPixelRatio(pr);
@@ -71,6 +78,7 @@ function applyQuality() {
   Q = QUAL[settings.quality] || QUAL.mid;
   bloom.enabled = Q.bloom;
   W.sun.castShadow = Q.shadow;
+  { const ms = DESK && settings.quality === 'high' ? 2048 : 1024; const sh = W.sun.shadow; if (sh.mapSize.x !== ms) { sh.mapSize.set(ms, ms); if (sh.map) { sh.map.dispose(); sh.map = null; } } }
   W.grass.geometry.instanceCount = Q.grass;
   W.flowers.geometry.instanceCount = Q.flowers;
   for (const rt of [composer.renderTarget1, composer.renderTarget2]) { if (rt.samples !== Q.samples) { rt.samples = Q.samples; rt.dispose(); } }
@@ -397,7 +405,7 @@ function updateDmgNums(dt) {
     if (d.t > 0.9) { d.el.remove(); dnums.splice(i, 1); continue; }
     _v.copy(d.pos).project(camera);
     if (_v.z > 1) { d.el.style.opacity = 0; continue; }
-    const x = (_v.x * 0.5 + 0.5) * innerWidth + d.dx * easeOut(d.t / 0.9), y = (-_v.y * 0.5 + 0.5) * innerHeight - easeOut(d.t / 0.9) * 46;
+    const x = (_v.x * 0.5 + 0.5) * VIEW.w + d.dx * easeOut(d.t / 0.9), y = (-_v.y * 0.5 + 0.5) * VIEW.h - easeOut(d.t / 0.9) * 46;
     d.el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%) scale(${d.t < 0.12 ? 1.5 - d.t * 4 : 1})`;
     d.el.style.opacity = d.t > 0.6 ? (0.9 - d.t) / 0.3 : 1;
   }
@@ -810,7 +818,7 @@ function renderCodex() {
 }
 function openCodex() {
   if (state !== 'play') return;
-  paused = true; $('codexOv').classList.remove('hidden'); renderCodex(); Audio.sfx('ui');
+  paused = true; freeMouse(); $('codexOv').classList.remove('hidden'); renderCodex(); Audio.sfx('ui');
 }
 
 // ------------------------------------------------------------------ level up
@@ -1395,7 +1403,7 @@ function die() {
   state = 'dead'; deadT = 0;
   P.atk.kind = null; P.castT = -1; P.glide = false; P.charge = -1; P.lock = null;
   $('hud').classList.add('dim');
-  setTimeout(() => $('deathOv').classList.remove('hidden'), 700);
+  freeMouse(); setTimeout(() => $('deathOv').classList.remove('hidden'), 700);
 }
 let deadT = 0;
 function revive() {
@@ -1562,7 +1570,7 @@ function updateEnding(dt) {
   if (endT > 5.2 && !prog.end) {
     prog.end = true; save();
     flashScreen(1.4);
-    setTimeout(() => $('endOv').classList.remove('hidden'), 500);
+    freeMouse(); setTimeout(() => $('endOv').classList.remove('hidden'), 500);
   }
 }
 function finishEnding(toTitle) {
@@ -1602,7 +1610,7 @@ function playCamera(dt, out, look, instant) {
   // looking skyward: stay behind and low so the seraph slides to the bottom of frame instead of filling it
   const up = clamp(-CAM.pitch / 1.4, 0, 1);
   const hcp = cp + (Math.max(cp, 0.82) - cp) * up;
-  const dist = CAM.dist;
+  const dist = CAM.dist * (CAM.zoom || 1);
   look.copy(CAM.look);
   CAM.side = damp(CAM.side || 0, L ? (L.isBoss ? 1.6 : 0.9) : 0, 3, dt);
   const rx = Math.cos(CAM.yaw), rz = -Math.sin(CAM.yaw);
@@ -1637,7 +1645,7 @@ function playCamera(dt, out, look, instant) {
 function titleCamera(out, look) {
   const fwd = new THREE.Vector3(Math.sin(P.yaw), 0, Math.cos(P.yaw));
   const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
-  const portrait = innerHeight > innerWidth;
+  const portrait = VIEW.h > VIEW.w;
   const sway = Math.sin(time * 0.08) * 0.22;
   const back = fwd.clone().multiplyScalar(-1);
   const off = back.clone().multiplyScalar(Math.cos(0.55 + sway)).addScaledVector(right, Math.sin(0.55 + sway));
@@ -1650,13 +1658,13 @@ let transT = 0;
 const fromPos = new THREE.Vector3(), fromLook = new THREE.Vector3();
 function updateCamera(dt) {
   const out = camPos, look = camLook;
-  if (state === 'landing' || state === 'loading') { titleCamera(out, look); CAM.fov = innerHeight > innerWidth ? 62 : 46; }
+  if (state === 'landing' || state === 'loading') { titleCamera(out, look); CAM.fov = VIEW.h > VIEW.w ? 62 : 46; }
   else if (state === 'trans') {
     transT += dt;
     const k = easeInOut(clamp(transT / 2.4, 0, 1));
     playCamera(dt, out, look, false);
     out.lerpVectors(fromPos, out, k); look.lerpVectors(fromLook, look, k);
-    CAM.fov = lerp(innerHeight > innerWidth ? 62 : 46, 58, k);
+    CAM.fov = lerp(VIEW.h > VIEW.w ? 62 : 46, 58, k);
     if (transT > 2.4) { state = 'play'; onEnterPlay(); }
   } else if (state === 'ending') { cameraEnding(out, look); CAM.fov = damp(CAM.fov, 52, 2, dt); }
   else { playCamera(dt, out, look, false); CAM.fov = damp(CAM.fov, P.glide ? 64 : P.dashT > 0 ? 63 : 58, 4, dt); }
@@ -1763,7 +1771,7 @@ function buildMapBase(L) {
 function buildMinimapBase() { mapBase = buildMapBase(0); mapBase2 = buildMapBase(1); }
 function layoutMinimap() {
   const cv = $('mmc'); if (!cv) return;
-  const s = cv.clientWidth || 132, pr = Math.min(2, devicePixelRatio || 1);
+  const s = cv.clientWidth || 132, pr = Math.min(3, (devicePixelRatio || 1) * (VIEW.s || 1));
   cv.width = s * pr; cv.height = s * pr;
   hud.mmPR = pr; hud.mmS = s;
 }
@@ -1856,7 +1864,7 @@ function updateHUD(dt) {
   hud.stam.classList.toggle('on', showSt);
   if (showSt) {
     _v.set(P.pos.x, P.pos.y + 1.3, P.pos.z).project(camera);
-    const x = (_v.x * 0.5 + 0.5) * innerWidth + 46, y = (-_v.y * 0.5 + 0.5) * innerHeight - 18;
+    const x = (_v.x * 0.5 + 0.5) * VIEW.w + 46, y = (-_v.y * 0.5 + 0.5) * VIEW.h - 18;
     hud.stam.style.transform = `translate(${x}px, ${y}px)`;
     hud.stArc.style.strokeDashoffset = (1 - P.stamina / 100) * 113.1;
     hud.stam.classList.toggle('low', P.stamina < 25);
@@ -1876,12 +1884,13 @@ function updateHUD(dt) {
     _v.set(L.pos.x, L.pos.y + (L.isBoss ? 3.8 : 1.75), L.pos.z).project(camera);
     if (_v.z < 1) {
       ret.style.display = 'block';
-      ret.style.transform = `translate(${(_v.x * 0.5 + 0.5) * innerWidth}px, ${(-_v.y * 0.5 + 0.5) * innerHeight}px)`;
+      ret.style.transform = `translate(${(_v.x * 0.5 + 0.5) * VIEW.w}px, ${(-_v.y * 0.5 + 0.5) * VIEW.h}px)`;
       ret.classList.toggle('boss', !!L.isBoss);
       hud.lockHp.style.transform = `scaleX(${clamp(L.hp / L.maxHp, 0, 1)})`;
     } else ret.style.display = 'none';
   } else ret.style.display = 'none';
   hud.bLock.classList.toggle('on', !!P.lock);
+  if (DESK) { const show = ML.can && !ML.failed && state === 'play' && !paused && !mouseLocked(); if (ML.hint !== show) { ML.hint = show; $('plHint').classList.toggle('hidden', !show); } }
   if (hud.healTxt !== P.flasks) { hud.healN.textContent = P.flasks; hud.healTxt = P.flasks; hud.bHeal.classList.toggle('empty', P.flasks <= 0); }
   hud.bAtk.style.setProperty('--c', P.charge >= 0 ? Math.min(1, P.charge / 0.9).toFixed(3) : '0');
   hud.bAtk.classList.toggle('full', P.chargeFull);
@@ -1905,11 +1914,11 @@ function updateHUD(dt) {
 // full map overlay
 function openMap() {
   if (state !== 'play') return;
-  paused = true;
+  paused = true; freeMouse();
   $('mapOv').classList.remove('hidden');
   const cv = $('bigmap');
   const size = Math.min(cv.parentElement.clientWidth, cv.parentElement.clientHeight);
-  const pr = Math.min(2, devicePixelRatio || 1);
+  const pr = Math.min(3, (devicePixelRatio || 1) * (VIEW.s || 1));
   cv.width = size * pr; cv.height = size * pr; cv.style.width = cv.style.height = size + 'px';
   const g = cv.getContext('2d'); g.setTransform(pr, 0, 0, pr, 0, 0);
   if (P.inRealm) drawMap(g, size, REALM.x, REALM.z - 42, 150, false); else if (P.inEarth) drawMap(g, size, 0, 0, 262, false); else drawMap(g, size, 0, -4, 248, false);
@@ -1930,6 +1939,23 @@ function closeOverlays() {
 
 // ------------------------------------------------------------------ input
 const input = { joyId: null, camId: null, last: { x: 0, y: 0 }, base: { x: 0, y: 0 }, joy: { x: 0, y: 0 }, keys: new Set(), mouseMoved: 0, isMouse: false };
+// desktop mouse: first click grabs the mouse (pointer lock); if the page is not allowed to lock it, drag-to-look instead
+const ML = { can: DESK && 'requestPointerLock' in Element.prototype, failed: false, intent: false, exitAt: -1e9, drag: null, hint: null };
+const mouseLocked = () => !!document.pointerLockElement;
+function freeMouse() { if (mouseLocked()) { ML.intent = true; document.exitPointerLock(); } }
+function lockMouse() {
+  const el = $('touch');
+  const fail = () => {
+    if (mouseLocked()) return;
+    if (performance.now() - ML.exitAt > 2500 && !ML.failed) { ML.failed = true; document.documentElement.classList.add('dragcam'); toast('<i class="dia"></i>拖曳滑鼠轉動視角 · 左鍵攻擊 · 右鍵閃避'); }
+  };
+  try { const r = el.requestPointerLock(); if (r && r.catch) r.catch(fail); } catch (e) { fail(); }
+  ML.onFail = fail;
+}
+function camTurn(dx, dy, k) {
+  CAM.yaw -= dx * k; CAM.pitch = clamp(CAM.pitch + dy * k * 0.75, -1.5, 1.5);
+  CAM.lastDrag = time;
+}
 function setupInput() {
   const layer = $('touch');
   const joyBase = $('joyBase'), knob = $('joyKnob');
@@ -1938,6 +1964,7 @@ function setupInput() {
   const restJoy = () => { const r = $('joy').getBoundingClientRect(); input.base.x = r.left + r.width / 2; input.base.y = r.top + r.height / 2; joyBase.style.transform = ''; knob.style.transform = ''; joyBase.classList.remove('active'); };
   layer.addEventListener('pointerdown', (e) => {
     if (state !== 'play' || paused) return;
+    if (e.pointerType === 'mouse' && DESK) return; // handled by the desktop mouse events below
     e.preventDefault();
     if (e.pointerType === 'mouse') { input.camId = e.pointerId; input.isMouse = true; input.mouseMoved = 0; input.last.x = e.clientX; input.last.y = e.clientY; layer.setPointerCapture(e.pointerId); return; }
     if (e.clientX < innerWidth * 0.42 && input.joyId === null) {
@@ -1961,9 +1988,8 @@ function setupInput() {
     } else if (e.pointerId === input.camId) {
       const dx = e.clientX - input.last.x, dy = e.clientY - input.last.y;
       input.last.x = e.clientX; input.last.y = e.clientY;
-      const k = input.isMouse ? 0.0042 : 0.0062;
-      CAM.yaw -= dx * k; CAM.pitch = clamp(CAM.pitch + dy * k * 0.75, -1.5, 1.5);
-      CAM.lastDrag = time; input.mouseMoved += Math.abs(dx) + Math.abs(dy);
+      camTurn(dx, dy, input.isMouse ? 0.0042 : 0.0062);
+      input.mouseMoved += Math.abs(dx) + Math.abs(dy);
     }
   });
   const end = (e) => {
@@ -1973,6 +1999,53 @@ function setupInput() {
   layer.addEventListener('pointerup', end);
   layer.addEventListener('pointercancel', end);
   layer.addEventListener('contextmenu', (e) => e.preventDefault());
+  if (DESK) {
+    const R = document.documentElement;
+    layer.addEventListener('mousedown', (e) => {
+      if (state !== 'play' || paused) return;
+      e.preventDefault();
+      if (mouseLocked()) { if (e.button === 0) attackDown(); else if (e.button === 2) doDodge(); else if (e.button === 1) doLock(); return; }
+      if (ML.can && !ML.failed) { lockMouse(); return; } // this click only grabs the mouse
+      ML.drag = { b: e.button, x: e.clientX, y: e.clientY, moved: 0 };
+      if (e.button === 0) attackDown();
+      R.classList.add('dragging');
+    });
+    addEventListener('mousemove', (e) => {
+      if (state !== 'play' || paused) return;
+      const k = 0.0024 * (settings.sens || 1);
+      if (mouseLocked()) { camTurn(e.movementX, e.movementY, k); return; }
+      const d = ML.drag; if (!d) return;
+      const dx = e.clientX - d.x, dy = e.clientY - d.y; d.x = e.clientX; d.y = e.clientY;
+      d.moved += Math.abs(dx) + Math.abs(dy);
+      if (d.b === 0 && d.moved > 6 && P.atkHeld) { P.atkHeld = false; P.charge = -1; P.chargeFull = false; } // a drag is a look, not a charge
+      camTurn(dx, dy, k * 1.6);
+    });
+    addEventListener('mouseup', (e) => {
+      if (mouseLocked()) { if (e.button === 0) attackUp(); return; }
+      const d = ML.drag; if (!d || e.button !== d.b) return;
+      if (d.b === 0) attackUp(); else if (d.b === 2 && d.moved < 6) doDodge();
+      ML.drag = null; R.classList.remove('dragging');
+    });
+    layer.addEventListener('wheel', (e) => { e.preventDefault(); if (state === 'play' && !paused) CAM.zoom = clamp((CAM.zoom || 1) * Math.exp(e.deltaY * 0.0011), 0.55, 1.9); }, { passive: false });
+    document.addEventListener('pointerlockchange', () => {
+      const on = mouseLocked();
+      R.classList.toggle('locked', on);
+      if (on) return;
+      ML.exitAt = performance.now();
+      if (P.atkHeld) attackUp();
+      input.keys.clear();
+      if (!ML.intent && state === 'play' && !paused) openSettings(); // Esc / alt-tab out of the mouse = pause
+      ML.intent = false;
+    });
+    document.addEventListener('pointerlockerror', () => ML.onFail && ML.onFail());
+    if (!ML.can) R.classList.add('dragcam');
+    // fullscreen
+    const fsOk = document.fullscreenEnabled && !!R.requestFullscreen;
+    const toggleFs = () => { if (document.fullscreenElement) document.exitFullscreen(); else R.requestFullscreen().catch(() => toast('<i class="dia"></i>此頁面不允許全螢幕 · 可於瀏覽器直接開啟')); };
+    for (const id of ['bFull', 'lbFull']) { const b = $(id); if (!fsOk) b.classList.add('hidden'); else b.addEventListener('click', (e) => { e.stopPropagation(); toggleFs(); }); }
+    if (!fsOk) document.querySelector('#lbox .hint').textContent = '放大視窗，畫面會更闊';
+    document.addEventListener('fullscreenchange', () => { R.classList.toggle('fs', !!document.fullscreenElement); setTimeout(resize, 60); });
+  }
 
   const bind = (id, fn) => {
     const el = $(id);
@@ -1996,8 +2069,14 @@ function setupInput() {
     if (e.repeat) return;
     const k = e.code;
     input.keys.add(k);
-    if (state === 'landing') { if (k === 'Enter' || k === 'Space') landingTap(); return; }
-    if (k === 'Escape') { if (paused) closeOverlays(); else if (state === 'play') openSettings(); return; }
+    if (state === 'landing') {
+      const L = $('landing');
+      if (DESK && L.classList.contains('menu') && k === 'Enter' && !document.querySelector('.ov:not(.hidden)')) { $('menu').querySelector('.primary').click(); return; }
+      if (k === 'Enter' || k === 'Space' || (DESK && !L.classList.contains('menu') && !e.metaKey && !e.ctrlKey)) landingTap();
+      return;
+    }
+    if (k === 'Escape') { if (performance.now() - ML.exitAt < 300) return; if (paused) closeOverlays(); else if (state === 'play') openSettings(); return; }
+    if (k === 'KeyH' && state === 'play') { document.documentElement.classList.toggle('nohud'); return; }
     if (paused) return;
     if (k === 'Space') { e.preventDefault(); doJump(); }
     else if (k === 'ShiftLeft' || k === 'ShiftRight') doDodge();
@@ -2007,6 +2086,7 @@ function setupInput() {
     else if (k === 'KeyK' || k === 'KeyQ') doSkill();
     else if (k === 'KeyE' || k === 'KeyF') doInteract();
     else if (k === 'KeyM') openMap();
+    else if (k === 'KeyB' || k === 'KeyC') openCodex();
   });
   addEventListener('keyup', (e) => { input.keys.delete(e.code); if (e.code === 'KeyJ') attackUp(); });
   addEventListener('blur', () => input.keys.clear());
@@ -2023,7 +2103,7 @@ function readMove() {
   let x = (K.has('KeyD') || K.has('ArrowRight') ? 1 : 0) - (K.has('KeyA') || K.has('ArrowLeft') ? 1 : 0);
   let y = (K.has('KeyW') || K.has('ArrowUp') ? 1 : 0) - (K.has('KeyS') || K.has('ArrowDown') ? 1 : 0);
   const m = Math.hypot(x, y) || 1;
-  const walk = K.has('AltLeft') || K.has('ControlLeft') ? 0.5 : 1;
+  const walk = K.has('AltLeft') || K.has('ControlLeft') || K.has('ControlRight') ? 0.5 : 1;
   move.x = (x / m) * walk; move.y = (y / m) * walk;
 }
 
@@ -2036,6 +2116,7 @@ function toggleSound() {
 }
 function openSettings() {
   if (state === 'play') paused = true;
+  freeMouse();
   syncSettingsUI();
   $('setOv').classList.remove('hidden');
   $('setTitle').classList.toggle('hidden', state !== 'play');
@@ -2044,6 +2125,7 @@ function openSettings() {
 function syncSettingsUI() {
   document.querySelectorAll('[data-q]').forEach((b) => b.classList.toggle('on', b.dataset.q === settings.quality));
   document.querySelectorAll('[data-lang]').forEach((b) => b.classList.toggle('on', b.dataset.lang === settings.lang));
+  document.querySelectorAll('[data-sens]').forEach((b) => b.classList.toggle('on', +b.dataset.sens === (settings.sens || 1)));
   $('camToggle').classList.toggle('on', settings.autoCam);
   $('camToggle').querySelector('em').textContent = settings.autoCam ? '開啟' : '關閉';
   $('sndToggle').classList.toggle('on', settings.sound);
@@ -2055,6 +2137,7 @@ function setupMenus() {
   $('bCodex').addEventListener('click', (e) => { e.stopPropagation(); openCodex(); });
   $('codexList').addEventListener('click', (e) => { const li = e.target.closest('li'); if (!li) return; codexSel = +li.dataset.i; renderCodex(); Audio.sfx('ui'); });
   document.querySelectorAll('[data-lang]').forEach((b) => b.addEventListener('click', () => { settings.lang = b.dataset.lang; store.set('lumenfall_settings', settings); setLang(settings.lang); syncSettingsUI(); Audio.sfx('ui'); }));
+  document.querySelectorAll('[data-sens]').forEach((b) => b.addEventListener('click', () => { settings.sens = +b.dataset.sens; store.set('lumenfall_settings', settings); syncSettingsUI(); Audio.sfx('ui'); }));
   $('camToggle').addEventListener('click', () => { settings.autoCam = !settings.autoCam; store.set('lumenfall_settings', settings); syncSettingsUI(); Audio.sfx('ui'); });
   $('glbIn').addEventListener('change', async (e) => {
     const f = e.target.files && e.target.files[0]; if (!f) return;
@@ -2127,14 +2210,14 @@ function onEnterPlay() {
   currentRegion = '';
   updateQuest();
   if (!store.get('lumenfall_seenTip', false)) {
-    setTimeout(() => toast(isTouch ? '<i class="dia"></i>左側拖曳移動 · 右側拖曳轉視角' : '<i class="dia"></i>WASD 移動 · 拖曳滑鼠轉視角 · 點擊攻擊'), 3800);
+    setTimeout(() => toast(isTouch ? '<i class="dia"></i>左側拖曳移動 · 右側拖曳轉視角' : '<i class="dia"></i>WASD 移動 · 滑鼠轉視角 · 左鍵攻擊 · 右鍵閃避'), 3800);
     setTimeout(() => toast('<i class="dia"></i>空中再按「展翼」即可滑翔'), 6600);
     store.set('lumenfall_seenTip', true);
   }
   checkRotate();
 }
 function goTitle() {
-  state = 'landing'; paused = false;
+  state = 'landing'; paused = false; freeMouse(); document.documentElement.classList.remove('nohud');
   $('hud').classList.remove('show'); $('hud').classList.add('hidden');
   const L = $('landing'); L.classList.remove('hidden', 'out'); L.classList.add('menu');
   P.pos.set(SPAWN.x, 0, SPAWN.z); P.vel.set(0, 0, 0); P.yaw = Math.PI; P.glide = false; P.grounded = true; P.hp = P.maxHp; P.atk.kind = null; P.castT = -1; P.lock = null; P.flasks = P.maxFlasks;
@@ -2154,7 +2237,7 @@ function checkRotate() {
 function placeTitleHalo() {
   const el = $('haloUI');
   _v.set(P.pos.x, P.pos.y + 1.35, P.pos.z).project(camera);
-  const x = (_v.x * 0.5 + 0.5) * innerWidth, y = (-_v.y * 0.5 + 0.5) * innerHeight;
+  const x = (_v.x * 0.5 + 0.5) * VIEW.w, y = (-_v.y * 0.5 + 0.5) * VIEW.h;
   el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
 }
 
@@ -2170,8 +2253,20 @@ function syncLayer() {
 const waterAt = (x, z) => (C.LAYER.cur ? C.EARTH_Y : Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r * 1.3 ? 0 : -999);
 
 // ------------------------------------------------------------------ loop
+function sampleDyn() {
+  if (!dyn.on || paused || document.hidden || !(state === 'play' || state === 'landing')) { dyn.last = 0; return; }
+  const now = performance.now();
+  if (dyn.last) { dyn.acc += now - dyn.last; dyn.n++; }
+  dyn.last = now;
+  if (dyn.acc < 2000) return;
+  const ms = dyn.acc / dyn.n; dyn.acc = 0; dyn.n = 0;
+  let ns = dyn.scale;
+  if (ms > 22) ns = Math.max(0.6, dyn.scale * 0.88); else if (ms < 18 && dyn.scale < 1) ns = Math.min(1, dyn.scale * 1.07);
+  if (Math.abs(ns - dyn.scale) > 0.005) { dyn.scale = ns; resize(); }
+}
 function frame() {
   requestAnimationFrame(frame);
+  sampleDyn();
   let dt = Math.min(clock.getDelta(), DT_MAX);
   const realDt = paused ? 0 : dt;
   if (hitstop > 0) { hitstop -= dt; dt *= 0.15; }
@@ -2276,4 +2371,4 @@ addEventListener('resize', resize);
 addEventListener('orientationchange', () => setTimeout(resize, 250));
 document.addEventListener('visibilitychange', () => { if (Audio.ctx) { if (document.hidden) Audio.ctx.suspend(); else Audio.ctx.resume(); } });
 init().catch((e) => { console.error(e); $('loadMsg').textContent = '載入失敗：' + e.message; });
-window.__LF = { levelUp: (n) => levelUp(n), showPower: (k) => showPower(k), breakables, equipWeapon: (w) => equipWeapon(w), calls: () => { renderer.info.autoReset = false; renderer.info.reset(); composer.render(0.016); const r = { ...renderer.info.render }; renderer.info.autoReset = true; return r; }, pause: (b) => (paused = b), FX, slow: () => (DT_MAX = 0.05), act: { attackDown, attackUp, lightAttack, doLock, doHeal, startAttack, perfectDodge, doAttack, doJump, doSkill, doDodge, doInteract, openMap, openSettings, damageShade, regionCard, toast }, fast: () => (DT_MAX = 0.25), THREE, scene, composer, q: (o) => { Object.assign(QUAL[settings.quality], o); applyQuality(); }, P, CAM, W, hero: () => hero, boss: () => boss, state: () => state, prog, shades, feathers, setState: (s) => (state = s), camera, renderer };
+window.__LF = { dyn: () => ({ ...dyn, pr: renderer.getPixelRatio() }), levelUp: (n) => levelUp(n), showPower: (k) => showPower(k), breakables, equipWeapon: (w) => equipWeapon(w), calls: () => { renderer.info.autoReset = false; renderer.info.reset(); composer.render(0.016); const r = { ...renderer.info.render }; renderer.info.autoReset = true; return r; }, pause: (b) => (paused = b), FX, slow: () => (DT_MAX = 0.05), act: { attackDown, attackUp, lightAttack, doLock, doHeal, startAttack, perfectDodge, doAttack, doJump, doSkill, doDodge, doInteract, openMap, openSettings, damageShade, regionCard, toast }, fast: () => (DT_MAX = 0.25), THREE, scene, composer, q: (o) => { Object.assign(QUAL[settings.quality], o); applyQuality(); }, P, CAM, W, hero: () => hero, boss: () => boss, state: () => state, prog, shades, feathers, setState: (s) => (state = s), camera, renderer };
