@@ -26,6 +26,9 @@
   --hair:rgba(198,162,90,.85);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+*{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+input,textarea{-webkit-user-select:text;user-select:text}
+.panel{touch-action:pan-y}
 html,body{margin:0;height:100%;overflow:hidden;background:#ece6db;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;font-family:var(--serif);color:var(--ink);overscroll-behavior:none}
 button{font:inherit;color:inherit;cursor:pointer}
 .hidden{display:none!important}
@@ -437,6 +440,18 @@ body.boss #toasts{top:calc(var(--st) + 54px)}
 .glb .lbtn{cursor:pointer}
 .mini{margin:6px 0 0;font:400 11px/1.7 var(--serif);color:var(--ink-s);letter-spacing:.05em}
 </style>
+<script>
+(() => {
+  const opt = { passive: false };
+  let last = 0;
+  document.addEventListener('touchend', (e) => { const now = Date.now(); if (now - last < 320 && !e.target.closest('button,li,label,a,input')) e.preventDefault(); last = now; }, opt);
+  document.addEventListener('touchstart', (e) => { if (e.touches.length > 1 && !e.target.closest('#touch,.act,#joy')) e.preventDefault(); }, opt);
+  for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, (e) => e.preventDefault(), opt);
+  document.addEventListener('dblclick', (e) => e.preventDefault(), opt);
+  document.addEventListener('contextmenu', (e) => e.preventDefault());
+  document.addEventListener('selectstart', (e) => { if (!e.target.closest || !e.target.closest('input,textarea')) e.preventDefault(); });
+})();
+</script>
 </head>
 <body>
 <canvas id="c"></canvas>
@@ -510,7 +525,7 @@ body.boss #toasts{top:calc(var(--st) + 54px)}
     </nav>
   </div>
   <div id="tapHint"><span class="c">觸碰開始</span><span class="e">TAP TO BEGIN</span></div>
-  <div class="corner bl">PROTOTYPE · v0.3 · 神域</div>
+  <div class="corner bl">PROTOTYPE · v0.6.1 · 人間</div>
   <div class="corner br">MOBILE · LANDSCAPE</div>
 </div>
 

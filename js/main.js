@@ -1599,11 +1599,15 @@ function playCamera(dt, out, look, instant) {
   const dTarget = P.glide ? 7.4 : L ? (L.isBoss ? 8.6 : 6.8) : P.atk.kind || nearestEnemy(12, -2) ? 6.6 : 5.6;
   CAM.dist = damp(CAM.dist, dTarget, 2.5, dt);
   const cp = Math.cos(CAM.pitch), sp = Math.sin(CAM.pitch);
+  // looking skyward: stay behind and low so the seraph slides to the bottom of frame instead of filling it
+  const up = clamp(-CAM.pitch / 1.4, 0, 1);
+  const hcp = cp + (Math.max(cp, 0.82) - cp) * up;
+  const dist = CAM.dist;
   look.copy(CAM.look);
   CAM.side = damp(CAM.side || 0, L ? (L.isBoss ? 1.6 : 0.9) : 0, 3, dt);
   const rx = Math.cos(CAM.yaw), rz = -Math.sin(CAM.yaw);
   look.x += rx * CAM.side * 0.55; look.z += rz * CAM.side * 0.55;
-  out.set(look.x + Math.sin(CAM.yaw) * cp * CAM.dist + rx * CAM.side * 0.45, look.y + sp * CAM.dist, look.z + Math.cos(CAM.yaw) * cp * CAM.dist + rz * CAM.side * 0.45);
+  out.set(look.x + Math.sin(CAM.yaw) * hcp * dist + rx * CAM.side * 0.45, look.y + sp * dist, look.z + Math.cos(CAM.yaw) * hcp * dist + rz * CAM.side * 0.45);
   // keep pillars, trunks and crystals from hiding the seraph
   let k = 1;
   const dx = out.x - look.x, dz = out.z - look.z, L2 = dx * dx + dz * dz;
@@ -1627,6 +1631,8 @@ function playCamera(dt, out, look, instant) {
   }
   const g = Math.max(groundAt(out.x, out.z), waterAt(out.x, out.z), padHeightAt(out.x, out.z, out.y));
   if (out.y < g + 0.7) out.y = g + 0.7;
+  // keep the requested view direction even when the ground pushes the camera up, so the whole sky can be seen
+  if (CAM.pitch < 0.15 && !L) look.set(out.x - Math.sin(CAM.yaw) * cp * 10, out.y - sp * 10, out.z - Math.cos(CAM.yaw) * cp * 10);
 }
 function titleCamera(out, look) {
   const fwd = new THREE.Vector3(Math.sin(P.yaw), 0, Math.cos(P.yaw));
@@ -1956,7 +1962,7 @@ function setupInput() {
       const dx = e.clientX - input.last.x, dy = e.clientY - input.last.y;
       input.last.x = e.clientX; input.last.y = e.clientY;
       const k = input.isMouse ? 0.0042 : 0.0062;
-      CAM.yaw -= dx * k; CAM.pitch = clamp(CAM.pitch + dy * k * 0.75, -0.38, 1.2);
+      CAM.yaw -= dx * k; CAM.pitch = clamp(CAM.pitch + dy * k * 0.75, -1.5, 1.5);
       CAM.lastDrag = time; input.mouseMoved += Math.abs(dx) + Math.abs(dy);
     }
   });
