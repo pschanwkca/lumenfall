@@ -9,8 +9,9 @@ import { buildWorld, W, colliders, sunDir, updateAmbient, setWaterQuality, HALO_
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { GradeShader, GodRayShader, CLOUD, hookCloudClock, rockGeo } from './env.js';
 import { setLang, tr } from './i18n.js';
-import { buildEarthGrid, buildEarth, EARTH, earthRegion, earthCull, inRift, SEA_NORTH } from './earth.js';
+import { buildEarthGrid, buildEarth, EARTH, earthRegion, earthCull, inRift, SEA_NORTH, EP as EARTH_EP, riftZ } from './earth.js';
 import { createFolk, FOLK_PAL } from './folk.js';
+import { buildHellGrid, buildHell, HELL, hellRegion, inLava, HELL_MAP } from './hell.js';
 import { getFeatherGeo } from './hero.js';
 import { SeraphActor } from './seraph.js';
 import { createBoss, BOSS_HOME } from './boss.js';
@@ -489,6 +490,7 @@ function buildFeathers() {
   for (const f of REALM.extraFeathers) spots.push(f);
   EARTH_F2 = spots.length;
   for (const f of EARTH.moreFeathers) spots.push(f);
+  for (const f of HELL.feathers) spots.push(f);
   const fMat = new THREE.MeshStandardMaterial({ map: TEX.feather, transparent: true, side: THREE.DoubleSide, depthWrite: false, color: '#fff8e8', emissive: '#ffe6a8', emissiveMap: TEX.feather, emissiveIntensity: 2.4 });
   const glowMat = new THREE.SpriteMaterial({ map: TEX.glow, color: new THREE.Color(1.5, 1.1, 0.55), transparent: true, opacity: 0.75, depthWrite: false });
   const beamMat = new THREE.MeshBasicMaterial({ map: TEX.beam, color: new THREE.Color(1.25, 0.95, 0.5), transparent: true, opacity: 0.42, depthWrite: false, side: THREE.DoubleSide });
@@ -553,29 +555,64 @@ function buildShades() {
   const celArcher = celBase.clone(); celArcher.emissive = new THREE.Color('#ff9ad6');
   const beastBase = new THREE.MeshStandardMaterial({ color: '#2b1d1a', roughness: 0.4, metalness: 0.4, emissive: '#ff6a3a', emissiveMap: TEX.vein, emissiveIntensity: 1.4 });
   const beastArcher = beastBase.clone(); beastArcher.emissive = new THREE.Color('#ffae4a');
-  const spawn = (x, z, guard, type = 'melee', fy, leash, earth) => {
-    const archer = type === 'archer';
-    const g = new THREE.Group();
-    const mat = (earth ? (archer ? beastArcher : beastBase) : fy !== undefined ? (archer ? celArcher : celBase) : archer ? archerBase : shadeMatBase).clone();
-    const body = new THREE.Mesh(new THREE.OctahedronGeometry(0.55, 0), mat);
-    body.scale.set(archer ? 0.55 : 0.75, archer ? 1.75 : 1.55, archer ? 0.55 : 0.75); body.position.y = 1.55; body.castShadow = true; g.add(body);
-    const mask = new THREE.Mesh(new THREE.SphereGeometry(0.3, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2), maskMat);
-    mask.rotation.x = Math.PI / 2; mask.position.set(0, 2.05, archer ? 0.17 : 0.22); mask.scale.set(archer ? 0.8 : 1, 0.55, 1.15); g.add(mask);
-    const ring = archer ? new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.035, 6, 40, Math.PI * 1.15), ringMat) : new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.03, 6, 40, Math.PI * 1.55), ringMat);
+  const hellBase = new THREE.MeshStandardMaterial({ color: '#160d0d', roughness: 0.35, metalness: 0.5, emissive: '#ff3a12', emissiveMap: TEX.vein, emissiveIntensity: 1.5 });
+  const hellArch = hellBase.clone(); hellArch.emissive = new THREE.Color('#ff8a2a');
+  const octa = new THREE.OctahedronGeometry(0.55, 0), cone = new THREE.ConeGeometry(0.12, 0.9, 6);
+  const warnMat = new THREE.MeshBasicMaterial({ map: TEX.rune, color: new THREE.Color(2.2, 0.5, 0.25), transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide });
+  const warnGeo = new THREE.RingGeometry(0.75, 1, 48); warnGeo.rotateX(-Math.PI / 2);
+  // each world dresses its creatures differently: gilt shades, silvered seraphic husks, bone-masked beasts, obsidian demons
+  const ringBy = {
+    isle: ringMat,
+    realm: new THREE.MeshStandardMaterial({ color: '#dfe3ee', metalness: 0.85, roughness: 0.3, emissive: '#8f7cff', emissiveIntensity: 0.35 }),
+    earth: new THREE.MeshStandardMaterial({ color: '#4a3a2e', metalness: 0.7, roughness: 0.55, emissive: '#5a2408', emissiveIntensity: 0.5 }),
+    hell: new THREE.MeshStandardMaterial({ color: '#241010', metalness: 0.8, roughness: 0.35, emissive: '#ff3a12', emissiveIntensity: 0.65 }),
+  };
+  const maskBy = {
+    isle: maskMat,
+    realm: new THREE.MeshStandardMaterial({ map: TEX.mask, color: '#f3dca0', roughness: 0.25, metalness: 0.55 }),
+    earth: new THREE.MeshStandardMaterial({ map: TEX.mask, color: '#b9a688', roughness: 0.75, metalness: 0.0 }),
+    hell: new THREE.MeshStandardMaterial({ map: TEX.mask, color: '#3a2420', roughness: 0.3, metalness: 0.6, emissive: '#7a1404', emissiveIntensity: 0.8 }),
+  };
+  const spawn = (x, z, guard, type = 'melee', fy, leash, earth, hell) => {
+    const T = EN[type] || EN.melee, archer = !!T.archer;
+    const lay = hell ? 'hell' : earth ? 'earth' : fy !== undefined ? 'realm' : 'isle';
+    const g = new THREE.Group(), rM = ringBy[lay], mM = maskBy[lay];
+    const baseM = hell ? (archer ? hellArch : hellBase) : earth ? (archer ? beastArcher : beastBase) : fy !== undefined ? (archer ? celArcher : celBase) : archer ? archerBase : shadeMatBase;
+    const mat = baseM.clone();
+    if (T.emis) mat.emissive = new THREE.Color(T.emis);
+    const bombBody = T.bomb;
+    const body = new THREE.Mesh(bombBody ? new THREE.SphereGeometry(0.62, 14, 10) : octa, mat);
+    const bs = bombBody ? [0.95, 1.0, 0.95] : T.slam ? [1.05, 1.5, 1.05] : T.double ? [0.46, 1.75, 0.46] : T.charge ? [0.95, 1.35, 1.25] : archer ? [0.55, 1.75, 0.55] : [0.75, 1.55, 0.75];
+    body.scale.set(bs[0], bs[1], bs[2]); body.position.y = bombBody ? 1.15 : 1.55; body.castShadow = true; g.add(body);
+    const mask = new THREE.Mesh(new THREE.SphereGeometry(0.3, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2), mM);
+    mask.rotation.x = Math.PI / 2; mask.position.set(0, bombBody ? 1.55 : 2.05, archer ? 0.17 : bombBody ? 0.5 : 0.22); mask.scale.set(archer ? 0.8 : 1, 0.55, 1.15); g.add(mask);
+    const ring = archer ? new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.035, 6, 40, Math.PI * 1.15), rM) : new THREE.Mesh(new THREE.TorusGeometry(0.62, T.slam ? 0.06 : 0.03, 6, 40, Math.PI * 1.55), rM);
     if (archer) { ring.position.set(0, 1.6, 0.45); ring.rotation.set(0, 0, Math.PI / 2 - 0.57); }
-    else { ring.position.y = 1.5; ring.rotation.x = Math.PI / 2 - 0.3; }
+    else { ring.position.y = bombBody ? 1.1 : 1.5; ring.rotation.x = Math.PI / 2 - 0.3; }
     g.add(ring);
+    // what sets each kind apart at a glance
+    if (T.slam) for (const sx of [-1, 1]) { const pl = new THREE.Mesh(octa, mat); pl.scale.set(0.55, 0.38, 0.55); pl.position.set(sx * 0.66, 2.0, 0); pl.castShadow = true; g.add(pl); }
+    if (T.double) for (const sx of [-1, 1]) { const bl = new THREE.Mesh(new THREE.BoxGeometry(0.04, 1.15, 0.32), rM); bl.position.set(sx * 0.36, 1.55, 0.05); bl.rotation.z = sx * 0.5; g.add(bl); }
+    if (T.charge || type === 'demon') for (const sx of [-1, 1]) { const h = new THREE.Mesh(cone, rM); h.scale.setScalar(type === 'demon' ? 1.6 : 1.3); h.position.set(sx * 0.26, 2.2, 0.15); h.rotation.set(-0.9, 0, sx * -0.35); g.add(h); }
+    let shield = null;
+    if (T.shield) { shield = new THREE.Group(); const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.72, 0.08, 6), rM); disc.rotation.x = Math.PI / 2; shield.add(disc); const rn = new THREE.Mesh(new THREE.CircleGeometry(0.5, 6), new THREE.MeshBasicMaterial({ map: TEX.rune, color: new THREE.Color(1.6, 1.3, 2.2), transparent: true, depthWrite: false })); rn.position.z = 0.05; shield.add(rn); shield.position.set(0, 1.45, 0.62); g.add(shield); }
+    if (T.caster) { const orb = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.4, 2.2, 1.6) })); orb.position.set(0, 2.85, 0); g.add(orb); const halo = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.025, 6, 32), rM); halo.rotation.x = Math.PI / 2; halo.position.set(0, 2.45, 0); g.add(halo); }
     const glint = new THREE.Sprite(glintMat); glint.position.set(0, 2.25, 0.35); glint.scale.setScalar(0.01); g.add(glint);
     const sh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.6), blob.material); sh.rotation.x = -Math.PI / 2; scene.add(sh);
     let aim = null;
     if (archer) { aim = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, 1), aimMat); aim.visible = false; scene.add(aim); noReflect(aim); }
+    let warn = null;
+    if (T.slam) { warn = new THREE.Mesh(warnGeo, warnMat.clone()); warn.visible = false; warn.renderOrder = 3; scene.add(noReflect(warn)); }
     scene.add(noReflect(g)); noReflect(sh);
-    const y = earth ? Math.max(C.EARTH_Y, C.groundAtL(x, z, 1)) : fy ?? Math.max(0, groundAt(x, z));
-    g.position.set(x, y, z);
-    const hp = archer ? 70 : 100;
-    const s = { type, g, body, mat, mask, ring, glint, aim, shards: [], sh, home: new THREE.Vector3(x, y, z), pos: new THREE.Vector3(x, y, z), vel: new THREE.Vector3(), hp, maxHp: hp, st: 'idle', t: 0, ph: R() * 6, guard, dead: false, hitT: 0, dir: new THREE.Vector3(0, 0, 1), wander: new THREE.Vector3(x, 0, z), wt: 0, cd: 1 + R() * 1.5, r: 0.6, hy: 2.8, emis: archer ? '#e7a6ff' : '#ffc766' };
-    if (earth) { s.earth = true; s.emis = archer ? '#ffae4a' : '#ff6a3a'; s.hp = s.maxHp = archer ? 130 : 190; }
-    else if (fy !== undefined) { s.floor = fy; s.leash = leash; s.realm = true; s.emis = archer ? '#ff9ad6' : '#a77bff'; s.hp = s.maxHp = archer ? 110 : 160; }
+    const y = hell ? C.groundAtL(x, z, 2) : earth ? Math.max(C.EARTH_Y, C.groundAtL(x, z, 1)) : fy ?? Math.max(0, groundAt(x, z));
+    const sc = T.s || 1;
+    g.position.set(x, y, z); g.scale.setScalar(sc); sh.scale.setScalar(sc);
+    const hp = Math.round(T.hp * LAYER_HP[lay] * (0.92 + R() * 0.16));
+    const s = { type: archer ? 'archer' : 'melee', kind: type, T, sc, lay, g, body, bodyScale: body.scale.clone(), mat, mask, ring, glint, aim, warn, shield, shards: [], sh, home: new THREE.Vector3(x, y, z), pos: new THREE.Vector3(x, y, z), vel: new THREE.Vector3(), hp, maxHp: hp, st: 'idle', t: 0, ph: R() * 6, guard, dead: false, hitT: 0, dir: new THREE.Vector3(0, 0, 1), wander: new THREE.Vector3(x, 0, z), wt: 0, cd: 1 + R() * 1.5, r: 0.6 * sc, hy: 2.8 * sc, emis: T.emis || (archer ? '#e7a6ff' : '#ffc766') };
+    if (hell) { s.hell = true; s.emis = T.emis || (archer ? '#ff8a2a' : '#ff3a12'); }
+    else if (earth) { s.earth = true; s.emis = T.emis || (archer ? '#ffae4a' : '#ff6a3a'); }
+    else if (fy !== undefined) { s.floor = fy; s.leash = leash; s.realm = true; s.emis = T.emis || (archer ? '#ff9ad6' : '#a77bff'); }
+    s.kill = KILL_KEY[lay][type] || (lay === 'isle' ? 'shade' : lay === 'realm' ? 'celestial' : lay === 'earth' ? 'beast' : 'hellCinder');
     shades.push(s);
     return s;
   };
@@ -590,8 +627,10 @@ function buildShades() {
     if (prog.s[i]) { W.shrines[i].lit = true; W.shrines[i].power = 1; }
   });
   spawn(-46, -38, -1); spawn(62, 78, -1); spawn(-110, 90, -1); spawn(70, 60, -1, 'archer');
+  spawn(40, -124, -1, 'brute'); spawn(-152, -58, -1, 'brute'); spawn(104, 36, -1, 'stalker'); spawn(-86, -26, -1, 'stalker'); spawn(152, -140, -1, 'stalker'); spawn(-30, 120, -1, 'stalker');
   for (const [x, y, z, type, isle] of REALM.enemies) spawn(x, z, -1, type, y, isle);
   for (const [x, z, type] of EARTH.enemies) spawn(x, z, -1, type, undefined, undefined, true);
+  for (const [x, z, type] of HELL.enemies) spawn(x, z, -1, type, undefined, undefined, false, true);
   spawnShade = spawn;
   // projectile pool: dark feathers
   const pm = new THREE.MeshStandardMaterial({ map: TEX.feather, color: '#26202e', emissive: '#c78cff', emissiveMap: TEX.feather, emissiveIntensity: 1.6, transparent: true, side: THREE.DoubleSide, depthWrite: false });
@@ -629,16 +668,36 @@ function updateProjectiles(dt) {
 }
 function killShade(s, silent) {
   s.dead = true; s.st = 'dead'; s.t = silent ? 9 : 0;
-  if (!silent) { const k = s.realm ? 'celestial' : s.earth ? 'beast' : 'shade'; prog.kills[k] = (prog.kills[k] || 0) + 1; save(); }
+  if (!silent) { const k = s.kill || 'shade'; prog.kills[k] = (prog.kills[k] || 0) + 1; save(); }
+  if (s.warn) s.warn.visible = false;
   if (silent) { s.g.visible = false; s.sh.visible = false; }
+}
+function explodeShade(s, siege) {
+  // the rotwalker bursts: everything close is caught in the miasma
+  const pd = Math.hypot(P.pos.x - s.pos.x, P.pos.z - s.pos.z);
+  if (pd < 4.2 && Math.abs(P.pos.y - s.pos.y) < 3) hurtPlayer(s.T.dmg, s.pos);
+  if (siege && Math.hypot(siege.x - s.pos.x, siege.z - s.pos.z) < 5.5) { siege.hp -= 22; folkFlinch(siege); }
+  burst(FX.smoke, s.pos.x, s.pos.y + 1, s.pos.z, 50, { speed: 8, up: 2, life: 1.4, size: 3.4, c: [0.4, 0.5, 0.25], g: 0.2 });
+  burst(FX.sparks, s.pos.x, s.pos.y + 1, s.pos.z, 40, { speed: 9, up: 3, life: 0.8, size: 1.2, c: [1.6, 2.0, 0.6] });
+  CAM.shake = Math.max(CAM.shake, 0.4); Audio.sfx('slam');
+  s.body.scale.copy(s.bodyScale);
+  killShade(s, false); s.t = 0.6;
+  if (P.lock === s) P.lock = null;
 }
 function shadesAlive(i) { return W.shrines[i].guards.filter((s) => !s.dead).length; }
 function damageShade(s, dmg, from, kind = 'hit') {
   if (s.dead) return;
-  s.hp -= dmg; s.hitT = 0.15;
   const d = _v.copy(s.pos).sub(from); d.y = 0; d.normalize();
-  s.vel.addScaledVector(d, 4 + dmg * 0.07);
-  s.st = 'hurt'; s.t = 0;
+  // a raised shield turns aside blows from the front; a heavy blow or a counter breaks it
+  if (s.T.shield && !(s.guardBreak > 0) && -d.dot(s.dir) > 0.3 && s.st !== 'hurt') {
+    if (kind === 'crit') { s.guardBreak = 3.2; dmgNumber(_p.set(s.pos.x, s.pos.y + 2.6, s.pos.z), '破盾', 'crit'); burst(FX.sparks, s.pos.x, s.pos.y + 1.5, s.pos.z, 40, { speed: 7, up: 2, life: 0.7, size: 1.1, c: [1.4, 1.2, 2.2] }); }
+    else { dmg *= 0.15; kind = 'block'; burst(FX.sparks, s.pos.x + s.dir.x * 0.6, s.pos.y + 1.5, s.pos.z + s.dir.z * 0.6, 14, { speed: 5, up: 1, life: 0.4, size: 0.8, c: [1.4, 1.2, 2.2] }); }
+  }
+  s.hp -= dmg; s.hitT = 0.15;
+  s.vel.addScaledVector(d, (4 + dmg * 0.07) / (s.sc || 1));
+  // the heavy ones only flinch once enough blows land
+  const heavy = s.T.poise;
+  if (s.st !== 'fuse' && s.st !== 'charge' && (!heavy || (s.poiseAcc = (s.poiseAcc || 0) + (kind === 'crit' ? 3 : 1)) >= heavy)) { s.poiseAcc = 0; s.st = 'hurt'; s.t = 0; s.combo = 0; }
   if (s.aim) s.aim.visible = false;
   burst(FX.sparks, s.pos.x, s.pos.y + 1.6, s.pos.z, 10 + Math.min(30, dmg / 4), { speed: 5, up: 1, life: 0.5, size: 0.8 });
   FX.flashLight.position.set(s.pos.x, s.pos.y + 1.6, s.pos.z); FX.flashLight.intensity = 5 + dmg * 0.05;
@@ -653,23 +712,44 @@ function damageShade(s, dmg, from, kind = 'hit') {
     burst(FX.sparks, s.pos.x, s.pos.y + 1.6, s.pos.z, 60, { speed: 6, up: 3, life: 1.4, size: 1.3, c: [1.9, 1.5, 0.8] });
     featherBurst(s.pos.x, s.pos.y + 1.6, s.pos.z, 8, 3);
     for (let k = 0; k < 18; k++) emit(FX.smoke, { x: s.pos.x, y: s.pos.y + 1.5, z: s.pos.z, vx: (Math.random() - 0.5) * 3, vy: Math.random() * 2, vz: (Math.random() - 0.5) * 3, life: 1.2, s: 3, c: [0.09, 0.08, 0.12], g: 0.5 });
-    toast('<i class="dia"></i>蝕影已淨化 · PURIFIED');
+    toast(`<i class="dia"></i>${KILL_NAME[s.kill] || '蝕影'}已淨化 · PURIFIED`);
     if (s.guard >= 0 && shadesAlive(s.guard) === 0) setTimeout(() => toast(`<i class="dia"></i>${SHRINES[s.guard].name}的封印已解除`, true), 700);
     updateQuest();
   }
 }
 let spawnShade = null;
+// the roster: per-kind stats and behaviour (hp is the island baseline; deeper layers scale it)
+const EN = {
+  melee: { hp: 100, spd: 3.6, wind: 0.6, lunge: 13, dmg: 16 },
+  archer: { hp: 70, archer: true, dmg: 12 },
+  brute: { hp: 280, s: 1.45, spd: 2.3, wind: 1.05, slam: 3.6, dmg: 28, poise: 4, emis: '#ff9a3a' },
+  stalker: { hp: 55, s: 0.82, spd: 5.8, wind: 0.32, lunge: 15, dmg: 11, double: true, emis: '#fff0a0' },
+  guard: { hp: 190, s: 1.18, spd: 2.8, wind: 0.8, lunge: 11, dmg: 20, shield: true, poise: 3, emis: '#c9a4ff' },
+  caster: { hp: 80, archer: true, caster: true, dmg: 14, emis: '#8affc8' },
+  charger: { hp: 240, s: 1.5, spd: 3.0, wind: 0.85, charge: 21, dmg: 26, poise: 4, emis: '#ff4a26' },
+  bomber: { hp: 45, s: 0.95, spd: 4.6, bomb: true, dmg: 34, emis: '#b4ff5a' },
+  demon: { hp: 520, s: 1.75, spd: 2.8, wind: 0.95, slam: 4.2, dmg: 34, poise: 5 },
+  cinder: { hp: 200, spd: 5.2, wind: 0.42, lunge: 15, dmg: 22, double: true, emis: '#ffb04a' },
+  hellArcher: { hp: 170, archer: true, dmg: 22 },
+};
+const LAYER_HP = { isle: 1, realm: 1.6, earth: 1.9, hell: 1 };
+const KILL_KEY = {
+  isle: { melee: 'shade', archer: 'shadeArcher', brute: 'shadeBrute', stalker: 'shadeStalker' },
+  realm: { melee: 'celestial', archer: 'celArcher', guard: 'celGuard', caster: 'celCaster' },
+  earth: { melee: 'beast', archer: 'beastArcher', charger: 'beastCharger', bomber: 'beastBomber' },
+  hell: { cinder: 'hellCinder', demon: 'hellDemon', hellArcher: 'hellArcher', melee: 'hellCinder' },
+};
 function updateShades(dt) {
   for (const s of shades) {
     if (s.dormant) continue;
-    if (!s.realm && !!s.earth !== (C.LAYER.cur === 1)) { if (!s.dead) { s.g.visible = false; s.sh.visible = false; } continue; }
+    if ((s.hell ? 2 : s.earth ? 1 : 0) !== C.LAYER.cur) { if (!s.dead) { s.g.visible = false; s.sh.visible = false; } continue; }
     const far = Math.abs(s.pos.x - P.pos.x) > 110 || Math.abs(s.pos.z - P.pos.z) > 110 || Math.abs(s.pos.y - P.pos.y) > 60;
     if (!s.dead) { s.g.visible = !far; s.sh.visible = !far; if (far && s.st === 'idle') continue; }
     if (s.dead) {
       if (s.t < 1) {
         s.t += dt;
         const k = s.t;
-        s.g.scale.setScalar(Math.max(0.001, 1 - k)); s.g.position.y += dt * 1.5;
+        s.g.scale.setScalar(Math.max(0.001, (1 - k) * (s.sc || 1))); s.g.position.y += dt * 1.5;
         s.mat.emissiveIntensity = 4 * (1 - k); s.sh.visible = k < 0.9;
         if (k >= 1) s.g.visible = false;
       }
@@ -685,6 +765,18 @@ function updateShades(dt) {
     if (siege) { toP.set(siege.x - s.pos.x, 0, siege.z - s.pos.z); dist = Math.max(0, toP.length() - 1.6); }
     const aggro = !!siege || (state === 'play' && dist < (archer ? 24 : 14) && Math.abs(P.pos.y - s.pos.y) < 7 && (homeD < 34 || !!s.siege));
     let glint = 0;
+    if (s.guardBreak > 0) s.guardBreak -= dt;
+    if (s.T.caster && s.st !== 'hurt') { // the priest mends whoever stands near
+      s.healCd = (s.healCd ?? 3) - dt;
+      if (s.healCd <= 0) {
+        s.healCd = 6;
+        for (const o of shades) if (o !== s && !o.dead && !o.dormant && o.hp < o.maxHp && Math.hypot(o.pos.x - s.pos.x, o.pos.z - s.pos.z) < 12) {
+          o.hp = Math.min(o.maxHp, o.hp + o.maxHp * 0.3);
+          burst(FX.sparks, o.pos.x, o.pos.y + 1.6, o.pos.z, 24, { speed: 3, up: 3, life: 1, size: 1, c: [1.2, 2.0, 1.4] });
+        }
+        burst(FX.sparks, s.pos.x, s.pos.y + 2.6, s.pos.z, 18, { speed: 2, up: 2, life: 0.9, size: 1, c: [1.2, 2.0, 1.4] });
+      }
+    }
     if (archer) {
       switch (s.st) {
         case 'idle': if (aggro) { s.st = 'kite'; s.t = 0; } else { s.vel.multiplyScalar(Math.exp(-3 * dt)); } break;
@@ -708,15 +800,16 @@ function updateShades(dt) {
           if (s.t > 0.8) {
             s.aim.visible = false;
             const lead = to.clone().addScaledVector(P.vel, 0.25);
-            fireProjectile(from.clone(), lead, 17, 12);
+            if (s.T.caster) fireProjectile(from.clone(), to.clone(), 9.5, s.T.dmg); else fireProjectile(from.clone(), lead, 17, s.T.dmg);
             Audio.sfx('dash');
-            s.st = 'kite'; s.t = 0; s.cd = 2.1 + Math.random() * 1.3;
+            s.st = 'kite'; s.t = 0; s.cd = (s.T.caster ? 2.8 : 2.1) + Math.random() * 1.3;
           }
           break;
         }
         case 'hurt': s.vel.multiplyScalar(Math.exp(-6 * dt)); if (s.t > 0.45) { s.st = 'kite'; s.t = 0; s.cd = Math.max(s.cd, 0.6); } break;
       }
     } else {
+      const T = s.T, sc = s.sc;
       switch (s.st) {
         case 'idle': {
           if (aggro) { s.st = 'chase'; s.t = 0; break; }
@@ -729,28 +822,64 @@ function updateShades(dt) {
         case 'chase': {
           if (!aggro) { s.st = 'idle'; break; }
           toP.normalize(); s.dir.copy(toP);
-          s.vel.x = damp(s.vel.x, toP.x * 3.6, 4, dt); s.vel.z = damp(s.vel.z, toP.z * 3.6, 4, dt);
-          if (dist < 3.4 && s.t > 0.6) { s.st = 'wind'; s.t = 0; }
+          s.vel.x = damp(s.vel.x, toP.x * T.spd, 4, dt); s.vel.z = damp(s.vel.z, toP.z * T.spd, 4, dt);
+          if (T.bomb) { if (dist < 2.6) { s.st = 'fuse'; s.t = 0; Audio.sfx('ui'); } break; }
+          if (T.charge && !siege && dist > 6 && dist < 18 && s.t > 1.2) { s.st = 'wind'; s.t = 0; break; }
+          if (dist < (T.slam ? T.slam * 0.85 : 3.4) && s.t > 0.6) { s.st = 'wind'; s.t = 0; }
           break;
         }
         case 'wind': {
           s.vel.multiplyScalar(Math.exp(-6 * dt));
-          if (dist > 0.1) s.dir.copy(toP.normalize());
-          s.mat.emissiveIntensity = 1.3 + s.t * 6;
+          if (dist > 0.1 && (!T.charge || s.t < T.wind * 0.7)) s.dir.copy(toP.normalize());
+          const k = clamp(s.t / T.wind, 0, 1);
+          s.mat.emissiveIntensity = 1.3 + k * 4;
           s.body.position.x = Math.sin(s.t * 70) * 0.04;
-          glint = clamp((s.t - 0.25) / 0.3, 0, 1);
-          if (s.t > 0.6) { s.st = 'lunge'; s.t = 0; s.bit = false; s.vel.copy(s.dir).multiplyScalar(13); s.body.position.x = 0; Audio.sfx('dash'); }
+          glint = clamp((k - 0.4) / 0.5, 0, 1);
+          if (s.warn) { s.warn.visible = true; s.warn.position.set(s.pos.x, s.pos.y + 0.08, s.pos.z); s.warn.scale.setScalar(T.slam * (0.35 + k * 0.65)); s.warn.material.opacity = 0.25 + k * 0.55; }
+          if (s.t > T.wind) {
+            s.body.position.x = 0;
+            if (T.slam) { // a blow that shakes the ground around it
+              if (s.warn) s.warn.visible = false;
+              const pd = Math.hypot(P.pos.x - s.pos.x, P.pos.z - s.pos.z);
+              if (pd < T.slam && Math.abs(P.pos.y - s.pos.y) < 2.5) hurtPlayer(T.dmg, s.pos);
+              if (siege && dist < T.slam) { siege.hp -= 16; folkFlinch(siege); }
+              burst(FX.smoke, s.pos.x, s.pos.y + 0.4, s.pos.z, 30, { speed: 7, up: 1, life: 1, size: 2.6, c: [0.2, 0.15, 0.18], g: 0.3 });
+              burst(FX.sparks, s.pos.x, s.pos.y + 0.4, s.pos.z, 30, { speed: 8, up: 2, life: 0.7, size: 1.1, c: [2, 0.9, 0.4] });
+              CAM.shake = Math.max(CAM.shake, 0.35); Audio.sfx('slam');
+              s.st = 'recover'; s.t = -0.6;
+            } else if (T.charge) { s.st = 'charge'; s.t = 0; s.bit = false; s.vel.copy(s.dir).multiplyScalar(T.charge); Audio.sfx('dash'); }
+            else { s.st = 'lunge'; s.t = 0; s.bit = false; s.vel.copy(s.dir).multiplyScalar(T.lunge); Audio.sfx('dash'); }
+          }
           break;
         }
         case 'lunge': {
           s.vel.multiplyScalar(Math.exp(-2.5 * dt));
           if (siege) { if (!s.bit && dist < 1.4) { s.bit = true; siege.hp -= 11; burst(FX.sparks, siege.x, siege.y + 2, siege.z, 14, { speed: 4, up: 2, life: 0.6, size: 1, c: [2, 0.6, 0.3] }); folkFlinch(siege); } }
-          else if (dist < 1.25 && Math.abs(P.pos.y - s.pos.y) < 2) hurtPlayer(16, s.pos);
-          if (s.t > 0.4) { s.st = 'recover'; s.t = 0; }
+          else if (!s.bit && dist < 1.25 * sc && Math.abs(P.pos.y - s.pos.y) < 2) { s.bit = true; hurtPlayer(T.dmg, s.pos); }
+          if (s.t > 0.4) {
+            if (T.double && !s.combo) { s.combo = 1; s.st = 'wind'; s.t = T.wind * 0.45; } // and again, at once
+            else { s.combo = 0; s.st = 'recover'; s.t = 0; }
+          }
           break;
         }
-        case 'recover': s.vel.multiplyScalar(Math.exp(-5 * dt)); s.mat.emissiveIntensity = damp(s.mat.emissiveIntensity, 1.3, 6, dt); if (s.t > 0.9) { s.st = aggro ? 'chase' : 'idle'; s.t = 0; } break;
-        case 'hurt': s.vel.multiplyScalar(Math.exp(-6 * dt)); if (s.t > 0.4) { s.st = 'chase'; s.t = 0.3; } break;
+        case 'charge': { // a long straight rush: sidestep it and it runs on past
+          if (siege) { if (!s.bit && dist < 1.8) { s.bit = true; siege.hp -= 18; folkFlinch(siege); } }
+          else if (!s.bit && Math.hypot(P.pos.x - s.pos.x, P.pos.z - s.pos.z) < 1.8 * sc && Math.abs(P.pos.y - s.pos.y) < 2.2) { s.bit = true; hurtPlayer(T.dmg, s.pos); }
+          if (Math.random() < dt * 30) emit(FX.smoke, { x: s.pos.x, y: s.pos.y + 0.3, z: s.pos.z, vx: (Math.random() - 0.5), vy: 0.6, vz: (Math.random() - 0.5), life: 0.8, s: 2, c: [0.35, 0.28, 0.24], g: 0.3 });
+          if (s.t > 0.95) { s.vel.multiplyScalar(0.25); s.st = 'recover'; s.t = -0.7; } // winded
+          break;
+        }
+        case 'fuse': { // swells, flashes, bursts
+          s.vel.multiplyScalar(Math.exp(-6 * dt));
+          const k = clamp(s.t / 1.1, 0, 1);
+          s.body.scale.copy(s.bodyScale).multiplyScalar(1 + k * 0.55 + Math.sin(s.t * 40) * 0.04 * k);
+          s.mat.emissiveIntensity = 1.4 + k * 6;
+          glint = k;
+          if (s.t > 1.1) { explodeShade(s, siege); continue; }
+          break;
+        }
+        case 'recover': s.vel.multiplyScalar(Math.exp(-5 * dt)); s.mat.emissiveIntensity = damp(s.mat.emissiveIntensity, 1.3, 6, dt); if (s.warn) s.warn.visible = false; if (s.t > 0.9) { s.st = aggro ? 'chase' : 'idle'; s.t = 0; } break;
+        case 'hurt': s.vel.multiplyScalar(Math.exp(-6 * dt)); if (s.warn) s.warn.visible = false; if (s.t > 0.4) { s.st = 'chase'; s.t = 0.3; } break;
       }
     }
     s.glint.scale.setScalar(glint > 0 ? (0.4 + glint * 1.1) * (0.85 + Math.sin(time * 40) * 0.15) : 0.001);
@@ -760,10 +889,11 @@ function updateShades(dt) {
       if (d2 < rr * rr && d2 > 1e-6) { const d = Math.sqrt(d2); s.pos.x = c.x + (dx / d) * rr; s.pos.z = c.z + (dz / d) * rr; }
     }
     if (s.leash) { const lx = s.pos.x - s.leash.x, lz = s.pos.z - s.leash.z, ld = Math.hypot(lx, lz), lr = (s.leash.lr ?? s.leash.r) - 1.4; if (ld > lr) { s.pos.x = s.leash.x + (lx / ld) * lr; s.pos.z = s.leash.z + (lz / ld) * lr; } }
-    const gy = s.floor ?? Math.max(s.earth ? C.EARTH_Y : 0, groundAt(s.pos.x, s.pos.z));
-    const padTop = s.floor !== undefined ? -999 : padHeightAt(s.pos.x, s.pos.z, gy + 2);
+    const gy = s.floor ?? (s.hell ? groundAt(s.pos.x, s.pos.z) : Math.max(s.earth ? C.EARTH_Y : 0, groundAt(s.pos.x, s.pos.z)));
+    const padTop = s.floor !== undefined ? -1e9 : padHeightAt(s.pos.x, s.pos.z, gy + 2);
     s.pos.y = damp(s.pos.y, Math.max(gy, padTop), 8, dt);
-    s.g.position.set(s.pos.x, s.pos.y + Math.sin(time * 2 + s.ph) * 0.15, s.pos.z);
+    s.g.position.set(s.pos.x, s.pos.y + Math.sin(time * 2 + s.ph) * 0.15 * (s.T.bomb ? 0.3 : 1) + (s.st === 'wind' && s.T.slam ? clamp(s.t / s.T.wind, 0, 1) * 0.6 * s.sc : 0), s.pos.z); // heavy ones rear up before the blow
+    if (s.shield) s.shield.rotation.x = damp(s.shield.rotation.x, s.guardBreak > 0 ? 1.1 : 0, 8, dt);
     if (s.dir.lengthSq() > 0.01) s.g.rotation.y = dampAngle(s.g.rotation.y, Math.atan2(s.dir.x, s.dir.z), 6, dt);
     s.body.rotation.y += dt * 0.8;
     if (!archer) s.ring.rotation.z += dt * 1.6;
@@ -783,19 +913,50 @@ function respawnShades() {
 
 // ------------------------------------------------------------------ 墮天錄 · the codex of the fallen
 const CODEX = [
-  { id: 'ophiel', key: 'boss', name: '墮光守衛 · 歐菲爾', en: 'OPHIEL, THE FALLEN WARDEN', where: '墮翼之丘', threat: 3, weak: '躍擊落地後的破綻', moves: '橫掃 · 重劈 · 躍擊 · 震地光環', reward: '守衛之盾 · 墮光大劍', col: '#2a2230', acc: '#e3b866',
+  { id: 'ophiel', key: 'boss', grp: '首領', shape: 'angel', name: '墮光守衛 · 歐菲爾', en: 'OPHIEL, THE FALLEN WARDEN', where: '墮翼之丘', threat: 3, weak: '躍擊落地後的破綻', moves: '橫掃 · 重劈 · 躍擊 · 震地光環', reward: '守衛之盾 · 墮光大劍', col: '#2a2230', acc: '#e3b866',
     lore: ['曾經守護聖所大門的熾天使。大地失去光芒的那天，他第一個拔劍，也第一個墮落。', '淨化之後，他的石像依然面向聖所，像在等待一聲召回。'] },
-  { id: 'astraea', key: 'boss2', name: '審判者 · 阿斯特萊亞', en: 'ASTRAEA, THE ARBITER', where: '審判之環', threat: 4, weak: '彈幕結束後的硬直', moves: '審判之槍 · 羽刃彈幕 · 光環', reward: '審判之翼', col: '#24346e', acc: '#d7b468',
+  { id: 'astraea', key: 'boss2', grp: '首領', shape: 'angel', name: '審判者 · 阿斯特萊亞', en: 'ASTRAEA, THE ARBITER', where: '審判之環', threat: 4, weak: '彈幕結束後的硬直', moves: '審判之槍 · 羽刃彈幕 · 光環', reward: '審判之翼', col: '#24346e', acc: '#d7b468',
     lore: ['以天秤衡量一切的審判者。她判決天界有罪，於是親手熄滅了神域的光。', '她的天秤至今仍向一邊傾斜——沒有人知道，她最後審判的是誰。'] },
-  { id: 'camael', key: 'boss3', name: '墮天騎士 · 卡麥爾', en: 'CAMAEL, THE FALLEN KNIGHT', where: '傾城遺跡', threat: 5, weak: '重斬後的長硬直', moves: '重斬 · 躍擊 · 衝擊波 · 灼羽彈幕', reward: '騎士之誓', col: '#5a1820', acc: '#ff8a5a',
+  { id: 'camael', key: 'boss3', grp: '首領', shape: 'angel', name: '墮天騎士 · 卡麥爾', en: 'CAMAEL, THE FALLEN KNIGHT', where: '傾城遺跡', threat: 5, weak: '重斬後的長硬直', moves: '重斬 · 躍擊 · 衝擊波 · 灼羽彈幕', reward: '騎士之誓', col: '#5a1820', acc: '#ff8a5a',
     lore: ['曾率領天軍守護人間的騎士長。他守護的城最終傾倒，他亦隨之墮落。', '淨化之後，遺跡的地底仍傳出低沉的心跳……'] },
-  { id: 'shade', kill: 'shade', name: '蝕影', en: 'SHADE', where: '光羽之境', threat: 1, weak: '完美閃避後的反擊', moves: '突刺 · 暗羽箭', col: '#26202e', acc: '#ffc766',
+  { id: 'abaddon', key: 'boss4', grp: '首領', shape: 'angel', name: '冥門守衛 · 亞巴頓', en: 'ABADDON, KEEPER OF THE ABYSS', where: '冥門', threat: 5, weak: '唯有神域之主的武器能真正傷及他', moves: '冥焰重斬 · 躍擊 · 衝擊環 · 灰燼彈幕', reward: '？？？', col: '#140808', acc: '#ff5a2a',
+    lore: ['冥門的守門者。據說他曾是神域最初的光，因為不肯低頭而被投入深淵。', '他守著的不是地獄的入口——而是不讓門後的東西出去。'] },
+  // 光羽之境
+  { id: 'shade', kill: 'shade', grp: '光羽之境', shape: 'shade', name: '蝕影', en: 'SHADE', where: '光羽之境', threat: 1, weak: '完美閃避後的反擊', moves: '突刺', col: '#26202e', acc: '#ffc766',
     lore: ['光熄滅後，由殘留的影子凝成的守衛。它們守著聖壇，卻不記得為何而守。', '每一隻蝕影的面具上，都刻著同一個名字。'] },
-  { id: 'cel', kill: 'celestial', name: '墮化天兵', en: 'FALLEN SENTINEL', where: '天上神域', threat: 2, weak: '突進後的空隙', moves: '突進 · 光矢', col: '#efe9dc', acc: '#a77bff',
+  { id: 'shadeArcher', kill: 'shadeArcher', grp: '光羽之境', shape: 'archer', name: '蝕影射手', en: 'SHADE ARCHER', where: '光羽之境', threat: 1, weak: '拉近距離 · 瞄準時閃避', moves: '保持距離 · 暗羽箭', col: '#221c2c', acc: '#e7a6ff',
+    lore: ['總是站在光照不到的地方。它的箭由墮落的羽毛磨成。', '射出的每一根暗羽，都曾經屬於某個天使。'] },
+  { id: 'shadeBrute', kill: 'shadeBrute', grp: '光羽之境', shape: 'brute', name: '重甲蝕影', en: 'IRONCLAD SHADE', where: '光羽之境 · 原野', threat: 3, weak: '重砸後的長硬直 · 從背後攻擊', moves: '蓄力重砸 · 震地', col: '#2a2024', acc: '#ff9a3a',
+    lore: ['好幾個影子擠進同一副鎧甲裡，所以它走得很慢，打得很重。', '鎧甲裡偶爾傳出不同的聲音，在爭論該往哪裡走。'] },
+  { id: 'shadeStalker', kill: 'shadeStalker', grp: '光羽之境', shape: 'stalker', name: '疾影', en: 'SWIFT SHADE', where: '光羽之境 · 原野', threat: 2, weak: '血量很低 · 一擊即散', moves: '連續突刺', col: '#24202a', acc: '#fff0a0',
+    lore: ['影子之中最輕的一種。它不守護任何東西，只是追逐光。', '傳說疾影是孩子們的影子——在光熄滅時跑得太快，沒能跟上。'] },
+  // 天上神域
+  { id: 'cel', kill: 'celestial', grp: '天上神域', shape: 'shade', name: '墮化天兵', en: 'FALLEN SENTINEL', where: '天上神域', threat: 2, weak: '突進後的空隙', moves: '突進', col: '#efe9dc', acc: '#a77bff',
     lore: ['神域的守衛，被紫色的裂紋侵蝕。它們仍在巡邏，守護一座已無神明的天庭。', '裂紋的紋路與地獄的法陣如出一轍。'] },
-  { id: 'beast', kill: 'beast', name: '瘴獸', en: 'MIASMA BEAST', where: '人間', threat: 2, weak: '聖環 · 重擊', moves: '撲擊 · 灼羽', col: '#2b1d1a', acc: '#ff6a3a',
+  { id: 'celArcher', kill: 'celArcher', grp: '天上神域', shape: 'archer', name: '墮化弓兵', en: 'FALLEN BOWMAN', where: '天上神域', threat: 2, weak: '拉近距離', moves: '光矢', col: '#efe9dc', acc: '#ff9ad6',
+    lore: ['曾在天庭的城垛上守望。如今它們瞄準一切會發光的東西。', '它們的弓弦是用審判者的天秤鏈改成的。'] },
+  { id: 'celGuard', kill: 'celGuard', grp: '天上神域', shape: 'guard', name: '審判衛士', en: "THE ARBITER'S GUARD", where: '天上神域', threat: 3, weak: '盾只擋正面 · 繞到背後或用重擊破盾', moves: '舉盾 · 盾擊', col: '#e8e2d4', acc: '#c9a4ff',
+    lore: ['審判者的親衛。它們的盾上刻著判決，從來不曾放下。', '盾的背面刻著另一行字，被刮得看不清了。'] },
+  { id: 'celCaster', kill: 'celCaster', grp: '天上神域', shape: 'caster', name: '光羽祭司', en: 'FEATHER PRIEST', where: '天上神域', threat: 3, weak: '優先擊倒 · 否則同伴會不斷回復', moves: '光羽彈 · 治癒同伴', col: '#ece6da', acc: '#8affc8',
+    lore: ['為墮化的天兵祈禱的祭司。它不知道自己的禱告已經沒有人在聽。', '它治癒同伴的光，是神域僅存的溫柔。'] },
+  // 人間
+  { id: 'beast', kill: 'beast', grp: '人間', shape: 'beast', name: '瘴獸', en: 'MIASMA BEAST', where: '人間', threat: 2, weak: '聖環 · 重擊', moves: '撲擊', col: '#2b1d1a', acc: '#ff6a3a',
     lore: ['墜光之後，從大地裂縫湧出的瘴氣所化。它們畏懼光，卻被光羽吸引。', '瘴氣的源頭，似乎在比人間更深的地方。'] },
+  { id: 'beastArcher', kill: 'beastArcher', grp: '人間', shape: 'archer', name: '灼羽瘴獸', en: 'EMBER-QUILL', where: '人間', threat: 2, weak: '拉近距離', moves: '灼羽', col: '#2b1d1a', acc: '#ffae4a',
+    lore: ['背上長滿燒焦羽毛的瘴獸。它把羽毛當作箭射出。', '沒有人知道，那些羽毛是從哪裡來的。'] },
+  { id: 'beastCharger', kill: 'beastCharger', grp: '人間', shape: 'charger', name: '巨角瘴獸', en: 'GREATHORN', where: '人間 · 原野與裂谷', threat: 3, weak: '衝鋒時側身閃避 · 衝完會喘氣', moves: '低頭蓄勢 · 直線衝鋒', col: '#2b1a16', acc: '#ff4a26',
+    lore: ['曾經是牧場裡的牛。瘴氣讓牠的角長得比牠的記憶還長。', '牠衝向的方向，總是村子。'] },
+  { id: 'beastBomber', kill: 'beastBomber', grp: '人間', shape: 'bomber', name: '腐行者', en: 'ROTWALKER', where: '人間 · 沼澤', threat: 2, weak: '在牠膨脹前擊倒 · 或者遠離', moves: '膨脹 · 瘴氣爆裂', col: '#2a2a1a', acc: '#b4ff5a',
+    lore: ['瘴氣在一個軀殼裡積得太滿，就會變成腐行者。', '牠們會走向人群，然後……把自己交出去。'] },
+  // 地獄
+  { id: 'hellCinder', kill: 'hellCinder', grp: '地獄', shape: 'stalker', name: '灰燼兵', en: 'CINDER HUSK', where: '冥門前庭', threat: 4, weak: '凡光無效 · 需要神域之主的武器', moves: '連續突刺', col: '#160d0d', acc: '#ffb04a',
+    lore: ['燒剩的軀殼，裡面只剩火。它們不累，也不會停。', '灰燼兵胸口的餘火，形狀像一根羽毛。'] },
+  { id: 'hellDemon', kill: 'hellDemon', grp: '地獄', shape: 'demon', name: '煉獄魔', en: 'INFERNAL', where: '冥門前庭', threat: 5, weak: '凡光無效 · 需要神域之主的武器', moves: '蓄力重砸 · 震地', col: '#140a0a', acc: '#ff3a12',
+    lore: ['地獄的看守。牠的角是熔岩冷卻後的樣子。', '煉獄魔從不離開冥門前庭，像是被某種誓約綁住。'] },
+  { id: 'hellArcher', kill: 'hellArcher', grp: '地獄', shape: 'archer', name: '灰燼射手', en: 'ASH ARCHER', where: '冥門前庭', threat: 4, weak: '凡光無效 · 需要神域之主的武器', moves: '熔羽箭', col: '#160d0d', acc: '#ff8a2a',
+    lore: ['用燒紅的羽毛作箭。被射中的地方，會一直發燙。', '它們瞄準的不是你，而是你身上的光。'] },
 ];
+const KILL_NAME = Object.fromEntries(CODEX.filter((c) => c.kill).map((c) => [c.kill, c.name]));
 let codexSel = 0;
 function codexState(c) {
   if (c.key) return prog[c.key] ? 2 : prog.seen[c.key] ? 1 : 0;
@@ -803,6 +964,23 @@ function codexState(c) {
 }
 function codexEmblem(c, st) {
   const body = st === 0 ? '#b9b2a4' : st === 2 && c.key ? '#f1ece1' : c.col, acc = st === 0 ? '#9a927f' : c.acc;
+  if (c.shape && c.shape !== 'angel') {
+    const S = (d, extra = '') => `<path d="${d}" fill="${body}" stroke="${acc}" stroke-width="1.2" ${extra}/>`;
+    const mask = (y) => `<path d="M48 ${y} Q60 ${y - 9} 72 ${y} Q60 ${y + 5} 48 ${y}Z" fill="#efe6d4" stroke="${acc}" stroke-width=".8"/>`;
+    const shapes = {
+      shade: S('M60 24 L76 62 L60 100 L44 62 Z') + mask(40),
+      archer: S('M60 22 L70 62 L60 102 L50 62 Z') + mask(38) + `<path d="M84 34 Q100 62 84 90" fill="none" stroke="${acc}" stroke-width="1.6"/><path d="M84 34 L84 90" stroke="${acc}" stroke-width=".6"/>`,
+      brute: S('M60 26 L84 50 L80 92 L40 92 L36 50 Z') + S('M30 44 L42 38 L46 52 L34 56 Z') + S('M90 44 L78 38 L74 52 L86 56 Z') + mask(42),
+      stalker: S('M60 20 L67 62 L60 104 L53 62 Z') + `<path d="M48 44 L36 80 M72 44 L84 80" stroke="${acc}" stroke-width="2"/>` + mask(36),
+      guard: S('M60 24 L76 62 L60 100 L44 62 Z') + mask(40) + `<path d="M60 52 L76 60 L76 78 L60 88 L44 78 L44 60 Z" fill="${body}" stroke="${acc}" stroke-width="1.6"/><circle cx="60" cy="70" r="5" fill="none" stroke="${acc}" stroke-width="1"/>`,
+      caster: S('M60 34 L74 66 L60 100 L46 66 Z') + mask(48) + `<circle cx="60" cy="20" r="6" fill="${acc}" opacity=".85"/><ellipse cx="60" cy="34" rx="11" ry="3" fill="none" stroke="${acc}" stroke-width="1.2"/>`,
+      beast: S('M60 28 L80 62 L60 98 L40 62 Z') + mask(42) + `<path d="M52 36 L46 24 M68 36 L74 24" stroke="${acc}" stroke-width="2"/>`,
+      charger: S('M60 34 L88 62 L74 96 L46 96 L32 62 Z') + mask(48) + `<path d="M50 42 Q30 30 28 14 M70 42 Q90 30 92 14" fill="none" stroke="${acc}" stroke-width="3"/>`,
+      bomber: `<circle cx="60" cy="68" r="28" fill="${body}" stroke="${acc}" stroke-width="1.2"/><circle cx="50" cy="62" r="4" fill="${acc}" opacity=".7"/><circle cx="70" cy="76" r="5" fill="${acc}" opacity=".6"/><circle cx="64" cy="56" r="3" fill="${acc}" opacity=".8"/>` + mask(46),
+      demon: S('M60 28 L88 54 L82 96 L38 96 L32 54 Z') + mask(44) + `<path d="M48 36 Q28 30 24 8 M72 36 Q92 30 96 8" fill="none" stroke="${acc}" stroke-width="4"/>`,
+    };
+    return `<svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="54" fill="none" stroke="${acc}" stroke-width=".8" stroke-dasharray="2 4"/>${st ? shapes[c.shape] || shapes.shade : `<g opacity=".55">${shapes[c.shape] || shapes.shade}</g><text x="60" y="76" text-anchor="middle" font-size="26" fill="${acc}" font-family="serif">?</text>`}</svg>`;
+  }
   const wing = (sx) => `<path transform="translate(60 54) scale(${sx} 1)" d="M6 0 C26 -26 52 -30 58 -14 C46 -12 40 -6 36 2 C44 0 50 4 50 12 C38 8 30 10 24 16 C28 20 28 26 24 30 C16 22 10 14 6 8 Z" fill="${body}" stroke="${acc}" stroke-width="1.2" opacity="${st ? 0.95 : 0.6}"/>`;
   return `<svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="54" fill="none" stroke="${acc}" stroke-width=".8" stroke-dasharray="2 4"/>${wing(1)}${wing(-1)}
     <ellipse cx="60" cy="28" rx="13" ry="4" fill="none" stroke="${acc}" stroke-width="1.6"/><circle cx="60" cy="40" r="7" fill="${body}" stroke="${acc}" stroke-width="1"/>
@@ -810,10 +988,12 @@ function codexEmblem(c, st) {
     ${st === 2 && c.key ? `<text x="60" y="112" text-anchor="middle" font-size="9" letter-spacing="3" fill="#a88444" font-family="Cinzel,serif">PURIFIED</text>` : ''}</svg>`;
 }
 function renderCodex() {
+  let lastG = '';
   $('codexList').innerHTML = CODEX.map((c, i) => {
     const st = codexState(c);
     const tag = c.key ? (st === 2 ? '已淨化' : st === 1 ? '交戰過' : '未知') : `${prog.kills[c.kill] || 0}`;
-    return `<li class="${i === codexSel ? 'sel' : ''} ${st ? '' : 'unk'}" data-i="${i}"><i class="dia"></i><span>${st ? c.name.split(' · ')[0] : '？？？'}</span><em>${tag}</em></li>`;
+    const head = c.grp !== lastG ? `<li class="grp">${c.grp}</li>` : ''; lastG = c.grp;
+    return `${head}<li class="${i === codexSel ? 'sel' : ''} ${st ? '' : 'unk'}" data-i="${i}"><i class="dia"></i><span>${st ? c.name.split(' · ')[0] : '？？？'}</span><em>${tag}</em></li>`;
   }).join('');
   const c = CODEX[codexSel], st = codexState(c);
   const stars = '✦'.repeat(c.threat) + '<i>' + '✦'.repeat(5 - c.threat) + '</i>';
@@ -927,17 +1107,28 @@ function buildBoss() {
       updateQuest();
     },
   });
-  bosses = [boss, boss2, boss3];
+  const boss4 = createBoss(G, {
+    key: 'boss4', name: '冥門守衛 · 亞巴頓', en: 'ABADDON, KEEPER OF THE ABYSS', fallen: true, scale: 4.3, weapon: 'greatsword', maxHp: 4600, tint: '#140808', emis: '#ff3a12', hell: true,
+    home: HELL.bossHome, floor: HELL.arenaFloor, arenaR: 30, leash: 44,
+    onDefeated: () => {
+      prog.boss4 = true; save(); applyStats(true);
+      document.body.classList.remove('boss');
+      setTimeout(() => toast('<i class="dia"></i>冥門守衛倒下了 · 但冥門依然緊閉', true), 1400);
+      setTimeout(() => regionCard('冥門守衛已淨化', 'THE KEEPER RESTS'), 2800);
+      updateQuest();
+    },
+  });
+  bosses = [boss, boss2, boss3, boss4];
 }
 
 // ------------------------------------------------------------------ collision helpers
 function padHeightAt(x, z, y) {
-  let best = -999;
+  let best = -1e9;
   for (const p of colliders.pads) {
     const top = p.dyn ? p.dyn() : p.top;
     if (top <= best) continue;
     const dx = x - p.x, dz = z - p.z, d2 = dx * dx + dz * dz;
-    if (d2 >= p.r * p.r || y < top - 0.75 || y <= (p.bot ?? -999)) continue;
+    if (d2 >= p.r * p.r || y < top - 0.75 || y <= (p.bot ?? -1e9)) continue;
     if (p.rf) { const rr = p.rf(Math.atan2(dz, dx)); if (d2 >= rr * rr) continue; }
     best = top;
   }
@@ -959,7 +1150,7 @@ function pushOut(pos, rad, prevY = pos.y) {
   }
   for (const p of colliders.pads) { // walls of tall steps / island sides
     const top = p.dyn ? p.dyn() : p.top;
-    if (py >= top - 0.75 || pos.y + 1.7 < (p.bot ?? -999)) continue;
+    if (py >= top - 0.75 || pos.y + 1.7 < (p.bot ?? -1e9)) continue;
     const dx = pos.x - p.x, dz = pos.z - p.z, d2 = dx * dx + dz * dz;
     const rr = (p.rf ? p.rf(Math.atan2(dz, dx)) : p.r) + rad;
     if (d2 < rr * rr && d2 > 1e-8) { const d = Math.sqrt(d2); pos.x = p.x + (dx / d) * rr; pos.z = p.z + (dz / d) * rr; }
@@ -1140,7 +1331,11 @@ function nearestEnemy(maxD, cone, camPref) {
   }
   return best;
 }
-function hitEnemy(e, dmg, poise, kind) { if (e.isBoss) e.damage(dmg, poise, P.pos, kind); else damageShade(e, dmg, P.pos, kind); }
+function hitEnemy(e, dmg, poise, kind) {
+  // nothing of hell is harmed by mortal light until the seraph carries the Empyrean lord's weapon
+  if ((e.hell || (e.isBoss && e.cfg.hell)) && !prog.hellBlade) { dmg *= 0.08; poise *= 0.15; kind = 'resist'; resistHint(); }
+  if (e.isBoss) e.damage(dmg, poise, P.pos, kind); else damageShade(e, dmg, P.pos, kind);
+}
 function doHit(A) {
   const fx = Math.sin(P.yaw + P.spin), fz = Math.cos(P.yaw + P.spin);
   for (const e of enemyList()) {
@@ -1239,6 +1434,7 @@ function hurtPlayer(dmg, from) {
     if (parry) { perfectDodge(); bigText('聖盾', 'PARRY'); } else Audio.sfx('hit');
     return;
   }
+  if (P.inHell && !prog.hellBlade) dmg *= 3;
   P.hp -= dmg; P.inv = 0.9; P.hurtT = 0.35; P.lastHurt = time;
   const d = _p.copy(P.pos).sub(from); d.y = 0; d.normalize();
   P.vel.x = d.x * 9; P.vel.z = d.z * 9; P.vel.y = 3.5; P.grounded = false; P.glide = false; P.atk.kind = null; P.charge = -1; P.healT = -1; P.spin = 0;
@@ -1382,14 +1578,20 @@ function updatePlayer(dt) {
   // safe spot + falling into the cloud sea
   P.safeT -= dt;
   const r = Math.hypot(P.pos.x, P.pos.z);
-  if (P.grounded && P.safeT < 0 && (P.inRealm ? P.pos.y > REALM.y - 20 : P.inEarth ? !inRift(P.pos.x, P.pos.z, 3) && P.pos.y > C.EARTH_Y - 6 : r < edgeR(Math.atan2(P.pos.z, P.pos.x)) - 16)) { P.safe.copy(P.pos); P.safeT = 0.5; }
+  if (P.grounded && P.safeT < 0 && (P.inRealm ? P.pos.y > REALM.y - 20 : P.inHell ? !inLava(P.pos.x, P.pos.z) && P.pos.y > C.HELL_Y - 0.4 : P.inEarth ? !inRift(P.pos.x, P.pos.z, 3) && P.pos.y > C.EARTH_Y - 6 : r < edgeR(Math.atan2(P.pos.z, P.pos.x)) - 16)) { P.safe.copy(P.pos); P.safeT = 0.5; }
   if (P.inRealm && P.pos.y < REALM.y - 70) { P.inRealm = false; currentRegion = ''; updateQuest(); } // dropped out of the Empyrean: fall to the isle below
-  if (!P.inEarth && P.pos.y < -70) dropToEarth(); // over the island's edge: through the cloud sea to the human world
+  if (!P.inEarth && !P.inHell && P.pos.y < -70) dropToEarth(); // over the island's edge: through the cloud sea to the human world
   if (P.inEarth) {
     const rr = Math.hypot(P.pos.x, P.pos.z);
     if (rr > 600) { P.pos.x *= 600 / rr; P.pos.z *= 600 / rr; }
-    if (P.pos.y < C.EARTH_Y - 26 && inRift(P.pos.x, P.pos.z, 6)) riftRepel();
-    else if (P.pos.y < C.EARTH_Y - 60) fallRespawn();
+    if (P.pos.y < C.EARTH_Y - 110 && inRift(P.pos.x, P.pos.z, 10)) dropToHell(); // the rift goes all the way down
+    else if (P.pos.y < C.EARTH_Y - 60 && !inRift(P.pos.x, P.pos.z, 10)) fallRespawn();
+  }
+  if (P.inHell) {
+    const hx = P.pos.x - C.HCX, hz = P.pos.z - (C.HCZ - 40), hr = Math.hypot(hx, hz);
+    if (hr > 222) { P.pos.x = C.HCX + (hx / hr) * 222; P.pos.z = C.HCZ - 40 + (hz / hr) * 222; }
+    if (P.pos.y < C.HELL_Y - 0.9 && inLava(P.pos.x, P.pos.z)) lavaBurn();
+    else if (P.pos.y < C.HELL_Y - 60) fallRespawn();
   }
 }
 function dropToEarth() {
@@ -1405,6 +1607,36 @@ function dropToEarth() {
   regionCard('人間', 'THE MORTAL WORLD');
   if (first) setTimeout(() => toast('<i class="dia"></i>穿過雲海，墜向人間 · 按「展翼」減速滑翔', true), 900);
   updateQuest();
+}
+function dropToHell() {
+  // through the rift, past the dark, into the fire
+  const hx = clamp(P.pos.x, C.HCX - 110, C.HCX + 110);
+  P.pos.set(hx, C.HELL_Y + 150, HELL.pillar.z - 6);
+  P.vel.y = Math.min(P.vel.y, -34); P.glide = false; P.grounded = false;
+  P.inEarth = false; P.inRealm = false; P.inHell = true;
+  syncLayer(); currentRegion = '';
+  P.checkpoint.copy(HELL.landing);
+  flashScreen(0.6); CAM.shake = Math.max(CAM.shake, 0.6);
+  const first = !prog.hell; prog.hell = true; save();
+  regionCard('地獄 · 冥門前庭', 'THE ABYSSAL THRESHOLD');
+  if (first) {
+    setTimeout(() => toast('<i class="dia"></i>墜入裂谷深處 · 這裡的一切都不受凡光所傷', true), 1800);
+    setTimeout(() => toast('<i class="dia"></i>在地獄受到的傷害大幅增加 · 墜落之地的光柱可以返回人間', true), 5200);
+  }
+  updateQuest();
+}
+function lavaBurn() {
+  flashScreen(0.5); CAM.shake = Math.max(CAM.shake, 0.4);
+  P.pos.copy(P.safe); P.pos.y += 0.5; P.vel.set(0, 0, 0); P.glide = false; P.grounded = true;
+  P.hp = Math.max(1, P.hp - 25); P.lastHurt = time;
+  burst(FX.sparks, P.pos.x, P.pos.y + 1, P.pos.z, 40, { speed: 6, up: 3, life: 1, size: 1.1, c: [2.4, 0.8, 0.2] });
+  toast('<i class="dia"></i>熔焰灼身 · 被推回地面');
+  Audio.sfx('hurt');
+}
+let resistHintT = -99;
+function resistHint() {
+  if (time - resistHintT < 25) return; resistHintT = time;
+  toast('<i class="dia"></i>凡光無法傷及地獄之物……需要神域之主的武器', true);
 }
 function riftRepel() {
   // the seal holds: the dark throws the seraph back up to the rim (no harm done — the way down isn't open yet)
@@ -1433,7 +1665,7 @@ function revive() {
   $('hud').classList.remove('dim');
   flashScreen(1);
   P.pos.copy(P.checkpoint); P.vel.set(0, 0, 0); P.hp = P.maxHp; P.stamina = 100; P.inv = 2; P.lastHurt = time; P.flasks = P.maxFlasks; hero.resetCloth();
-  P.inEarth = P.checkpoint.y < -350; P.inRealm = P.checkpoint.y > 200; syncLayer(); currentRegion = ''; updateQuest();
+  P.inEarth = P.checkpoint.y < -350 && P.checkpoint.y > -1200; P.inHell = P.checkpoint.y < -1200; P.inRealm = P.checkpoint.y > 200; syncLayer(); currentRegion = ''; updateQuest();
   for (const b of beacons) if (b.st === 'siege') endSiege(b, 'calm');
   for (const b of bosses) b.reset();
   P.grounded = true; P.glide = false;
@@ -1501,7 +1733,7 @@ function buildFolk() {
       b.keepers.push(folk.add({ x, z, yaw: Math.atan2(Math.cos(a), Math.sin(a)), kind: b.monks ? 'monk' : b.id === 'bHarbor' ? 'fisher' : 'villager', st: b.st === 'lit' ? (i % 2 ? 'idle' : 'pray') : 'guard', line: b.st === 'lit' ? b.line : i === 0 ? '……牠們又來了。燈火撐不了多久。' : null }));
     }
     for (let i = 0; i < 4; i++) {
-      const sh = spawnShade(b.x, b.z, -1, i === 3 ? 'archer' : 'melee', undefined, undefined, true);
+      const sh = spawnShade(b.x, b.z, -1, ['melee', 'melee', 'bomber', 'charger'][i], undefined, undefined, true);
       sh.siege = b; killShade(sh, true); sh.dormant = true; sh.home.set(b.x, b.y, b.z); b.beasts.push(sh);
     }
     beacons.push(b);
@@ -1510,8 +1742,8 @@ function buildFolk() {
 }
 function folkFlinch(b) { for (const p of b.keepers) if (p.st === 'guard') p.set('cower'); }
 function wake(sh, x, z) {
-  sh.dead = false; sh.dormant = false; sh.hp = sh.maxHp; sh.t = 0; sh.st = 'chase';
-  sh.pos.set(x, C.groundAtL(x, z, 1), z); sh.vel.set(0, 0, 0); sh.g.scale.setScalar(1); sh.g.visible = true; sh.sh.visible = true; sh.mat.emissiveIntensity = 1.3;
+  sh.dead = false; sh.dormant = false; sh.hp = sh.maxHp; sh.t = 0; sh.st = 'chase'; sh.combo = 0;
+  sh.pos.set(x, C.groundAtL(x, z, 1), z); sh.vel.set(0, 0, 0); sh.g.scale.setScalar(sh.sc || 1); sh.body.scale.copy(sh.bodyScale); sh.g.visible = true; sh.sh.visible = true; sh.mat.emissiveIntensity = 1.3;
   burst(FX.smoke, x, sh.pos.y + 1, z, 22, { speed: 4, up: 2, life: 1.1, size: 2.2, c: [0.35, 0.25, 0.3] });
 }
 function sleepBeast(sh) {
@@ -1610,6 +1842,10 @@ function updateInteract() {
     if (!t && prog.end && !P.inRealm && Math.hypot(P.pos.x - T.x, P.pos.z - T.z) < 6.5 && P.pos.y > T.floorY - 1 && P.pos.y < T.floorY + 6) t = P.lv >= 3 ? { kind: 'ascend' } : { kind: 'ascendLocked', n: P.lv };
     if (!t && P.inRealm && Math.hypot(P.pos.x - REALM.gate.x, P.pos.z - REALM.gate.z) < 5 && Math.abs(P.pos.y - REALM.gate.y) < 3) t = { kind: 'descend' };
     if (!t && P.inEarth && Math.hypot(P.pos.x - EARTH.pillar.x, P.pos.z - EARTH.pillar.z) < 6 && Math.abs(P.pos.y - EARTH.pillar.y) < 5) t = { kind: 'rise' };
+    if (!t && P.inHell) {
+      if (Math.hypot(P.pos.x - HELL.pillar.x, P.pos.z - HELL.pillar.z) < 6 && Math.abs(P.pos.y - HELL.pillar.y) < 5) t = { kind: 'riseHell' };
+      else if (Math.hypot(P.pos.x - HELL.gate.x, P.pos.z - HELL.gate.z) < 12 && Math.abs(P.pos.y - HELL.gate.y) < 8) t = { kind: 'hellGate' };
+    }
     if (!t && P.inEarth) {
       for (const c of captives) if (!c.done && Math.hypot(P.pos.x - c.x, P.pos.z - c.z) < 4.8 && Math.abs(P.pos.y - c.y) < 4) { const n = c.guards.filter((g) => !g.dead).length; t = n ? { kind: 'crystalSealed', n, c } : { kind: 'purify', c }; }
       for (const b of beacons) if (b.st === 'won' && Math.hypot(P.pos.x - b.x, P.pos.z - b.z) < 6 && Math.abs(P.pos.y - b.y) < 4) t = { kind: 'kindle', b };
@@ -1622,12 +1858,13 @@ function updateInteract() {
     if (!t) el.classList.add('hidden');
     else {
       el.classList.remove('hidden');
-      el.classList.toggle('locked', t.kind === 'sealed' || t.kind === 'coreLocked' || t.kind === 'ascendLocked' || t.kind === 'crystalSealed');
+      el.classList.toggle('locked', t.kind === 'sealed' || t.kind === 'coreLocked' || t.kind === 'ascendLocked' || t.kind === 'crystalSealed' || t.kind === 'hellGate');
       const L = {
         shrine: ['點亮聖壇', 'KINDLE THE SHRINE'], sealed: [`淨化周圍的蝕影 <em>${t.n}</em>`, 'SEALED BY SHADES'],
         core: ['觸碰聖核', 'TOUCH THE SACRED CORE'], coreLocked: [`聖核沉睡中 <em>${t.n}/4</em>`, 'LIGHT ALL FOUR SHRINES'],
         ascend: ['升往天上神域', 'ASCEND TO THE EMPYREAN'], ascendLocked: [`光羽之力不足 <em>Lv${t.n}/3</em>`, 'REACH LV 3 TO ASCEND'],
         descend: ['返回人間之島', 'RETURN TO THE ISLE'], rise: ['返回天上之島', 'RETURN TO THE ISLE ABOVE'],
+        riseHell: ['返回人間', 'RETURN TO THE MORTAL WORLD'], hellGate: ['冥門被封印', 'THE GATE OF THE ABYSS IS SEALED'],
         purify: ['淨化蝕晶', 'PURIFY THE CRYSTAL'], crystalSealed: [`擊退看守的瘴獸 <em>${t.n}</em>`, 'GUARDED BY BEASTS'], kindle: ['點亮燈火', 'KINDLE THE BEACON'],
       }[t.kind];
       $('intLbl').innerHTML = L[0]; $('intSub').textContent = L[1];
@@ -1642,6 +1879,8 @@ function doInteract() {
   else if (t.kind === 'ascend') startTrip(true);
   else if (t.kind === 'descend') startTrip(false);
   else if (t.kind === 'rise') startTrip('rise');
+  else if (t.kind === 'riseHell') startTrip('riseHell');
+  else if (t.kind === 'hellGate') { toast('<i class="dia"></i>冥門紋絲不動 · 門後傳來低沉的心跳……需要神域之主的武器', true); Audio.sfx('ui'); }
   else if (t.kind === 'purify') { rescue(t.c); interactTarget = null; $('bInteract').classList.add('hidden'); }
   else if (t.kind === 'kindle') { kindle(t.b); interactTarget = null; $('bInteract').classList.add('hidden'); }
   else if (t.kind === 'ascendLocked') { toast(`<i class="dia"></i>需要 Lv3 才能踏上天梯 · 目前 Lv${P.lv}`); Audio.sfx('ui'); }
@@ -1651,9 +1890,9 @@ function doInteract() {
 let trip = null, tripBeam = null;
 function startTrip(up) {
   const T = W.temple;
-  const rise = up === 'rise';
-  const to = rise ? new THREE.Vector3(SPAWN.x, 0, SPAWN.z) : up ? REALM.landing.clone() : new THREE.Vector3(T.x, T.floorY, T.z + 10);
-  trip = { up: !!up, rise, from: P.pos.clone(), to, t: 0, dur: rise ? 5.2 : up ? 4.8 : 3.8 };
+  const rise = up === 'rise', fromHell = up === 'riseHell';
+  const to = fromHell ? EARTH.riftRim.clone() : rise ? new THREE.Vector3(SPAWN.x, 0, SPAWN.z) : up ? REALM.landing.clone() : new THREE.Vector3(T.x, T.floorY, T.z + 10);
+  trip = { up: !!up, rise, fromHell, from: P.pos.clone(), to, t: 0, dur: rise || fromHell ? 5.2 : up ? 4.8 : 3.8 };
   state = 'ascend';
   P.vel.set(0, 0, 0); P.atk.kind = null; P.lock = null; P.castT = -1; P.charge = -1; P.dashT = 0;
   $('hud').classList.add('cine'); interactTarget = null; $('bInteract').classList.add('hidden');
@@ -1676,16 +1915,17 @@ function updateTrip(dt) {
   tripBeam.material.opacity = Math.sin(k * Math.PI) * 0.75;
   if (Math.random() < dt * 70) { const a = Math.random() * 6.28, r = 2 + Math.random() * 5; emit(FX.sparks, { x: P.pos.x + Math.cos(a) * r, y: P.pos.y + (trip.up ? -4 : 6) + Math.random() * 3, z: P.pos.z + Math.sin(a) * r, vy: trip.up ? -26 : 26, life: 0.45, s: 1.3 }); }
   if (k >= 1) {
-    const up = trip.up, rise = trip.rise; trip = null;
+    const up = trip.up, rise = trip.rise, fromHell = trip.fromHell; trip = null;
     state = 'play'; P.glide = false; P.grounded = true; P.vel.set(0, 0, 0);
     tripBeam.visible = false;
     $('hud').classList.remove('cine');
     flashScreen(0.85); CAM.shake = 0.35;
     burst(FX.sparks, P.pos.x, P.pos.y + 0.5, P.pos.z, 60, { speed: 6, up: 3, life: 1.2, size: 1.2, c: [1.8, 1.4, 0.9] });
     featherBurst(P.pos.x, P.pos.y + 1, P.pos.z, 14, 3);
-    P.inRealm = up && !rise; P.inEarth = false; P.safe.copy(P.pos); P.checkpoint.copy(P.pos);
-    currentRegion = rise ? '鏡湖' : up ? '天上神域' : '環光聖所';
-    if (rise) regionCard('鏡湖', 'THE MIRROR LAKE');
+    P.inRealm = up && !rise && !fromHell; P.inEarth = !!fromHell; P.inHell = false; P.safe.copy(P.pos); P.checkpoint.copy(P.pos);
+    currentRegion = fromHell ? '墮天裂谷' : rise ? '鏡湖' : up ? '天上神域' : '環光聖所';
+    if (fromHell) regionCard('墮天裂谷', 'THE RIFT OF THE FALLEN');
+    else if (rise) regionCard('鏡湖', 'THE MIRROR LAKE');
     else if (up) {
       const first = !prog.realm; prog.realm = true; save();
       regionCard('天上神域', 'THE EMPYREAN');
@@ -1878,6 +2118,7 @@ function regionCard(cn, en) {
   regionTimer = setTimeout(() => el.classList.remove('on'), 3600);
 }
 function regionAt(x, z, y) {
+  if (P.inHell) return hellRegion(x, z);
   if (P.inEarth) return earthRegion(x, z);
   if (y > 250) { for (const I of REALM.isles) if (Math.hypot(x - I.x, z - I.z) < I.r + 1.5) return [I.name, I.en]; return ['天上神域', 'THE EMPYREAN']; }
   for (const s of W.islands) if (!s.far && Math.hypot(x - s.x, z - s.z) < s.r + 2 && y > s.top - 3) return ['浮嶼', 'THE DRIFTING ISLES'];
@@ -1892,8 +2133,11 @@ function regionAt(x, z, y) {
 function updateQuest() {
   const lit = prog.s.filter(Boolean).length, f = prog.f.length;
   let title, rows;
-  if (P.inEarth) {
-    const ef = prog.f.filter((id) => (id >= EARTH_F0 && id < EARTH_F1) || id >= EARTH_F2).length;
+  if (P.inHell) {
+    title = '第三章 · 地獄';
+    rows = [[prog.boss4 ? '冥門守衛 · 已淨化' : '冥門守衛 · 亞巴頓', prog.boss4 ? '✓' : '極度危險'], ['冥門被封印', ''], ['取得能傷及地獄之物的武器', prog.hellBlade ? '✓' : '未取得'], ['回到墜落之地的光柱，返回人間', '']];
+  } else if (P.inEarth) {
+    const ef = prog.f.filter((id) => (id >= EARTH_F0 && id < EARTH_F1) || (id >= EARTH_F2 && id < EARTH_F2 + EARTH.moreFeathers.length)).length;
     title = '第二章 · 人間';
     rows = [['解救被蝕晶封住的人', `${nRescued()}/${EARTH.captives.length}`], ['守住人們的燈火', `${nBeacons()}/${EARTH.beacons.length}`],
       ['探索人間，收集光羽', `${ef}/${EARTH.feathers.length + EARTH.moreFeathers.length}`], prog.boss3 ? ['墮天騎士 · 已淨化', '✓'] : ['挑戰：傾城遺跡的墮天騎士', '']];
@@ -1916,6 +2160,7 @@ function flashScreen(a) { const f = $('flash'); f.style.transition = 'none'; f.s
 // minimap
 let mapBase = null;
 function buildMapBase(L) {
+  if (L === 2) return buildHellMapBase();
   const N = L ? 640 : 480, EXT = L ? C.EWORLD : 640, HX = EXT / 2;
   const cv = document.createElement('canvas'); cv.width = cv.height = N;
   const g = cv.getContext('2d');
@@ -1953,7 +2198,24 @@ function buildMapBase(L) {
   g.beginPath(); g.arc(w2c(TEMPLE.x), w2c(TEMPLE.z), (14 / 640) * N, 0, Math.PI * 2); g.stroke();
   return cv;
 }
-function buildMinimapBase() { mapBase = buildMapBase(0); mapBase2 = buildMapBase(1); }
+function buildMinimapBase() { mapBase = buildMapBase(0); mapBase2 = buildMapBase(1); mapBase3 = buildMapBase(2); }
+let mapBase3 = null;
+function buildHellMapBase() {
+  // hell on the map: charred parchment, fire where the floor gives way
+  const N = 360, EXT = C.HWORLD, cv = document.createElement('canvas'); cv.width = cv.height = N;
+  const g = cv.getContext('2d'), img = g.createImageData(N, N), ga = (x, z) => C.groundAtL(x, z, 2) - C.HELL_Y, step = EXT / N;
+  for (let py = 0; py < N; py++) for (let px = 0; px < N; px++) {
+    const wx = C.HCX - EXT / 2 + px * step, wz = C.HCZ - EXT / 2 + py * step, h = ga(wx, wz), i = (py * N + px) * 4;
+    let r, gg, b;
+    if (h < -0.6) { const k = smooth(-0.6, -6, h); r = lerp(214, 240, k); gg = lerp(110, 140, k); b = lerp(70, 60, k); }
+    else { const t = clamp(h / 70, 0, 1), sx = ga(wx + step, wz) - h, sz = ga(wx, wz + step) - h, sh = clamp(1 + (-sx - sz) * 0.04, 0.8, 1.12); r = lerp(92, 52, t) * sh; gg = lerp(78, 44, t) * sh; b = lerp(74, 46, t) * sh; }
+    const c0 = Math.floor(h / 4), c1 = Math.floor(ga(wx + step, wz) / 4), c2 = Math.floor(ga(wx, wz + step) / 4);
+    if (h > 0.5 && (c0 !== c1 || c0 !== c2)) { r = lerp(r, 170, 0.35); gg = lerp(gg, 120, 0.35); b = lerp(b, 90, 0.35); }
+    img.data[i] = r; img.data[i + 1] = gg; img.data[i + 2] = b; img.data[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  return cv;
+}
 function layoutMinimap() {
   const cv = $('mmc'); if (!cv) return;
   const s = cv.clientWidth || 132, pr = Math.min(3, (devicePixelRatio || 1) * (VIEW.s || 1));
@@ -1962,6 +2224,7 @@ function layoutMinimap() {
 }
 function drawDiamond(g, x, y, r, fill, stroke) { g.beginPath(); g.moveTo(x, y - r); g.lineTo(x + r * 0.75, y); g.lineTo(x, y + r); g.lineTo(x - r * 0.75, y); g.closePath(); if (fill) { g.fillStyle = fill; g.fill(); } if (stroke) { g.strokeStyle = stroke; g.lineWidth = 1.4; g.stroke(); } }
 function questTarget() {
+  if (P.inHell) return { x: HELL.pillar.x, z: HELL.pillar.z, kind: 'core' };
   if (P.inEarth) {
     let best = null, bd = 1e9;
     for (const c of captives) if (!c.done) { const d = Math.hypot(c.x - P.pos.x, c.z - P.pos.z); if (d < bd) { bd = d; best = { x: c.x, z: c.z, kind: 'shrine' }; } }
@@ -2001,8 +2264,14 @@ function drawMap(g, size, cx, cz, range, round) {
   g.clearRect(0, 0, size, size);
   if (round) { g.beginPath(); g.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2); g.clip(); }
   if (round) { g.fillStyle = '#dcd7cd'; g.fillRect(0, 0, size, size); }
-  const sky = P.inRealm, earth = P.inEarth, cl = sky ? 's' : earth ? 'e' : 'i';
+  const sky = P.inRealm, earth = P.inEarth, hell = P.inHell, cl = sky ? 's' : hell ? 'h' : earth ? 'e' : 'i';
   if (sky) drawRealmBase(g, toS, s, size, !round);
+  else if (hell) {
+    const [ox, oy] = toS(C.HCX - C.HHALF, C.HCZ - C.HHALF); g.drawImage(mapBase3, ox, oy, C.HWORLD * s, C.HWORLD * s);
+    const u = size / 140;
+    { const [x, y] = toS(HELL.gate.x, HELL.gate.z - 10); g.fillStyle = '#1a1214'; g.strokeStyle = '#ff7a4a'; g.lineWidth = 1.3 * u; g.fillRect(x - 6 * u, y - 7 * u, 12 * u, 9 * u); g.strokeRect(x - 6 * u, y - 7 * u, 12 * u, 9 * u); }
+    if (!round) for (const m of HELL.marks) { const [x, y] = toS(m.x, m.z); g.fillStyle = '#f3dccb'; g.font = `500 ${Math.round(Math.max(11, size / 46))}px "Noto Serif TC", serif`; g.textAlign = 'center'; g.fillText(tr(m.name), x, y + 18 * u); }
+  }
   else if (earth) { const [ox, oy] = toS(-C.EHALF, -C.EHALF); g.drawImage(mapBase2, ox, oy, C.EWORLD * s, C.EWORLD * s); drawEarthPOI(g, toS, s, size); for (const m of EARTH.marks) { const [x, y] = toS(m.x, m.z); g.strokeStyle = 'rgba(155,122,60,0.75)'; g.lineWidth = 1.2; g.beginPath(); g.arc(x, y, Math.max(4, m.r * s * 0.3), 0, 6.3); g.stroke(); if (!round) { g.fillStyle = '#7d6232'; g.font = `500 ${Math.round(Math.max(11, size / 46))}px "Noto Serif TC", serif`; g.textAlign = 'center'; g.fillText(tr(m.name), x, y + Math.max(4, m.r * s * 0.3) + 13); } } }
   else { const [ox, oy] = toS(-320, -320); g.drawImage(mapBase, ox, oy, 640 * s, 640 * s); }
   const u = size / 140;
@@ -2011,15 +2280,15 @@ function drawMap(g, size, cx, cz, range, round) {
   // landmarks
   if (cl === 'i') for (const L of LANDMARKS) { const [x, y] = toS(L.x, L.z); g.fillStyle = 'rgba(250,246,236,0.95)'; g.strokeStyle = '#9b7a3c'; g.lineWidth = 1.2 * u; g.beginPath(); g.arc(x, y, 3.6 * u, 0, 6.3); g.fill(); g.stroke(); g.beginPath(); g.arc(x, y, 5.4 * u, 0, 6.3); g.stroke(); g.fillStyle = '#c29a4c'; g.beginPath(); g.arc(x, y, 1.4 * u, 0, 6.3); g.fill(); }
   // feathers
-  for (const f of feathers) { if (f.taken || !f.seen) continue; f.grp.getWorldPosition(_v); if ((_v.y > 200 ? 's' : _v.y < -350 ? 'e' : 'i') !== cl) continue; const [x, y] = toS(_v.x, _v.z); g.fillStyle = 'rgba(255,253,245,0.95)'; g.strokeStyle = 'rgba(184,146,74,0.9)'; g.lineWidth = 1 * u; g.beginPath(); g.arc(x, y, 1.9 * u, 0, Math.PI * 2); g.fill(); g.stroke(); }
+  for (const f of feathers) { if (f.taken || !f.seen) continue; f.grp.getWorldPosition(_v); if ((_v.y > 200 ? 's' : _v.y < -1200 ? 'h' : _v.y < -350 ? 'e' : 'i') !== cl) continue; const [x, y] = toS(_v.x, _v.z); g.fillStyle = 'rgba(255,253,245,0.95)'; g.strokeStyle = 'rgba(184,146,74,0.9)'; g.lineWidth = 1 * u; g.beginPath(); g.arc(x, y, 1.9 * u, 0, Math.PI * 2); g.fill(); g.stroke(); }
   // shades
-  for (const sh of shades) { if (sh.dead || (sh.realm ? 's' : sh.earth ? 'e' : 'i') !== cl || Math.hypot(sh.pos.x - P.pos.x, sh.pos.z - P.pos.z) > 75) continue; const [x, y] = toS(sh.pos.x, sh.pos.z); g.fillStyle = 'rgba(40,34,48,0.9)'; g.beginPath(); g.arc(x, y, 2.2 * u, 0, Math.PI * 2); g.fill(); }
+  for (const sh of shades) { if (sh.dead || (sh.realm ? 's' : sh.hell ? 'h' : sh.earth ? 'e' : 'i') !== cl || Math.hypot(sh.pos.x - P.pos.x, sh.pos.z - P.pos.z) > 75) continue; const [x, y] = toS(sh.pos.x, sh.pos.z); g.fillStyle = 'rgba(40,34,48,0.9)'; g.beginPath(); g.arc(x, y, 2.2 * u, 0, Math.PI * 2); g.fill(); }
   // shrines
   if (cl === 'i') W.shrines.forEach((sh) => { const [x, y] = toS(sh.def.x, sh.def.z); drawDiamond(g, x, y, 5 * u, sh.lit ? '#e8c776' : 'rgba(250,247,240,0.95)', '#9b7a3c'); if (sh.lit) { g.fillStyle = '#fff8e6'; g.beginPath(); g.arc(x, y, 1.3 * u, 0, 6.3); g.fill(); } });
   // temple star
   if (cl === 'i') { const [x, y] = toS(TEMPLE.x, TEMPLE.z); g.fillStyle = prog.end ? '#f0cf7e' : '#fbf7ee'; g.strokeStyle = '#9b7a3c'; g.lineWidth = 1.2 * u; g.beginPath(); for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2 - Math.PI / 2, r = (i % 2 ? 2.6 : 6.4) * u; g.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r); } g.closePath(); g.fill(); g.stroke(); }
   // boss
-  { const bk = sky ? 'boss2' : earth ? 'boss3' : 'boss', bh = sky ? REALM.bossHome : earth ? EARTH.bossHome : BOSS_HOME; const [x, y] = toS(bh.x, bh.z); g.save(); g.translate(x, y); g.rotate(Math.PI / 4); g.fillStyle = prog[bk] ? '#efe9dc' : '#2a2230'; g.strokeStyle = prog[bk] ? '#9b7a3c' : '#e3b866'; g.lineWidth = 1.4 * u; g.fillRect(-4 * u, -4 * u, 8 * u, 8 * u); g.strokeRect(-4 * u, -4 * u, 8 * u, 8 * u); g.restore(); if (!prog[bk]) { g.fillStyle = '#e3b866'; g.beginPath(); g.arc(x, y, 1.4 * u, 0, 6.3); g.fill(); } }
+  { const bk = sky ? 'boss2' : hell ? 'boss4' : earth ? 'boss3' : 'boss', bh = sky ? REALM.bossHome : hell ? HELL.bossHome : earth ? EARTH.bossHome : BOSS_HOME; const [x, y] = toS(bh.x, bh.z); g.save(); g.translate(x, y); g.rotate(Math.PI / 4); g.fillStyle = prog[bk] ? '#efe9dc' : '#2a2230'; g.strokeStyle = prog[bk] ? '#9b7a3c' : '#e3b866'; g.lineWidth = 1.4 * u; g.fillRect(-4 * u, -4 * u, 8 * u, 8 * u); g.strokeRect(-4 * u, -4 * u, 8 * u, 8 * u); g.restore(); if (!prog[bk]) { g.fillStyle = '#e3b866'; g.beginPath(); g.arc(x, y, 1.4 * u, 0, 6.3); g.fill(); } }
   // quest target
   const qt = questTarget();
   if (qt) {
@@ -2119,7 +2388,7 @@ function openMap() {
   const pr = Math.min(3, (devicePixelRatio || 1) * (VIEW.s || 1));
   cv.width = size * pr; cv.height = size * pr; cv.style.width = cv.style.height = size + 'px';
   const g = cv.getContext('2d'); g.setTransform(pr, 0, 0, pr, 0, 0);
-  if (P.inRealm) drawMap(g, size, REALM.x, REALM.z - 42, 150, false); else if (P.inEarth) drawMap(g, size, 40, -10, 590, false); else drawMap(g, size, 0, -4, 248, false);
+  if (P.inRealm) drawMap(g, size, REALM.x, REALM.z - 42, 150, false); else if (P.inHell) drawMap(g, size, C.HCX, C.HCZ - 55, 200, false); else if (P.inEarth) drawMap(g, size, 40, -10, 590, false); else drawMap(g, size, 0, -4, 248, false);
   const lit = prog.s.filter(Boolean).length;
   $('mapList').innerHTML = SHRINES.map((s, i) => `<li class="${prog.s[i] ? 'lit' : ''}"><i class="dia"></i><span>${s.name}</span><em>${prog.s[i] ? '已點亮' : shadesAlive(i) ? '封印中' : '待點亮'}</em></li>`).join('') +
     `<li class="${prog.end ? 'lit' : ''}"><i class="star">✦</i><span>環光聖所</span><em>${prog.end ? '已甦醒' : lit === 4 ? '可進入' : `${lit}/4`}</em></li>` +
@@ -2136,7 +2405,8 @@ function openMap() {
       `<li><i class="dot"></i><span>晨鐘堡居民</span><em>${4 + nRescued()} 人 · 燈 ${Math.min(EARTH.lamps.n, lampsLit())}</em></li>`;
     void lit;
   }
-  $('mapTitle').innerHTML = P.inEarth ? '人間地圖<small>THE MORTAL WORLD</small>' : P.inRealm ? '天上神域<small>THE EMPYREAN</small>' : '聖域地圖<small>THE REALM</small>';
+  if (P.inHell) $('mapList').innerHTML = `<li class="${prog.boss4 ? 'lit' : ''}"><i class="dia"></i><span>冥門守衛</span><em>${prog.boss4 ? '已淨化' : '極度危險'}</em></li><li><i class="star">✦</i><span>冥門</span><em>封印中</em></li><li><i class="dot"></i><span>墜落之地</span><em>光柱 · 返回人間</em></li>`;
+  $('mapTitle').innerHTML = P.inHell ? '地獄<small>THE ABYSS</small>' : P.inEarth ? '人間地圖<small>THE MORTAL WORLD</small>' : P.inRealm ? '天上神域<small>THE EMPYREAN</small>' : '聖域地圖<small>THE REALM</small>';
   $('mapHint').textContent = `已發現的光羽會標示在地圖上 · ${feathers.filter((f) => f.seen && !f.taken).length} 根待拾取`;
   Audio.sfx('ui');
 }
@@ -2343,7 +2613,7 @@ function setupMenus() {
   document.querySelectorAll('[data-q]').forEach((b) => b.addEventListener('click', () => { settings.quality = b.dataset.q; store.set('lumenfall_settings', settings); applyQuality(); syncSettingsUI(); Audio.sfx('ui'); }));
   $('sndToggle').addEventListener('click', toggleSound);
   $('bCodex').addEventListener('click', (e) => { e.stopPropagation(); openCodex(); });
-  $('codexList').addEventListener('click', (e) => { const li = e.target.closest('li'); if (!li) return; codexSel = +li.dataset.i; renderCodex(); Audio.sfx('ui'); });
+  $('codexList').addEventListener('click', (e) => { const li = e.target.closest('li'); if (!li || li.dataset.i === undefined) return; codexSel = +li.dataset.i; renderCodex(); Audio.sfx('ui'); });
   document.querySelectorAll('[data-lang]').forEach((b) => b.addEventListener('click', () => { settings.lang = b.dataset.lang; store.set('lumenfall_settings', settings); setLang(settings.lang); syncSettingsUI(); Audio.sfx('ui'); }));
   document.querySelectorAll('[data-sens]').forEach((b) => b.addEventListener('click', () => { settings.sens = +b.dataset.sens; store.set('lumenfall_settings', settings); syncSettingsUI(); Audio.sfx('ui'); }));
   $('camToggle').addEventListener('click', () => { settings.autoCam = !settings.autoCam; store.set('lumenfall_settings', settings); syncSettingsUI(); Audio.sfx('ui'); });
@@ -2375,9 +2645,10 @@ function setupMenus() {
       updateLvHUD(); updateQuest(); closeOverlays(); return;
     }
     closeOverlays();
-    if (k === 'realm') { P.pos.copy(REALM.landing); P.inRealm = true; P.inEarth = false; prog.realm = true; save(); regionCard('天上神域', 'THE EMPYREAN'); }
-    else if (k === 'earth') { P.pos.set(EARTH.landing.x, C.groundAtL(EARTH.landing.x, EARTH.landing.z, 1) + 0.5, EARTH.landing.z); P.inEarth = true; P.inRealm = false; prog.earth = true; save(); syncLayer(); regionCard('人間', 'THE MORTAL WORLD'); }
-    else { P.pos.set(SPAWN.x, 0, SPAWN.z); P.inRealm = false; P.inEarth = false; syncLayer(); regionCard('鏡湖', 'THE MIRROR LAKE'); }
+    if (k === 'realm') { P.pos.copy(REALM.landing); P.inRealm = true; P.inEarth = false; P.inHell = false; prog.realm = true; save(); regionCard('天上神域', 'THE EMPYREAN'); }
+    else if (k === 'hell') { P.pos.copy(HELL.landing); P.inHell = true; P.inEarth = false; P.inRealm = false; prog.earth = true; prog.hell = true; save(); syncLayer(); regionCard('地獄 · 冥門前庭', 'THE ABYSSAL THRESHOLD'); }
+    else if (k === 'earth') { P.pos.set(EARTH.landing.x, C.groundAtL(EARTH.landing.x, EARTH.landing.z, 1) + 0.5, EARTH.landing.z); P.inEarth = true; P.inRealm = false; P.inHell = false; prog.earth = true; save(); syncLayer(); regionCard('人間', 'THE MORTAL WORLD'); }
+    else { P.pos.set(SPAWN.x, 0, SPAWN.z); P.inRealm = false; P.inEarth = false; P.inHell = false; syncLayer(); regionCard('鏡湖', 'THE MIRROR LAKE'); }
     P.vel.set(0, 0, 0); P.safe.copy(P.pos); P.checkpoint.copy(P.pos); P.glide = false; flashScreen(0.8); updateQuest();
   }));
   document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => { closeOverlays(); Audio.sfx('ui'); }));
@@ -2452,7 +2723,7 @@ function placeTitleHalo() {
 // ------------------------------------------------------------------ layers: island (0) / human world (1)
 let mapBase2 = null;
 function syncLayer() {
-  const want = P.pos.y < -350 ? 1 : 0;
+  const want = P.pos.y < -1200 ? 2 : P.pos.y < -350 ? 1 : 0;
   if (C.LAYER.cur === want) return;
   C.LAYER.cur = want;
   for (const gm of W.grassMats) {
@@ -2460,10 +2731,68 @@ function syncLayer() {
     if (gm.uniforms.uGrid) gm.uniforms.uGrid.value.set(want ? C.EHALF : C.HALF, want ? C.ESEG / C.EWORLD : C.SEG / C.WORLD, want ? C.EGN : C.GN);
   }
   if (EARTH.root) EARTH.root.visible = want === 1;
+  if (ATM) setTimeout(() => updateAtmos(0, true), 0);
+  if (HELL.root) HELL.root.visible = want === 2;
+  W.sky.visible = want !== 2;
+  if (W.motes) W.motes.visible = want !== 2;
+  if (W.drift) W.drift.im.visible = want !== 2;
   currentRegion = '';
 }
-const waterAt = (x, z) => (C.LAYER.cur ? (z < SEA_NORTH ? -999 : C.EARTH_Y) : Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r * 1.3 ? 0 : -999);
+const waterAt = (x, z) => (C.LAYER.cur === 2 ? -1e9 : C.LAYER.cur ? (z < SEA_NORTH ? -1e9 : C.EARTH_Y) : Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r * 1.3 ? 0 : -1e9); // -1e9: no water here
 
+
+// ------------------------------------------------------------------ atmosphere: every layer, and every corner of the mortal world, has its own light
+// A palette = sky (horizon/mid/zenith), fog, sun, sky/ground fill, colour grade, exposure, grass. The isle's own look is captured at load;
+// the rest are written relative to it, and the live palette eases toward whatever the seraph is standing in.
+const PAL = {};
+let ATM = null;
+const palKeys = ['hor', 'mid', 'zen', 'fog', 'sun', 'hs', 'hg', 'gB', 'gT'];
+function mkPal(base, o) {
+  const p = { dens: o.dens ?? base.dens, sunI: o.sunI ?? base.sunI, hI: o.hI ?? base.hI, exp: o.exp ?? base.exp, tint: new THREE.Vector3(...(o.tint || [base.tint.x, base.tint.y, base.tint.z])) };
+  for (const k of palKeys) p[k] = o[k] ? new THREE.Color(o[k]) : base[k].clone();
+  return p;
+}
+function copyPal(d, a) { for (const k of palKeys) d[k].copy(a[k]); d.dens = a.dens; d.sunI = a.sunI; d.hI = a.hI; d.exp = a.exp; d.tint.copy(a.tint); return d; }
+function lerpPal(d, b, t) { if (t <= 0.001) return d; for (const k of palKeys) d[k].lerp(b[k], t); d.dens += (b.dens - d.dens) * t; d.sunI += (b.sunI - d.sunI) * t; d.hI += (b.hI - d.hI) * t; d.exp += (b.exp - d.exp) * t; d.tint.lerp(b.tint, t); return d; }
+function captureAtmos() {
+  const gm = W.grassMats[0].uniforms;
+  const isle = { hor: COL.hor.clone(), mid: COL.mid.clone(), zen: COL.zen.clone(), fog: scene.fog.color.clone(), dens: scene.fog.density, sun: W.sun.color.clone(), sunI: W.sun.intensity,
+    hs: W.hemi.color.clone(), hg: W.hemi.groundColor.clone(), hI: W.hemi.intensity, tint: new THREE.Vector3(), exp: 0.86, gB: gm.uBase.value.clone(), gT: gm.uTip.value.clone() };
+  PAL.isle = isle;
+  PAL.realm = mkPal(isle, { exp: 0.74 });
+  // the mortal world: warmer, earthier, a low golden haze
+  PAL.earth = mkPal(isle, { hor: '#ead9b9', mid: '#c5cdc9', zen: '#6b8db8', fog: '#e0d2b6', dens: 0.0019, sun: '#ffd29a', sunI: 2.55, hs: '#dfe3e2', hg: '#8a7a50', hI: 0.62, tint: [0.02, 0.006, -0.022], exp: 0.88, gB: '#36532a', gT: '#a6b65a' });
+  PAL.swamp = mkPal(isle, { hor: '#aab39a', mid: '#98a291', zen: '#5d6f6c', fog: '#959c86', dens: 0.0042, sun: '#d6d3a8', sunI: 1.55, hs: '#b8c0a8', hg: '#4c4a32', hI: 0.55, tint: [-0.012, 0.012, -0.02], exp: 0.84, gB: '#2c3f24', gT: '#7d8a48' });
+  PAL.frost = mkPal(isle, { hor: '#e7eef3', mid: '#c9d9e7', zen: '#5f8cc4', fog: '#e2eaf0', dens: 0.0024, sun: '#f6f3ea', sunI: 2.6, hs: '#eef2f6', hg: '#9aa0a8', tint: [-0.02, 0.0, 0.03], exp: 0.86, gB: '#3e5a40', gT: '#b7c79a' });
+  PAL.rift = mkPal(isle, { hor: '#d9b29a', mid: '#ad8f86', zen: '#5c4a5e', fog: '#be9682', dens: 0.0028, sun: '#ffae7a', sunI: 2.0, hs: '#d8b8a8', hg: '#5a3a2c', hI: 0.55, tint: [0.035, -0.01, -0.025], exp: 0.86, gB: '#3e4a2a', gT: '#a09a58' });
+  PAL.coast = mkPal(isle, { hor: '#e3ecec', mid: '#bad3df', zen: '#578bc6', fog: '#d9e5e7', dens: 0.0016, sun: '#fff1d6', sunI: 2.6, tint: [-0.01, 0.0, 0.018], exp: 0.88 });
+  PAL.hell = mkPal(isle, { hor: '#5a1a10', mid: '#2a0c0a', zen: '#0a0405', fog: '#3a140d', dens: 0.0052, sun: '#ff7a3a', sunI: 1.15, hs: '#5a1e12', hg: '#ff5a20', hI: 0.5, tint: [0.05, -0.015, -0.03], exp: 1.0 });
+  ATM = { cur: mkPal(isle, {}), tgt: mkPal(isle, {}) };
+}
+function atmosTarget() {
+  const t = ATM.tgt, L = C.LAYER.cur;
+  if (L === 2) return copyPal(t, PAL.hell);
+  if (L === 0) return copyPal(t, P.pos.y > 200 ? PAL.realm : PAL.isle);
+  const x = P.pos.x, z = P.pos.z;
+  copyPal(t, PAL.earth);
+  lerpPal(t, PAL.coast, smooth(360, 470, x) * (1 - smooth(200, 330, Math.abs(z - 130))));
+  lerpPal(t, PAL.frost, 1 - smooth(110, 240, Math.hypot(x - 350, z + 360)));
+  lerpPal(t, PAL.swamp, 1 - smooth(0.7, 1.25, Math.hypot(x - EARTH_EP.swamp.x, z - EARTH_EP.swamp.z) / EARTH_EP.swamp.r));
+  lerpPal(t, PAL.rift, (1 - smooth(40, 150, Math.abs(z - riftZ(x)))) * smooth(-400, -330, x) * (1 - smooth(290, 350, x)));
+  return t;
+}
+function updateAtmos(dt, snap) {
+  if (!ATM) return;
+  const tgt = atmosTarget(), c = ATM.cur;
+  if (snap) copyPal(c, tgt); else lerpPal(c, tgt, 1 - Math.exp(-dt * 1.4));
+  COL.hor.copy(c.hor); COL.mid.copy(c.mid); COL.zen.copy(c.zen);
+  scene.fog.color.copy(c.fog); scene.fog.density = c.dens;
+  W.sun.color.copy(c.sun); W.sun.intensity = c.sunI;
+  W.hemi.color.copy(c.hs); W.hemi.groundColor.copy(c.hg); W.hemi.intensity = c.hI;
+  grade.uniforms.uTint.value.copy(c.tint);
+  renderer.toneMappingExposure = c.exp;
+  for (const gm of W.grassMats) { if (gm.uniforms.uBase) gm.uniforms.uBase.value.copy(c.gB); if (gm.uniforms.uTip) gm.uniforms.uTip.value.copy(c.gT); }
+}
 // ------------------------------------------------------------------ loop
 function sampleDyn() {
   if (!dyn.on || paused || document.hidden || !(state === 'play' || state === 'landing')) { dyn.last = 0; return; }
@@ -2518,14 +2847,15 @@ function frame() {
   CLOUD.value += dt;
   { // god rays: only when the camera looks roughly toward the sun
     camera.getWorldDirection(_v); const face = _v.dot(sunDir);
-    const amt = Q.bloom ? smooth(0.35, 0.85, face) * 0.22 : 0;
+    const amt = Q.bloom && C.LAYER.cur !== 2 ? smooth(0.35, 0.85, face) * 0.22 : 0;
     rays.enabled = amt > 0.01;
     if (rays.enabled) { _v.copy(camera.position).addScaledVector(sunDir, 800).project(camera); rays.uniforms.uSun.value.set(_v.x * 0.5 + 0.5, _v.y * 0.5 + 0.5); rays.uniforms.uAmt.value = amt; }
   }
   updateAmbient(time, dt, _p.set(P.pos.x, P.pos.y, P.pos.z));
   for (const gm of W.grassMats) { gm.uniforms.uCenter.value.copy(P.pos); gm.uniforms.uPlayer.value.copy(P.pos); }
-  renderer.toneMappingExposure = damp(renderer.toneMappingExposure, P.pos.y > 200 ? 0.74 : 0.86, 2, dt);
-  { const low = P.pos.y < 170, isle = low && C.LAYER.cur === 0; W.grass.visible = W.flowers.visible = low; if (Q.refl) { W.water.reflector.visible = isle; W.water.simple.visible = !isle; } }
+  updateAtmos(dt, false);
+  if (C.LAYER.cur === 2 && HELL.sky) HELL.sky.position.copy(camera.position);
+  { const low = P.pos.y < 170, isle = low && C.LAYER.cur === 0; W.grass.visible = W.flowers.visible = low && C.LAYER.cur !== 2; if (Q.refl) { W.water.reflector.visible = isle; W.water.simple.visible = !isle; } }
   W.sun.position.copy(P.pos).addScaledVector(sunDir, 120);
   W.sun.target.position.copy(P.pos);
   if (state === 'play' || state === 'ending' || state === 'trans') updateHUD(dt);
@@ -2541,11 +2871,12 @@ async function init() {
   setLoad(0.08, '光正在匯聚…');
   await wait();
   C.makeTextures();
-  C.buildGrid(); buildEarthGrid();
+  C.buildGrid(); buildEarthGrid(); buildHellGrid();
   setLoad(0.35, '大地自雲海中升起…');
   await wait();
   buildWorld(scene, renderer, Q);
   buildEarth(scene);
+  buildHell(scene);
   setLoad(0.65, '聖所的光環正在轉動…');
   await wait();
   buildPlayer();
@@ -2576,9 +2907,10 @@ async function init() {
   await wait();
   // compile every shader up front (the human world too), asynchronously where the browser allows it,
   // so the page stays responsive here and dropping into the world below doesn't hitch
-  EARTH.root.visible = true;
+  EARTH.root.visible = HELL.root.visible = true;
   try { if (renderer.compileAsync) await renderer.compileAsync(scene, camera); else renderer.compile(scene, camera); } catch (e) { try { renderer.compile(scene, camera); } catch (_) {} }
-  EARTH.root.visible = false;
+  EARTH.root.visible = HELL.root.visible = false;
+  captureAtmos();
   setLoad(1);
   state = 'landing';
   clock.getDelta();
@@ -2590,4 +2922,4 @@ addEventListener('resize', resize);
 addEventListener('orientationchange', () => setTimeout(resize, 250));
 document.addEventListener('visibilitychange', () => { if (Audio.ctx) { if (document.hidden) Audio.ctx.suspend(); else Audio.ctx.resume(); } });
 init().catch((e) => { console.error(e); $('loadMsg').textContent = '載入失敗：' + e.message; });
-window.__LF = { sites: () => ({ captives, beacons, folk }), kill: (sh) => killShade(sh), interact: () => doInteract(), dyn: () => ({ ...dyn, pr: renderer.getPixelRatio() }), levelUp: (n) => levelUp(n), showPower: (k) => showPower(k), breakables, equipWeapon: (w) => equipWeapon(w), calls: () => { renderer.info.autoReset = false; renderer.info.reset(); composer.render(0.016); const r = { ...renderer.info.render }; renderer.info.autoReset = true; return r; }, pause: (b) => (paused = b), FX, slow: () => (DT_MAX = 0.05), act: { attackDown, attackUp, lightAttack, doLock, doHeal, startAttack, perfectDodge, doAttack, doJump, doSkill, doDodge, doInteract, openMap, openSettings, damageShade, regionCard, toast }, fast: () => (DT_MAX = 0.25), THREE, scene, composer, q: (o) => { Object.assign(QUAL[settings.quality], o); applyQuality(); }, P, CAM, W, hero: () => hero, boss: () => boss, state: () => state, prog, shades, feathers, setState: (s) => (state = s), camera, renderer };
+window.__LF = { layer: () => C.LAYER.cur, hell: () => HELL, sites: () => ({ captives, beacons, folk }), kill: (sh) => killShade(sh), interact: () => doInteract(), dyn: () => ({ ...dyn, pr: renderer.getPixelRatio() }), levelUp: (n) => levelUp(n), showPower: (k) => showPower(k), breakables, equipWeapon: (w) => equipWeapon(w), calls: () => { renderer.info.autoReset = false; renderer.info.reset(); composer.render(0.016); const r = { ...renderer.info.render }; renderer.info.autoReset = true; return r; }, pause: (b) => (paused = b), FX, slow: () => (DT_MAX = 0.05), act: { attackDown, attackUp, lightAttack, doLock, doHeal, startAttack, perfectDodge, doAttack, doJump, doSkill, doDodge, doInteract, openMap, openSettings, damageShade, regionCard, toast }, fast: () => (DT_MAX = 0.25), THREE, scene, composer, q: (o) => { Object.assign(QUAL[settings.quality], o); applyQuality(); }, P, CAM, W, hero: () => hero, boss: () => boss, state: () => state, prog, shades, feathers, setState: (s) => (state = s), camera, renderer };

@@ -559,7 +559,7 @@ export function buildEarth(scene) {
   }
 
   // ---- updrafts (visuals are made by the world's updraft builder pattern)
-  { const ux = COLO.x + 30, uz = riftZ(COLO.x + 30) + riftW(COLO.x + 30) + 12; EARTH.updrafts.push({ x: ux, z: uz, top: Y + 76, g: gA(ux, uz) }); }
+  { const ux = COLO.x + 30, uz = riftZ(COLO.x + 30) + riftW(COLO.x + 30) + 12; EARTH.updrafts.push({ x: ux, z: uz, top: Y + 76, g: gA(ux, uz) }); EARTH.riftRim = new THREE.Vector3(ux - 8, gA(ux - 8, uz + 8) + 0.5, uz + 8); }
   for (const u of EARTH.updrafts) {
     const h = u.top - u.g;
     const m = new THREE.ShaderMaterial({
@@ -611,18 +611,19 @@ export function buildEarth(scene) {
 
   // ---- miasma beasts roaming the land
   const foe = (x, z, t = 'melee') => EARTH.enemies.push([x, z, t]);
-  [[60, 92], [118, 150], [-90, 140], [-60, 60], [-130, 40, 'archer'], [20, 120], [45, 212, 'archer'], [-100, -100], [-160, -150], [-140, -190, 'archer'],
-    [122, -86], [178, -132], [-40, -80], [80, -40, 'archer'], [240, -200], [260, -160, 'archer'], [-250, -80], [-280, 20], [350, 40], [300, 120, 'archer'],
-    [-200, 400], [-260, 350, 'archer'], [150, -300], [-60, -330], [30, -360, 'archer'], [-420, -60], [400, 420], [-430, 330]].forEach(([x, z, t]) => foe(x, z, t));
+  [[60, 92], [118, 150, 'charger'], [-90, 140], [-60, 60, 'bomber'], [-130, 40, 'archer'], [20, 120], [45, 212, 'archer'], [-100, -100, 'charger'], [-160, -150], [-140, -190, 'archer'],
+    [122, -86], [178, -132, 'bomber'], [-40, -80], [80, -40, 'archer'], [240, -200, 'charger'], [260, -160, 'archer'], [-250, -80], [-280, 20, 'bomber'], [350, 40], [300, 120, 'archer'],
+    [-200, 400], [-260, 350, 'archer'], [150, -300, 'charger'], [-60, -330], [30, -360, 'archer'], [-420, -60, 'bomber'], [400, 420], [-430, 330, 'charger'],
+    [-380, 60, 'bomber'], [-420, 180, 'bomber'], [-30, -250, 'charger'], [210, 30, 'bomber']].forEach(([x, z, t]) => foe(x, z, t));
 
   // ---- the people: sealed in crystal, or holding a light against the dark
   EARTH.captives = [
-    { id: 'cSwampA', x: -420, z: 92, guards: [[6, 4], [-5, 6], [2, -8, 'archer']], line: '……光？是天上的光嗎？' },
+    { id: 'cSwampA', x: -420, z: 92, guards: [[6, 4, 'bomber'], [-5, 6], [2, -8, 'archer']], line: '……光？是天上的光嗎？' },
     { id: 'cSwampB', x: -352, z: 192, guards: [[6, -3], [-6, -4]], line: '我的燈……我以為再也點不著了。' },
     { id: 'cWood', x: -262, z: 214, guards: [[5, 5], [-6, 2, 'archer']], line: '森林一直在低語，叫我不要睡著。' },
     { id: 'cField', x: 128, z: 236, guards: [[6, 2], [-4, -6]], line: '天使大人……您不是來懲罰我們的吧？' },
-    { id: 'cRuins', x: -214, z: -168, guards: [[6, 4], [-6, 3], [0, -8, 'archer']], line: '騎士長倒下那天，我們就再沒見過光。' },
-    { id: 'cRift', x: 74, z: -396, guards: [[6, 5], [-6, 4], [3, -7, 'archer']], line: '裂谷裡……有東西在叫我的名字。' },
+    { id: 'cRuins', x: -214, z: -168, guards: [[6, 4, 'charger'], [-6, 3], [0, -8, 'archer']], line: '騎士長倒下那天，我們就再沒見過光。' },
+    { id: 'cRift', x: 74, z: -396, guards: [[6, 5, 'charger'], [-6, 4, 'bomber'], [3, -7, 'archer']], line: '裂谷裡……有東西在叫我的名字。' },
   ];
   for (const cp of EARTH.captives) cp.y = gA(cp.x, cp.z);
   EARTH.beacons = [

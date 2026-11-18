@@ -534,6 +534,14 @@ body.boss #siegeBar{top:calc(var(--st) + 58px)}
 body.siege #toasts{top:calc(var(--st) + 50px)} body.siege.boss #toasts{top:calc(var(--st) + 96px)}
 .toast .say{font-style:normal;letter-spacing:.14em;color:#4a3b22}
 html.desk #siegeBar{width:min(420px,calc(var(--vw)*34))}
+
+/* codex: groups + scroll; resisted hits */
+#codexList{max-height:min(62vh,440px);overflow:auto;padding-right:4px}
+html.desk #codexList{max-height:calc(var(--vh)*62)}
+#codexList li.grp{display:block;padding:10px 6px 4px;border:0;font:600 9.5px var(--cin);letter-spacing:.3em;color:var(--gold-d);cursor:default}
+#codexList li.grp:first-child{padding-top:2px}
+.dn.resist{font-size:11px;color:#b9b0a6;text-shadow:0 0 4px rgba(40,20,20,.9)}
+.dn.block{font-size:12px;color:#c9c2ff;text-shadow:0 0 6px rgba(80,60,160,.9)}
 </style>
 <script>
 (() => {
@@ -667,7 +675,7 @@ html.desk #siegeBar{width:min(420px,calc(var(--vw)*34))}
     </nav>
   </div>
   <div id="tapHint"><span class="c t-only">觸碰開始</span><span class="e t-only">TAP TO BEGIN</span><span class="c d-only">點擊或按任意鍵開始</span><span class="e d-only">PRESS ANY KEY</span></div>
-  <div class="corner bl">PROTOTYPE · v0.7 · 人間</div>
+  <div class="corner bl">PROTOTYPE · v0.8 · 地獄</div>
   <div class="corner br t-only">MOBILE · LANDSCAPE</div><div class="corner br d-only">DESKTOP · KEYBOARD &amp; MOUSE</div>
 </div>
 
@@ -703,7 +711,7 @@ html.desk #siegeBar{width:min(420px,calc(var(--vw)*34))}
     <div class="row"><div class="k">鏡頭自動跟隨<small>AUTO CAMERA</small></div><button class="tog" id="camToggle"><em>關閉</em><i></i></button></div>
     <div class="row"><div class="k">角色模型<small>CHARACTER MODEL</small></div><div class="glb"><label class="lbtn" for="glbIn"><span>上載 GLB</span><small>UPLOAD</small></label><input type="file" id="glbIn" accept=".glb,.gltf" hidden><button class="lbtn" id="glbReset"><span>還原</span></button></div></div>
     <p class="mini" id="glbStat">支援 Mixamo 標準骨架嘅人形模型（例如 Tripo 綁骨後匯出嘅 GLB）。</p>
-    <div class="row devrow"><div class="k">測試工具<small>PROTOTYPE ONLY</small></div><div class="seg"><button data-dev="realm">去神域</button><button data-dev="earth">去人間</button><button data-dev="isle">回鏡湖</button><button data-dev="feather">光羽 +3</button></div></div>
+    <div class="row devrow"><div class="k">測試工具<small>PROTOTYPE ONLY</small></div><div class="seg"><button data-dev="realm">去神域</button><button data-dev="earth">去人間</button><button data-dev="hell">去地獄</button><button data-dev="isle">回鏡湖</button><button data-dev="feather">光羽 +3</button></div></div>
     <p class="mini" id="devStat">方便試玩用：直接傳送，或者即刻拎 3 根光羽試升 Lv。</p>
     <div class="btns">
       <button class="lbtn" id="resetProg"><span>重置旅程進度</span><small>RESET</small></button>

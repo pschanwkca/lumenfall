@@ -48,8 +48,11 @@ export function installFog(sunDir) {
       float fogFactor = smoothstep(fogNear, fogFar, vFogDepth);
     #endif
     float sunA = pow(max(dot(fDir, ${S}), 0.0), 5.0);
-    vec3 fc = mix(fogColor, ${lin('#ffe1b0')}, sunA * 0.7);
-    fc = mix(fc, ${lin('#9fbadc')}, (1.0 - sunA) * smoothstep(0.02, 0.4, fDir.y) * 0.5);
+    // daylight layers: warm sun glow + sky-blue overhead. Dark (hell) fog: the glow turns to ember and the sky tint drops out.
+    float fogDay = smoothstep(0.03, 0.12, dot(fogColor, vec3(0.2126, 0.7152, 0.0722)));
+    vec3 glow = mix(min(fogColor * vec3(3.4, 2.0, 1.3), vec3(1.0)), ${lin('#ffe1b0')}, fogDay);
+    vec3 fc = mix(fogColor, glow, sunA * 0.7);
+    fc = mix(fc, ${lin('#9fbadc')}, (1.0 - sunA) * smoothstep(0.02, 0.4, fDir.y) * 0.5 * fogDay);
     #ifdef FOG_SCALE
       fogFactor *= FOG_SCALE; // landmarks that should read through the haze
     #endif

@@ -136,8 +136,19 @@ export const LAYER = { cur: 0 };
 // the human world is a larger grid of its own: 1.28 km square at 4 m cells
 export const EWORLD = 1280, EHALF = 640, ESEG = 320, EGN = ESEG + 1, ECELL = EWORLD / ESEG;
 export const grid2 = { h: new Float32Array(EGN * EGN), mask: new Float32Array(EGN * EGN), flower: new Float32Array(EGN * EGN), wheat: new Float32Array(EGN * EGN) };
+// hell (layer 2): a 480 m cavern floor far below the rift, centred under it
+export const HELL_Y = -1600, HWORLD = 480, HHALF = 240, HSEG = 120, HGN = HSEG + 1, HCELL = HWORLD / HSEG, HCX = 0, HCZ = -480;
+export const grid3 = { h: new Float32Array(HGN * HGN) };
 // triangle interpolation identical to PlaneGeometry's split; L = 0 island (y 0), L = 1 human world (y EARTH_Y)
 export function groundAtL(x, z, L) {
+  if (L === 2) {
+    const fx = (x - HCX + HHALF) / HCELL, fz = (z - HCZ + HHALF) / HCELL;
+    if (fx < 0 || fz < 0 || fx >= HSEG || fz >= HSEG) return HELL_Y - 100;
+    const ix = Math.floor(fx), iz = Math.floor(fz), u = fx - ix, v = fz - iz, H = grid3.h;
+    const h00 = H[iz * HGN + ix], h10 = H[iz * HGN + ix + 1], h01 = H[(iz + 1) * HGN + ix], h11 = H[(iz + 1) * HGN + ix + 1];
+    if (u + v <= 1) return HELL_Y + h00 + (h10 - h00) * u + (h01 - h00) * v;
+    return HELL_Y + h11 + (h01 - h11) * (1 - u) + (h10 - h11) * (1 - v);
+  }
   const half = L ? EHALF : HALF, cell = L ? ECELL : CELL, seg = L ? ESEG : SEG, gn = L ? EGN : GN;
   const fx = (x + half) / cell, fz = (z + half) / cell;
   const base = L ? EARTH_Y : 0;
@@ -151,6 +162,7 @@ export function groundAtL(x, z, L) {
 }
 export function groundAt(x, z) { return groundAtL(x, z, LAYER.cur); }
 export function maskAt(x, z) {
+  if (LAYER.cur === 2) return 0;
   if (LAYER.cur) { const ix = clamp(Math.round((x + EHALF) / ECELL), 0, ESEG), iz = clamp(Math.round((z + EHALF) / ECELL), 0, ESEG); return grid2.mask[iz * EGN + ix]; }
   const ix = clamp(Math.round((x + HALF) / CELL), 0, SEG), iz = clamp(Math.round((z + HALF) / CELL), 0, SEG);
   return grid.mask[iz * GN + ix];

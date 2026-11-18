@@ -1316,7 +1316,7 @@ function buildRealm(scene, R, marble, gold, goldGlow) {
       const c = deco(new THREE.Mesh(W.canopyGeo, leaf)); c.scale.setScalar(2.2 + R()); c.position.set(x, G0.top + H + 0.6, z); c.castShadow = true;
       colliders.solids.push({ x, z, r: 0.5, y0: G0.top - 1, y1: G0.top + H });
     }
-    C.enemies.push([G0.x - 4, G0.top, G0.z + 5, 'melee', G0], [G0.x + 5, G0.top, G0.z - 4, 'melee', G0], [G0.x + 2, G0.top, G0.z + 10, 'archer', G0]);
+    C.enemies.push([G0.x - 4, G0.top, G0.z + 5, 'guard', G0], [G0.x + 5, G0.top, G0.z - 4, 'melee', G0], [G0.x + 2, G0.top, G0.z + 10, 'archer', G0]);
   }
   // ---- starlit pool: a mirror disc, crystals and a rising wind to the zenith
   {
@@ -1325,7 +1325,7 @@ function buildRealm(scene, R, marble, gold, goldGlow) {
     pool.rotation.x = -Math.PI / 2; pool.position.set(P0.x, P0.top + 0.04, P0.z);
     const lip = deco(new THREE.Mesh(new THREE.TorusGeometry(P0.r * 0.56, 0.18, 6, 80), goldGlow)); lip.rotation.x = Math.PI / 2; lip.position.set(P0.x, P0.top + 0.08, P0.z);
     W.crystalMin = P0.r * 0.42; W.addCrystals(P0.x, P0.z, 10, P0.r * 0.16, P0.top); W.crystalMin = 0;
-    C.enemies.push([P0.x - 6, P0.top, P0.z - 6, 'melee', P0], [P0.x + 6, P0.top, P0.z + 5, 'melee', P0]);
+    C.enemies.push([P0.x - 6, P0.top, P0.z - 6, 'melee', P0], [P0.x + 6, P0.top, P0.z + 5, 'caster', P0]);
     const S0 = by.summit, dx = S0.x - P0.x, dz = S0.z - P0.z, dd = Math.hypot(dx, dz);
     const ux = P0.x + (dx / dd) * 9, uz = P0.z + (dz / dd) * 9, top = S0.top + 7, h = top - P0.top;
     const m = new THREE.ShaderMaterial({
@@ -1357,7 +1357,7 @@ function buildRealm(scene, R, marble, gold, goldGlow) {
     const capg = deco(shadowy(new THREE.Mesh(new THREE.ConeGeometry(5.4, 4, 4), marble))); capg.position.set(B0.x - 0.6, B0.top + H + 1.6, B0.z - 0.6); capg.rotation.set(0.12, Math.PI / 4, 0.06);
     const bellG = new THREE.LatheGeometry([[0, 0], [1.9, 0.1], [1.75, 0.6], [1.25, 1.6], [1.05, 2.6], [0.6, 3.0], [0, 3.05]].map(([x, y]) => new THREE.Vector2(x, y)), 32);
     const bell = deco(shadowy(new THREE.Mesh(bellG, gold))); bell.position.set(B0.x, B0.top + 13.6, B0.z);
-    C.enemies.push([B0.x - 7, B0.top, B0.z + 4, 'melee', B0], [B0.x + 6, B0.top, B0.z - 6, 'archer', B0]);
+    C.enemies.push([B0.x - 7, B0.top, B0.z + 4, 'guard', B0], [B0.x + 6, B0.top, B0.z - 6, 'archer', B0]);
   }
   // ---- celestial archive: standing tablets of light
   {
@@ -1374,7 +1374,7 @@ function buildRealm(scene, R, marble, gold, goldGlow) {
     const lect = deco(shadowy(new THREE.Mesh(new THREE.CylinderGeometry(0.7, 1.0, 1.4, 16), marble))); lect.position.set(A0.x, A0.top + 0.7, A0.z);
     const book = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.18, 1.0), goldGlow); book.position.set(A0.x, A0.top + 2.1, A0.z); anim.add(book); halos.push(book);
     colliders.solids.push({ x: A0.x, z: A0.z, r: 1.1, y0: A0.top - 1, y1: A0.top + 2.5 });
-    C.enemies.push([A0.x - 3, A0.top, A0.z + 3, 'melee', A0], [A0.x + 4, A0.top, A0.z - 2, 'melee', A0], [A0.x, A0.top, A0.z - 6, 'archer', A0]);
+    C.enemies.push([A0.x - 3, A0.top, A0.z + 3, 'melee', A0], [A0.x + 4, A0.top, A0.z - 2, 'guard', A0], [A0.x, A0.top, A0.z - 6, 'caster', A0]);
   }
   // ---- ring of judgement: the arena
   {
