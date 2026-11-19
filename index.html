@@ -862,6 +862,36 @@ html.desk #qMark b{font-size:10px;top:12px}
 #clash .bar i{position:absolute;left:1px;top:1px;bottom:1px;right:1px;transform-origin:left;background:linear-gradient(90deg,#e3a24a,#fff0c4);box-shadow:0 0 10px rgba(255,200,120,.9)}
 #clash .h{font:500 11px var(--serif);letter-spacing:.3em;color:#ffe6b0;text-shadow:0 1px 2px rgba(40,28,10,.9);animation:breathe .5s infinite}
 #bLock.focus{box-shadow:0 0 0 2px #ffcf8a,0 0 16px rgba(255,190,110,.9)!important}
+
+/* ---- review fixes v1.7 */
+/* title: the ring sits round the hero, clear of the logo; the start hint lives in the title column on landscape */
+#haloUI{width:min(78vh,540px);height:min(78vh,540px)}
+@media (orientation:landscape){
+  #tapHint{left:calc(var(--sl) + 6vw);transform:none;bottom:calc(var(--sb) + 17vh);align-items:flex-start;text-align:left}
+  #tapHint .c,#tapHint .e{padding-left:0}
+}
+html.desk #tapHint{left:calc(var(--sl) + var(--vw)*6);bottom:calc(var(--vh)*9)}
+.tag{color:#5e5446}
+/* stamina reads cool, hp warm: they no longer look like one bar twice */
+#stw i{background:linear-gradient(90deg,#9fc9cf,#e9f7f6)!important;box-shadow:0 0 5px rgba(170,225,230,.7)!important}
+#stw.low i{background:linear-gradient(90deg,#d98b67,#f2c3a2)!important}
+#hpf{background:linear-gradient(90deg,#c98a3a,#ecc56e 55%,#fff0c8)!important}
+/* thumb labels big enough to read on a phone */
+html.touch .act span{font-size:9.5px!important;font-weight:600;letter-spacing:.08em}
+html.touch #bAtk span{font-size:10.5px!important}
+html.touch .act svg.i{width:46%;height:46%}
+
+/* prologue: letterboxed lines over the opening view */
+#prologue{position:fixed;inset:0;z-index:40;display:none;align-items:center;justify-content:center;cursor:pointer;
+  background:linear-gradient(180deg,rgba(14,11,8,.92) 0 12%,rgba(14,11,8,.45) 30%,rgba(14,11,8,.45) 70%,rgba(14,11,8,.92) 88% 100%)}
+#prologue.on{display:flex}
+#prologue .pl{text-align:center;padding:0 8vw;opacity:0}
+#prologue.line .pl{animation:proIn 3.4s ease forwards}
+@keyframes proIn{0%{opacity:0;transform:translateY(6px);filter:blur(3px)}18%{opacity:1;transform:none;filter:none}82%{opacity:1}100%{opacity:0}}
+#proCn{font:500 clamp(17px,2.6vw,26px)/1.6 var(--serif);letter-spacing:.32em;color:#f6efe0;text-shadow:0 0 18px rgba(255,220,160,.35)}
+#proEn{margin-top:10px;font:500 clamp(8px,1vw,10.5px) var(--cin);letter-spacing:.42em;color:#c9a45a}
+#proSkip{position:absolute;right:calc(var(--sr) + 22px);bottom:calc(var(--sb) + 18px);background:none;border:0;cursor:pointer;font:500 12px var(--serif);letter-spacing:.3em;color:#d8ccb4}
+#proSkip small{font:500 8px var(--cin);letter-spacing:.3em;color:#c9a45a}
 </style>
 <script>
 (() => {
@@ -1001,10 +1031,11 @@ html.desk #qMark b{font-size:10px;top:12px}
     </nav>
   </div>
   <div id="tapHint"><span class="c t-only">觸碰開始</span><span class="e t-only">TAP TO BEGIN</span><span class="c d-only">點擊或按任意鍵開始</span><span class="e d-only">PRESS ANY KEY</span></div>
-  <div class="corner bl">PROTOTYPE · v1.6 · 黎恩</div>
+  <div class="corner bl">PROTOTYPE · v1.7 · 黎恩</div>
   <div class="corner br t-only">MOBILE · LANDSCAPE</div><div class="corner br d-only">DESKTOP · KEYBOARD &amp; MOUSE</div>
 </div>
 
+<div id="prologue"><div class="pl"><div id="proCn"></div><div id="proEn"></div></div><button id="proSkip">略過 <small>SKIP</small></button></div>
 <!-- ============ OVERLAYS ============ -->
 <div id="codexOv" class="ov hidden">
   <div class="panel" style="width:min(780px,96vw)">

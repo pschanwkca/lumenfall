@@ -1173,7 +1173,7 @@ const START = new THREE.Vector3(SPAWN.x, 0, SPAWN.z); let START_YAW = Math.PI;
 function buildBoss() {
   const G = {
     scene, P, prog, state: () => state, hurtPlayer: (d, f) => hurtPlayer(d * ((boss && boss.cfg.dmgK) || 1), f, true), burst, FX, dmgNumber, Audio, bigText, toast, regionCard, fireProjectile,
-    hitstop: (v) => (hitstop = Math.max(hitstop, v)), shake: (v) => (CAM.shake = Math.max(CAM.shake, v)), flash: flashScreen, featherBurst,
+    hitstop: (v) => (hitstop = Math.max(hitstop, v)), shake: (v) => (CAM.shake = Math.max(CAM.shake, v)), flash: flashScreen, featherBurst, say,
     onWound: (b, part) => {
       if (!prog.tips) prog.tips = {};
       if (!prog.tips.wound) { prog.tips.wound = true; save(); toast(`<i class="dia"></i>${part.cn}出現傷口 · ${isTouch ? '按住「鎖定」' : '按住 C'}進入集中模式，對準傷口攻擊`, true); }
@@ -1191,9 +1191,10 @@ function buildBoss() {
       updateQuest();
     },
   };
-  boss = createBoss(G, { maxHp: 3200, dmgK: 0.95 });
+  boss = createBoss(G, { maxHp: 3200, dmgK: 0.95, moves: ['combo'], line: '……搖籃不能熄。退下。' });
   const boss2 = createBoss(G, {
     key: 'boss2', name: '審判者 · 阿斯特萊亞', en: 'ASTRAEA, THE ARBITER', fallen: false, scale: 3.2, weapon: 'spear', maxHp: 4200, dmgK: 1.25, tint: '#24346e', emis: '#1a1f36',
+    moves: ['pillars'], line: '罪人之子……前來受審。',
     home: REALM.bossHome, floor: REALM.bossHome.y, arenaR: 14, leash: 38,
     onDefeated: () => {
       prog.boss2 = true; save(); applyStats(true);
@@ -1206,6 +1207,7 @@ function buildBoss() {
   });
   const boss3 = createBoss(G, {
     key: 'boss3', name: '墮天騎士 · 卡麥爾', en: 'CAMAEL, THE FALLEN KNIGHT', fallen: true, scale: 3.5, weapon: 'greatsword', maxHp: 2300, dmgK: 0.62, tint: '#5a1820', emis: '#ff5a3a',
+    moves: ['combo'], line: '……你身上，有那個人的光。',
     home: EARTH.bossHome, floor: EARTH.castleFloor, arenaR: 18, leash: 40,
     onDefeated: () => {
       prog.boss3 = true; save(); applyStats(true);
@@ -1218,6 +1220,7 @@ function buildBoss() {
   });
   const boss4 = createBoss(G, {
     key: 'boss4', name: '冥門守衛 · 亞巴頓', en: 'ABADDON, KEEPER OF THE ABYSS', fallen: true, scale: 4.3, weapon: 'greatsword', maxHp: 4600, dmgK: 1.3, tint: '#140808', emis: '#ff3a12', hell: true,
+    moves: ['combo'], line: '一千年了……門終於等到了它的鑰匙。',
     home: HELL.bossHome, floor: HELL.arenaFloor, arenaR: 30, leash: 44,
     onDefeated: () => {
       prog.boss4 = true; save(); applyStats(true);
@@ -2358,7 +2361,7 @@ function titleCamera(out, look) {
   const off = back.clone().multiplyScalar(Math.cos(0.55 + sway)).addScaledVector(right, Math.sin(0.55 + sway));
   const dist = portrait ? 6.6 : 4.6;
   out.set(P.pos.x + off.x * dist, P.pos.y + (portrait ? 1.0 : 0.7), P.pos.z + off.z * dist);
-  const shift = portrait ? 0 : -1.25;
+  const shift = portrait ? 0 : VIEW.w / VIEW.h > 1.9 ? -2.1 : -1.6; // wide phones: push him right of the title
   look.set(P.pos.x, P.pos.y + (portrait ? 2.0 : 1.75), P.pos.z).addScaledVector(right, shift).addScaledVector(fwd, 0.0);
 }
 let transT = 0;
@@ -2627,7 +2630,7 @@ function updateGuide(dt) {
 
 // ---- the objective marker: a small diamond over the target with its distance; pinned to the edge when off-screen
 function updateQuestMark() {
-  const el = hud.qMark, t = state === 'play' && !paused && !DLG ? questTarget() : null;
+  const el = hud.qMark, t = state === 'play' && !paused && !DLG && !(boss && boss.engaged) ? questTarget() : null; // a fight needs a clear screen
   const d = t ? Math.hypot(t.x - P.pos.x, t.z - P.pos.z) : 0;
   if (!t || d < 10) { if (hud.qmOn) { el.classList.remove('on'); hud.qmOn = false; } return; }
   if (!hud.qmOn) { el.classList.add('on'); hud.qmOn = true; }
@@ -3607,12 +3610,36 @@ function onEnterPlay() {
   layoutMinimap();
   currentRegion = '';
   updateQuest();
-  if (!prog.talk.father && !pendingWarp) setTimeout(() => { if (state === 'play' && !DLG && P.inEarth && Math.hypot(P.pos.x - START.x, P.pos.z - START.z) < 30) fatherGift(); }, 1300);
+  const meetFather = () => setTimeout(() => { if (state === 'play' && !DLG && P.inEarth && Math.hypot(P.pos.x - START.x, P.pos.z - START.z) < 30) fatherGift(); }, 1300);
+  if (!prog.talk.father && !pendingWarp) { if (!prog.prologue) playPrologue(meetFather); else meetFather(); }
   if (!store.get('lumenfall_seenTip', false)) {
     setTimeout(() => toast(isTouch ? '<i class="dia"></i>左側拖曳移動 · 右側拖曳轉視角' : '<i class="dia"></i>WASD 移動 · 滑鼠轉視角 · 左鍵攻擊 · 右鍵閃避'), 3800);
     store.set('lumenfall_seenTip', true);
   }
   checkRotate();
+}
+// ---- prologue: a few lines over the opening view before the first word with the father
+const PROLOGUE = [
+  ['千年前，光從天上墜落。', 'A THOUSAND YEARS AGO, THE LIGHT FELL.'],
+  ['天使守著光的搖籃，人間守著自己的燈火。', 'ANGELS KEPT ITS CRADLE. MORTALS KEPT THEIR LAMPS.'],
+  ['直到墮落的靈魂從裂縫裡爬出來，燈，一盞一盞熄滅。', 'THEN THE FALLEN CRAWLED OUT OF THE RIFT, AND THE LAMPS WENT OUT.'],
+  ['晨鐘堡的黎恩，是天使與凡人的兒子。', 'LIAN OF BELLDAWN IS THE SON OF AN ANGEL AND A MORTAL.'],
+  ['今天，他要出發了。', 'TODAY, HE SETS OUT.'],
+];
+function playPrologue(done) {
+  const el = $('prologue'), cn = $('proCn'), en = $('proEn');
+  let i = -1, tm = 0;
+  const finish = () => { clearTimeout(tm); el.classList.remove('on'); el.onclick = null; paused = false; prog.prologue = true; save(); $('hud').classList.remove('cine'); setTimeout(done, 400); };
+  const next = () => {
+    clearTimeout(tm);
+    if (++i >= PROLOGUE.length) return finish();
+    el.classList.remove('line'); void el.offsetWidth;
+    cn.textContent = PROLOGUE[i][0]; en.textContent = PROLOGUE[i][1]; el.classList.add('line');
+    tm = setTimeout(next, 3400);
+  };
+  paused = true; el.classList.add('on'); el.onclick = next; $('hud').classList.add('cine');
+  $('proSkip').onclick = (e) => { e.stopPropagation(); finish(); };
+  setTimeout(next, 600);
 }
 function goTitle() {
   state = 'landing'; paused = false; freeMouse(); document.documentElement.classList.remove('nohud');

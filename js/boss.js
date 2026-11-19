@@ -85,6 +85,19 @@ export class Boss {
     G.scene.add(this.ringMesh);
     this.shadow = new THREE.Mesh(new THREE.PlaneGeometry(7, 7), new THREE.MeshBasicMaterial({ map: TEX.shadow, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
     this.shadow.rotation.x = -Math.PI / 2; G.scene.add(this.shadow);
+    // judgement: pillars of light called down where you stand (the Arbiter's own move)
+    this.pillars = [];
+    if (cfg.moves && cfg.moves.includes('pillars')) for (let i = 0; i < 4; i++) {
+      // amber, normally blended: a telegraph has to read on the realm's white stone as well as on dark ground
+      const tm = new THREE.Mesh(new THREE.RingGeometry(0.88, 1, 48), new THREE.MeshBasicMaterial({ color: '#d0861c', transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+      tm.rotation.x = -Math.PI / 2; tm.visible = false; tm.renderOrder = 4;
+      const fill = new THREE.Mesh(new THREE.CircleGeometry(1, 48), new THREE.MeshBasicMaterial({ color: '#b8600f', transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+      tm.add(fill);
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 24, 1, true).translate(0, 0.5, 0), new THREE.MeshBasicMaterial({ map: TEX.beam, color: new THREE.Color(2.4, 2.0, 1.3), transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending }));
+      beam.visible = false;
+      G.scene.add(tm); G.scene.add(beam);
+      this.pillars.push({ tm, fill, beam, t: -1, at: new THREE.Vector3(), hit: false });
+    }
     for (const o of [this.decal, this.ringMesh, this.shadow]) o.traverse((c) => c.layers.set(2));
     if (this.st === 'purified') this.purify(true);
     this.place();
@@ -113,6 +126,8 @@ export class Boss {
     const tl = this.impactAt - this.t;
     if (this.st === 'ring' && this.ring.on && Math.abs(Math.hypot(p.x - this.ring.center.x, p.z - this.ring.center.z) - this.ring.r) < 2.2) return true;
     if (tl > -0.05 && tl < 0.32 && this.inArea(p, 0.8)) return true;
+    for (const pl of this.pillars) if (pl.t > 0.6 && pl.t < 0.92 && Math.hypot(p.x - pl.at.x, p.z - pl.at.z) < 3.2) return true;
+    if (this.st === 'combo' && tl > -0.05 && tl < 0.32 && this.local(p).d < 9) return true;
     return false;
   }
   local(p) {
@@ -206,11 +221,11 @@ export class Boss {
   // a heavy blow that meets the boss's own at the moment it lands cancels it (offset); blade against blade in an
   // overhead slam locks the two in a power clash instead
   tryOffset() {
-    if (!['sweep', 'slam', 'ring'].includes(this.st) || this.hitDone) return null;
+    if (!['sweep', 'slam', 'ring', 'combo'].includes(this.st) || this.hitDone) return null;
     const tl = this.impactAt - this.t;
     if (tl < -0.06 || tl > 0.4) return null;
     this.hitDone = true; this.decal.visible = false;
-    if (this.st === 'slam') { this.go('clash'); return 'clash'; }
+    if (this.st === 'slam' || (this.st === 'combo' && this.hitIdx === 2)) { this.go('clash'); return 'clash'; }
     this.topple('相殺', 'OFFSET', 3.0);
     return 'offset';
   }
@@ -221,7 +236,7 @@ export class Boss {
     else { this.go('idle'); G.hurtPlayer(28, this.pos); }
   }
   go(st) {
-    this.st = st; this.t = 0; this.hitDone = false; this.impactAt = 99; this.decal.visible = false;
+    this.st = st; this.t = 0; this.hitDone = false; this.impactAt = 99; this.decal.visible = false; this.segT0 = 0; this.hitIdx = 0;
     const P = this.G.P;
     const sp = this.phase === 2 ? 0.85 : 1;
     switch (st) {
@@ -240,6 +255,9 @@ export class Boss {
         break;
       case 'stagger': this.dur = 3.4; this.G.Audio.sfx('slam'); break;
       case 'flinch': this.dur = 1.3; this.G.Audio.sfx('roar'); break;
+      // a three-blow chain: two sweeps, then an overhead held a beat too long (the delayed blow catches early rolls)
+      case 'combo': { const k = this.phase === 2 ? 0.88 : 1; this.comboT = [0.8 * k, 1.42 * k, 2.55 * k]; this.impactAt = this.comboT[0]; this.dur = this.comboT[2] + 1.1; this.setDecal(2, 8, 0, 1.45); break; }
+      case 'pillars': this.dur = 3.6; this.volley = 0; this.G.Audio.sfx('glide'); break;
       case 'clash': this.dur = 9; break;
       case 'walk': this.dur = 1.5 + Math.random() * 1.5; break;
       case 'idle': this.dur = 0.6 + Math.random() * 0.5; break;
@@ -253,8 +271,8 @@ export class Boss {
   updateDecal() {
     const d = this.decal; if (!d.visible) return;
     const u = d.material.uniforms, { mode, sx, fwd } = d.userData;
-    const k = clamp(this.t / Math.max(0.01, this.impactAt), 0, 1);
-    u.uFill.value = k; u.uAlpha.value = Math.min(1, this.t * 4);
+    const t0 = this.segT0 || 0, k = clamp((this.t - t0) / Math.max(0.01, this.impactAt - t0), 0, 1);
+    u.uFill.value = k; u.uAlpha.value = Math.min(1, (this.t - t0) * 4);
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
     if (mode === 2) { d.scale.set(sx, sx, 1); d.position.set(this.pos.x, 0, this.pos.z); d.rotation.set(-Math.PI / 2, 0, this.yaw + Math.PI); }
     else if (mode === 1) { d.scale.set(sx, fwd, 1); d.position.set(this.pos.x + fx * fwd, 0, this.pos.z + fz * fwd); d.rotation.set(-Math.PI / 2, 0, this.yaw + Math.PI); }
@@ -288,8 +306,12 @@ export class Boss {
     const r = Math.random(), p2 = this.phase === 2;
     const fly = !this.parts.wings.broken, halo = !this.parts.head.broken; // broken wings can't carry it; a broken halo can't ring
     if (L.d > 15) return fly && r < (p2 ? 0.55 : 0.4) ? (p2 && r < 0.25 ? 'barrage' : 'leap') : 'walk';
+    if (L.d > 8 && (this.cfg.moves || []).includes('pillars') && this.lastAct !== 'pillars' && r < 0.4) return 'pillars';
     if (L.d > 8) return fly && p2 && r < 0.3 ? 'barrage' : fly && r < 0.55 ? 'leap' : 'walk';
+    const mv = this.cfg.moves || [];
+    if (mv.includes('pillars') && this.lastAct !== 'pillars' && r < 0.3) return 'pillars';
     if (p2 && halo && r < 0.28 && this.lastAct !== 'ring') return 'ring';
+    if (mv.includes('combo') && this.lastAct !== 'combo' && Math.random() < 0.38) return 'combo';
     if (Math.abs(Math.atan2(L.l, L.f)) > 1.2) return 'sweep';
     return r < 0.55 ? 'sweep' : 'slam';
   }
@@ -319,7 +341,8 @@ export class Boss {
       Object.assign(T, { hipY: lerp(0.52, 0.95, k), thL: lerp(-1.35, 0, k), knL: lerp(1.45, 0.05, k), thR: lerp(0.25, 0, k), knR: lerp(1.75, 0.05, k), tX: lerp(0.32, -0.3, k), hX: lerp(0.55, -0.5, k), sLz: lerp(-0.15, 1.1, k), sRz: lerp(-0.35, -1.1, k), fold: lerp(0.2, -0.15, k), wScale: 1.15, wLift: 0.35 * k });
       spMode = 'down'; rate = 4; turn = 0.8;
       if (this.t > 1.2 && this.t - edt <= 1.2) { G.shake(0.6); G.burst(G.FX.smoke, this.pos.x, gy + 1, this.pos.z, 40, { speed: 6, up: 1, life: 1.4, size: 4, c: [0.1, 0.08, 0.12], g: 0.3 }); }
-      if (this.t > 2.6) { this.go('idle'); G.toast('<i class="dia"></i>按「鎖定」對準守衛 · 留意地面的警示'); }
+      if (this.cfg.line && this.t > 1.5 && this.t - edt <= 1.5) G.say && G.say(this.cfg.line);
+      if (this.t > 2.6) { this.go('idle'); if (!this.cfg.line) G.toast('<i class="dia"></i>按「鎖定」對準守衛 · 留意地面的警示'); }
     } else if (st === 'idle' || st === 'walk') {
       turn = 2.0;
       if (st === 'walk') { moveSp = (p2 ? 3.0 : 2.4) * (L.d > 5 ? 1 : 0); }
@@ -421,6 +444,46 @@ export class Boss {
       Object.assign(T, { hipY: lerp(0.5, 0.8, up), thL: -1.3, knL: 1.45, thR: 0.3, knR: 1.75, tX: lerp(0.75, 0.3, up), hX: lerp(0.7, 0.2, up), sRx: -0.3, eR: -0.3, sLx: lerp(-1.2, -0.4, up), sLz: 0.3, eL: -0.1, fold: 0.85, wScale: 0.85 });
       spMode = 'down'; rate = this.t < 0.3 ? 14 : 6;
       if (this.t > this.dur) this.go('idle');
+    } else if (st === 'combo') {
+      const H = this.comboT, i = this.hitIdx, prev = i ? H[i - 1] : 0;
+      turn = this.t < H[Math.min(i, 2)] - 0.3 ? 2.0 : 0.3;
+      const k = easeOut(clamp((this.t - prev) / 0.18, 0, 1)) * (i ? 1 : 0), pre = clamp((this.t - prev) / Math.max(0.01, H[Math.min(i, 2)] - prev), 0, 1);
+      if (i < 2) { // the two sweeps, right then left
+        const sgn = i === 0 ? 1 : -1, w = i === 0 ? 0 : 1;
+        Object.assign(T, { tY: lerp(-1.1 * sgn, 1.0 * sgn, w ? easeOut(pre) * 0.0 : 0) , sRz: -0.4, sRx: -1.2, eR: -0.25, sLx: -0.5, sLz: 0.6, thL: -0.45, thR: 0.35, knL: 0.3, knR: 0.35, hipY: 0.88, tX: 0.15 });
+        T.tY = i === 0 ? lerp(0, -1.1, pre) : lerp(1.0, -1.15, easeOut(pre));
+        if (i === 1) T.sRz = lerp(0.25, -1.35, easeOut(pre));
+        else T.sRz = lerp(-0.4, -1.35, pre);
+      } else { // overhead: raised early, held, then down
+        const up = easeInOut(clamp((this.t - H[1]) / 0.45, 0, 1)), dn = easeOut(clamp((this.t - H[2]) / 0.12, 0, 1));
+        Object.assign(T, { sRx: lerp(lerp(-1.0, -2.95, up), -1.05, dn), sLx: lerp(lerp(-0.4, -2.7, up), -1.0, dn), sRz: -0.15, sLz: 0.15, eR: -0.2, eL: -0.3, tX: lerp(lerp(0.1, -0.35, up), 0.55, dn), hX: lerp(-0.3, 0.3, dn), hipY: lerp(0.95, 0.74, dn), thL: -0.6 * dn, knL: 0.7 * dn, thR: 0.35, knR: 0.5 * dn, wScale: 1.1 });
+      }
+      rate = this.t > H[Math.min(i, 2)] - 0.12 ? 26 : 9;
+      if (i < 3 && this.t >= H[i]) {
+        const L2 = this.local(P.pos), hitIt = i < 2 ? L2.d < 7.6 * this.reachK && L2.f > -1.5 && Math.abs(Math.atan2(L2.l, L2.f)) < 1.5 : L2.f > -1 && L2.f < 10 * this.reachK && Math.abs(L2.l) < 1.8;
+        if (!this.hitDone && hitIt) G.hurtPlayer(i < 2 ? 18 : 28, this.pos);
+        G.Audio.sfx(i < 2 ? 'swing' : 'slam'); G.shake(i < 2 ? 0.15 : 0.5);
+        if (i === 2) { const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw); G.burst(G.FX.sparks, this.pos.x + fx * 5, gy + 0.5, this.pos.z + fz * 5, 40, { speed: 7, up: 2, life: 0.8, size: 1.1, c: [1.8, 0.9, 1.4] }); }
+        this.hitIdx = i + 1; this.hitDone = false; this.segT0 = H[i];
+        if (i === 0) { this.impactAt = H[1]; this.setDecal(2, 8, 0, 1.45); }
+        else if (i === 1) { this.impactAt = H[2]; this.setDecal(1, 1.8, 5.0, 0); }
+        else { this.impactAt = 99; this.decal.visible = false; }
+      }
+      if (this.t > this.dur) this.go('idle');
+    } else if (st === 'pillars') {
+      // hover, spear raised: four pillars fall where you stand, each a beat after the last
+      turn = 2.5;
+      const hover = Math.min(1, this.t / 0.5) * (this.t > 3.1 ? Math.max(0, (3.6 - this.t) / 0.5) : 1);
+      this.pos.y = gy + hover * 2.2;
+      Object.assign(T, { hipY: 0.95, thL: 0.2, thR: 0.3, knL: 0.3, knR: 0.4, tX: -0.15, hX: -0.35, sRx: -2.9, sRz: -0.2, eR: -0.1, sLx: -1.3, sLz: 0.6, eL: -0.2, fold: -0.2, wScale: 1.3, wLift: 0.5, flap: Math.sin(this.t * 5) * 0.1 });
+      spMode = 'arm';
+      const n = this.pillars.length;
+      if (this.volley < n && this.t > 0.55 + this.volley * 0.5) {
+        const pl = this.pillars[this.volley++];
+        pl.at.set(P.pos.x + P.vel.x * 0.25, 0, P.pos.z + P.vel.z * 0.25); pl.at.y = this.gnd(pl.at.x, pl.at.z);
+        pl.t = 0; pl.hit = false; pl.tm.visible = true; pl.tm.position.set(pl.at.x, pl.at.y + 0.2, pl.at.z);
+      }
+      if (this.t > this.dur) { this.pos.y = gy; this.go('idle'); }
     } else if (st === 'flinch') {
       const k = Math.sin(clamp(this.t / this.dur, 0, 1) * Math.PI);
       Object.assign(T, { tX: -0.45 * k, hX: -0.55 * k, sLz: 0.4 + 0.8 * k, sRz: -0.4 - 0.8 * k, sLx: -0.3, sRx: -0.5, hipY: 0.95 - 0.08 * k, thL: 0.25 * k, knR: 0.4 * k, fold: 0.2, wScale: 1.1, wLift: 0.3 * k });
@@ -452,6 +515,19 @@ export class Boss {
     // keep the player outside the body
     const pd = Math.hypot(P.pos.x - this.pos.x, P.pos.z - this.pos.z);
     if (pd < 1.7 && pd > 0.01 && Math.abs(P.pos.y - this.pos.y) < 6) { P.pos.x = this.pos.x + (P.pos.x - this.pos.x) / pd * 1.7; P.pos.z = this.pos.z + (P.pos.z - this.pos.z) / pd * 1.7; }
+    for (const pl of this.pillars) {
+      if (pl.t < 0) continue;
+      pl.t += edt;
+      const R = 2.8, lead = 0.9;
+      if (pl.t < lead) { const k = pl.t / lead; pl.tm.scale.setScalar(R); pl.fill.scale.setScalar(k); pl.tm.material.opacity = 0.5 + k * 0.5; this.threatAt = pl; }
+      else if (!pl.hit) {
+        pl.hit = true; pl.tm.visible = false; pl.beam.visible = true; pl.beam.position.copy(pl.at); pl.beam.scale.set(R * 0.75, 40, R * 0.75);
+        G.Audio.sfx('slam'); G.shake(0.25);
+        G.burst(G.FX.sparks, pl.at.x, pl.at.y + 0.5, pl.at.z, 36, { speed: 6, up: 6, life: 0.9, size: 1.2, c: [2.2, 1.8, 1.1] });
+        if (Math.hypot(P.pos.x - pl.at.x, P.pos.z - pl.at.z) < R && P.pos.y - pl.at.y < 6) G.hurtPlayer(20, pl.at);
+      } else if (pl.t < lead + 0.35) { pl.beam.material.opacity = 1 - (pl.t - lead) / 0.35; }
+      else { pl.beam.visible = false; pl.t = -1; }
+    }
     // wounds: a glowing gash on the part, brighter in focus mode; scars heal over time
     for (const p of Object.values(this.parts)) {
       if (p.scar > 0) p.scar -= edt;

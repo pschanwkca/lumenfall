@@ -83,6 +83,18 @@ Sized after Monster Hunter's hunt HUD so the scene stays the subject:
 - The crater's pillar sleeps (a faint thread of light) until Camael's echo has spoken, so the sky cannot be reached early;
   arriving in the sky early (old saves) points you back down
 
+## Review pass (v1.7)
+
+- Art: the hero wears a Belldawn-blue half-cape with a gold hem (cloth; folds away when the wings come out) in place of
+  two sashes that read as sticks; hell's floor is basalt split by wandering seams of fire; the hell return beam is
+  thinner and warm instead of a white wall; the title composition keeps the logo and the hero apart
+- UI: stamina bar is cool (celeste) and HP warm; thumb labels larger; the objective marker hides during boss fights;
+  boss telegraphs are amber and normally blended so they read on white stone
+- Combat: greatsword bosses gain a three-blow chain whose last overhead is delayed (it punishes early rolls; offset or
+  clash it); the Arbiter calls four light pillars where you stand
+- Story: a five-line prologue before the first words with the father; each boss speaks as the fight begins
+  (Abaddon's line foreshadows the key)
+
 ## Hunt combat (v1.6, after Monster Hunter Wilds)
 
 - **Weight**: every attack has a readable wind-up, a fast swing on the hit frame and a recovery you commit to. A roll

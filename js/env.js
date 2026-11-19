@@ -110,9 +110,29 @@ export function terrainDetail(m, o = {}) {
           rk *= clamp(vc0 / ${lin('#9a9184')}, vec3(0.1), vec3(1.2));
         #endif
         diffuseColor.rgb = mix(diffuseColor.rgb, rk, steep);
+        #ifdef CRACKS
+          // basalt plates split by glowing seams of the fire below
+          vec2 wq = vWP.xz + vec2(en(vWP.xz*0.07), en(vWP.xz*0.07 + 5.2))*6.0; // warp so the seams wander
+          float ck = lfCrack(wq*0.085), ck2 = lfCrack(wq*0.3 + 7.3);
+          float mask = smoothstep(0.08, 0.5, efb(vWP.xz*0.018 + 3.1)) * (1.0 - smoothstep(0.0, 0.3, steep));
+          float wdt = 0.012 + 0.03*en(vWP.xz*0.12);
+          float fade = 1.0 - smoothstep(35.0, 110.0, length(vViewPosition));
+          lfGlow = ((1.0 - smoothstep(0.0, wdt, ck)) + (1.0 - smoothstep(0.0, 0.012, ck2)) * 0.25 * mask) * mask * fade;
+          diffuseColor.rgb *= 0.82 + 0.18*smoothstep(0.0, 0.25, ck);
+        #endif
       }`);
+    if (o.cracks) {
+      sh.fragmentShader = sh.fragmentShader.replace('void main() {', `float lfGlow = 0.0;
+        vec2 lfH2(vec2 p){ p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3))); return fract(sin(p)*43758.5453); }
+        float lfCrack(vec2 p){ vec2 i = floor(p), f = fract(p); float d1 = 8.0, d2 = 8.0;
+          for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) { vec2 g = vec2(float(x), float(y)); vec2 r = g + lfH2(i + g) - f; float d = dot(r, r); if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) d2 = d; }
+          return sqrt(d2) - sqrt(d1); }
+        void main() {`).replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        totalEmissiveRadiance += ${lin('#ff3c0c')} * 1.7 * lfGlow;`);
+    }
   };
-  m.customProgramCacheKey = () => 'lf-terrain' + (o.tint ? '-t' : '');
+  if (o.cracks) m.defines = Object.assign({}, m.defines, { CRACKS: 1 });
+  m.customProgramCacheKey = () => 'lf-terrain' + (o.tint ? '-t' : '') + (o.cracks ? '-c' : '');
   return m;
 }
 export function strataMaterial(moss = 0.85, o = {}) {

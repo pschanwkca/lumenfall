@@ -78,10 +78,25 @@ export function makeWarriorMats() {
   M.hair = rim(new THREE.MeshStandardMaterial({ color: '#5b4434', roughness: 0.55, side: THREE.DoubleSide }), '#d9b98e', 0.35);
   M.leather = new THREE.MeshStandardMaterial({ color: '#6e5038', roughness: 0.68, metalness: 0.08 });
   M.steel = rim(new THREE.MeshStandardMaterial({ color: '#c3c7cf', roughness: 0.32, metalness: 0.82 }), '#ffffff', 0.25);
+  M.cape = new THREE.MeshStandardMaterial({ map: capeTexture(), roughness: 0.86, side: THREE.DoubleSide });
   M.sash = new THREE.MeshStandardMaterial({ map: TEX.sash, color: '#e9dcc0', transparent: true, side: THREE.DoubleSide, depthWrite: false, roughness: 0.75, emissive: '#fff6e8', emissiveIntensity: 0.05 });
   return M;
 }
 
+// the hero's half-cape: deep Belldawn blue with a gold hem, so he reads against bright ground and sky
+let _capeTex = null;
+function capeTexture() {
+  if (_capeTex) return _capeTex;
+  const c = document.createElement('canvas'); c.width = 64; c.height = 128;
+  const g = c.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, 0, 128); gr.addColorStop(0, '#2c3d6b'); gr.addColorStop(1, '#1d2a4d');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 128);
+  g.globalAlpha = 0.18; g.fillStyle = '#0d1428'; for (let x = 4; x < 64; x += 9) g.fillRect(x, 0, 2, 128); // folds
+  g.globalAlpha = 1; g.fillStyle = '#c9a45a'; g.fillRect(0, 114, 64, 4); g.fillRect(0, 121, 64, 2); g.fillRect(0, 0, 3, 128); g.fillRect(61, 0, 3, 128);
+  g.fillStyle = '#e7cd8a'; for (let x = 6; x < 64; x += 12) { g.beginPath(); g.moveTo(x, 106); g.lineTo(x + 3, 110); g.lineTo(x, 114); g.lineTo(x - 3, 110); g.fill(); } // a row of small diamonds above the hem
+  _capeTex = new THREE.CanvasTexture(c); _capeTex.colorSpace = THREE.SRGBColorSpace; _capeTex.anisotropy = 4;
+  return _capeTex;
+}
 // ---------------------------------------------------------------- placeholder skinned body
 function capsuleBetween(a, b, r) {
   const d = new V3().subVectors(b, a), L = d.length();
@@ -624,9 +639,14 @@ export class SeraphActor {
     if (!this.opt.noCloth) {
       const s = this.scale;
       this.hair = new Cloth(4, this.opt.style === 'warrior' ? 3 : 9, 0.2 * s, (this.opt.style === 'warrior' ? 0.16 : 0.85) * s, M.hair, { taper: 0.55, grav: -8 });
-      this.sashL = new Cloth(2, 12, 0.2 * s, 1.35 * s, M.sash, { taper: 0.1, grav: -6.5 });
-      this.sashR = new Cloth(2, 12, 0.2 * s, 1.35 * s, M.sash, { taper: 0.1, grav: -6.5 });
-      for (const c of [this.hair, this.sashL, this.sashR]) { this.scene.add(c.mesh); this.cloths.push(c); }
+      if (this.opt.style === 'warrior' && M.cape) {
+        this.cape = new Cloth(6, 9, 0.5 * s, 0.86 * s, M.cape, { grav: -7, drag: 0.975, shadow: true });
+        for (const c of [this.hair, this.cape]) { this.scene.add(c.mesh); this.cloths.push(c); }
+      } else {
+        this.sashL = new Cloth(2, 12, 0.2 * s, 1.35 * s, M.sash, { taper: 0.1, grav: -6.5 });
+        this.sashR = new Cloth(2, 12, 0.2 * s, 1.35 * s, M.sash, { taper: 0.1, grav: -6.5 });
+        for (const c of [this.hair, this.sashL, this.sashR]) { this.scene.add(c.mesh); this.cloths.push(c); }
+      }
     }
   }
   buildSpear() {
@@ -826,17 +846,24 @@ export class SeraphActor {
     const down = new V3(0, -1, -0.15).applyQuaternion(cq).normalize();
     const vis = this.root.visible;
     this.hair.setPins((f, out) => out.set((f - 0.5) * 0.17 * s, 0.04 * s - Math.abs(f - 0.5) * 0.06 * s, -0.08 * s).applyQuaternion(hq).add(head).add(_v.set(0, 0.1 * s, 0).applyQuaternion(hq)));
-    this.sashL.setPins((f, out) => out.set((0.1 + f * 0.07) * s, 0.13 * s, -0.08 * s).applyQuaternion(cq).add(chest));
-    this.sashR.setPins((f, out) => out.set((-0.17 + f * 0.07) * s, 0.13 * s, -0.08 * s).applyQuaternion(cq).add(chest));
+    if (this.sashL) {
+      this.sashL.setPins((f, out) => out.set((0.1 + f * 0.07) * s, 0.13 * s, -0.08 * s).applyQuaternion(cq).add(chest));
+      this.sashR.setPins((f, out) => out.set((-0.17 + f * 0.07) * s, 0.13 * s, -0.08 * s).applyQuaternion(cq).add(chest));
+    }
+    if (this.cape) { // pinned across the shoulders, curving round the back
+      this.cape.setPins((f, out) => out.set((f - 0.5) * 0.4 * s, 0.17 * s, (-0.11 - Math.cos((f - 0.5) * Math.PI) * 0.03 + Math.abs(f - 0.5) * 0.06) * s).applyQuaternion(cq).add(chest));
+      this.cape.mesh.visible = vis && this.angel < 0.3; // folded away while the wings are out
+    }
     const back = new V3(0, 0.02, -0.06 * s).applyQuaternion(cq).add(chest);
     const spheres = [
-      { x: back.x, y: back.y, z: back.z, r: 0.15 * s },
+      { x: back.x, y: back.y, z: back.z, r: (this.cape ? 0.2 : 0.15) * s },
+      { x: back.x, y: back.y - 0.22 * s, z: back.z, r: (this.cape ? 0.19 : 0.001) * s },
       { x: hips.x, y: hips.y - 0.05 * s, z: hips.z, r: 0.2 * s },
       { x: head.x, y: head.y + 0.1 * s, z: head.z, r: 0.12 * s },
     ];
     const speed = S.speed || 0;
     const wind = [Math.sin(this.anim.t * 0.7) * 0.6, S.glide ? 2.5 : 0, Math.cos(this.anim.t * 0.5) * 0.4];
-    for (const c of this.cloths) { c.step(dt, wind, spheres, down); c.mesh.visible = vis; }
+    for (const c of this.cloths) { c.step(dt, wind, spheres, down); c.mesh.visible = vis && (c !== this.cape || this.angel < 0.3); }
   }
   resetCloth() { for (const c of this.cloths) c.ready = false; }
   setVisible(v) { this.root.visible = v; this.weaponHolder.visible = v; for (const c of this.cloths) c.mesh.visible = v; }

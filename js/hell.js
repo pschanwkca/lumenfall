@@ -60,7 +60,7 @@ export function buildHell(scene) {
     cols[i * 3] = c.r; cols[i * 3 + 1] = c.g; cols[i * 3 + 2] = c.b;
   }
   geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
-  const floor = new THREE.Mesh(geo, terrainDetail(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), { tint: true }));
+  const floor = new THREE.Mesh(geo, terrainDetail(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 }), { tint: true, cracks: true }));
   floor.position.set(HCX, Y, HCZ); floor.receiveShadow = true; root.add(floor);
   // ---- the sea of fire beneath the cracks
   const lavaM = new THREE.ShaderMaterial({
@@ -112,11 +112,11 @@ export function buildHell(scene) {
   // ---- where the fall ends: the light from above reaches this far, and can carry you back up
   const [lx, lz] = W2(LP.u, LP.v), lg = gA(lx, lz);
   {
-    const beamM = new THREE.MeshBasicMaterial({ map: TEX.beam, color: new THREE.Color(1.25, 1.0, 0.7), transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide, fog: false, blending: THREE.AdditiveBlending });
-    const beam = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.4, 1, 32, 1, true).translate(0, 0.5, 0), beamM); beam.scale.set(1, 330, 1); beam.position.set(lx, lg, lz); root.add(noReflect(beam));
+    const beamM = new THREE.MeshBasicMaterial({ map: TEX.beam, color: new THREE.Color(1.15, 0.78, 0.42), transparent: true, opacity: 0.2, depthWrite: false, side: THREE.DoubleSide, fog: false, blending: THREE.AdditiveBlending });
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 1, 32, 1, true).translate(0, 0.5, 0), beamM); beam.scale.set(1, 330, 1); beam.position.set(lx, lg, lz); root.add(noReflect(beam));
     const rune = new THREE.Mesh(new THREE.RingGeometry(2.6, 6.5, 64), new THREE.MeshBasicMaterial({ map: TEX.rune, color: new THREE.Color(1.3, 1.0, 0.6), transparent: true, depthWrite: false, side: THREE.DoubleSide }));
     rune.rotation.x = -Math.PI / 2; rune.position.set(lx, lg + 0.12, lz); root.add(rune);
-    W.animated.push((t) => { rune.rotation.z = t * 0.2; beamM.opacity = 0.26 + Math.sin(t * 1.3) * 0.06; });
+    W.animated.push((t) => { rune.rotation.z = t * 0.2; beamM.opacity = 0.17 + Math.sin(t * 1.3) * 0.04; });
   }
   HELL.pillar = new THREE.Vector3(lx, lg, lz);
   HELL.landing = new THREE.Vector3(lx - 8, lg + 1, lz + 10);
