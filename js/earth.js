@@ -190,7 +190,7 @@ function buildTerrain(root, Y) {
     }
     cols[i * 3] = c.r; cols[i * 3 + 1] = c.g; cols[i * 3 + 2] = c.b;
   }
-  const material = terrainDetail(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 }), { tint: true });
+  const material = terrainDetail(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 }), { tint: true, burn: true });
   const CH = 8, CS = ESEG / CH;
   for (let cz = 0; cz < CH; cz++) for (let cx = 0; cx < CH; cx++) {
     const lod = new THREE.LOD();
@@ -750,8 +750,85 @@ export function buildEarth(scene) {
     buildChest(root, c);
     colliders.solids.push({ x: c.x, z: c.z, r: 0.5, y0: c.y - 0.3, y1: c.y + 0.62, noClimb: true });
   }
+  // ---- forage: what the land still gives — dawnleaf in the meadows, wheat by the town, wild honey up high
+  // (on tall rocks and in tree crowns), marsh caps in the swamp, frostberries on the abbey's ridge
+  {
+    const FR = mulberry(4242), out = EARTH.forage = [];
+    const ok = (x, z, minD = 6) => gA(x, z) - Y > 0.4 && roadD(x, z) > 3.5 && !inRift(x, z, 6) && Math.hypot(x, z) < 590 && out.every((o) => Math.hypot(o.x - x, o.z - z) > minD);
+    const scatterAt = (k, cx, cz, R, n) => { for (let i = 0, tries = 0; i < n && tries < n * 40; tries++) { const a = FR() * 6.283, r = Math.sqrt(FR()) * R, x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r; if (!ok(x, z)) continue; out.push({ k, x, y: gA(x, z), z }); i++; } };
+    scatterAt('herb', K.x, K.z, 120, 7); scatterAt('herb', EP.watch.x, EP.watch.z, 110, 6); scatterAt('herb', 60, 250, 90, 4); scatterAt('herb', -150, 40, 120, 4);
+    scatterAt('wheat', T.x + 40, T.z - 30, 70, 6); scatterAt('wheat', EP.mill.x, EP.mill.z, 50, 5);
+    scatterAt('cap', EP.swamp.x, EP.swamp.z, 110, 9); scatterAt('cap', EP.forest.x, EP.forest.z, 60, 3);
+    scatterAt('berry', EP.monastery.x, EP.monastery.z + 20, 90, 7); scatterAt('berry', EP.monastery.x - 90, EP.monastery.z + 60, 60, 3);
+    // honey: on the tops of tall rocks and in tree crowns, spread across the land (climb for it)
+    const high = colliders.solids.filter((c) => !c.bx && !c.noStand && !c.terrain && c.y0 > Y - 30 && c.y0 < Y + 160 && c.y1 - c.y0 > 3 && c.y1 - c.y0 < 14 && Math.hypot(c.x, c.z) < 580);
+    for (let i = 0, tries = 0; i < 12 && tries < 400; tries++) {
+      const c = high[Math.floor(FR() * high.length)]; if (!c || out.some((o) => o.k === 'honey' && Math.hypot(o.x - c.x, o.z - c.z) < 70)) continue;
+      out.push({ k: 'honey', x: c.x, y: c.st ?? c.y1, z: c.z, high: true }); i++;
+    }
+    out.forEach((o, i) => { o.id = i; });
+    buildForage(root, out);
+  }
+  // a cooking fire in the town square, by the well (lit beacons are kitchens too)
+  {
+    const fx = T.x + 5.5, fz = T.z + 4, fg = gA(fx, fz), grp = new THREE.Group(); grp.position.set(fx, fg, fz); root.add(grp);
+    const stoneM = mat('#9a9184'), woodM2 = mat('#5b4433'), potM = mat('#3a3433', { metalness: 0.6, roughness: 0.45 });
+    for (let i = 0; i < 8; i++) { const a = (i / 8) * 6.283, st = shadowy(new THREE.Mesh(new THREE.DodecahedronGeometry(0.22, 0), stoneM)); st.position.set(Math.cos(a) * 0.62, 0.1, Math.sin(a) * 0.62); grp.add(st); }
+    for (let i = 0; i < 4; i++) { const l = shadowy(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.8, 6), woodM2)); l.rotation.set(1.2, (i / 4) * 6.283, 0); l.position.y = 0.2; grp.add(l); }
+    for (const s of [-1, 1]) { const p = shadowy(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.5, 6), woodM2)); p.position.set(s * 0.8, 0.75, 0); grp.add(p); }
+    const bar = shadowy(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.7, 6), woodM2)); bar.rotation.z = Math.PI / 2; bar.position.y = 1.45; grp.add(bar);
+    const pot = shadowy(new THREE.Mesh(new THREE.SphereGeometry(0.34, 14, 10, 0, 6.283, 0.35, 2.4), potM)); pot.position.y = 0.92; grp.add(pot);
+    const flM = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 1.2, 0.45), transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+    const fl = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.8, 8, 1, true).translate(0, 0.4, 0), flM); fl.position.y = 0.12; grp.add(noReflect(fl));
+    const gl = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.glow, color: new THREE.Color(2.2, 1.3, 0.6), transparent: true, opacity: 0.5, depthWrite: false, fog: false })); gl.position.y = 0.6; gl.scale.setScalar(2.6); grp.add(noReflect(gl));
+    W.animated.push((t) => { const f = 1 + Math.sin(t * 11) * 0.08 + Math.sin(t * 7.3) * 0.06; fl.scale.set(f, 1 + Math.sin(t * 9) * 0.15, f); gl.material.opacity = 0.42 + Math.sin(t * 13) * 0.06; });
+    colliders.solids.push({ x: fx, z: fz, r: 0.75, y0: fg - 0.3, y1: fg + 0.4, noClimb: true, noStand: true });
+    EARTH.hearth = { x: fx, y: fg, z: fz, name: '晨鐘堡的灶火' };
+  }
   // what the seraph already knows of this world: where he fell, and the town he grew up in
   EARTH.known = [{ x: K.x, z: K.z, r: 200 }, { x: T.x, z: T.z, r: 300 }];
+}
+
+// ---------------------------------------------------------------- forage: one instanced mesh per kind, plus a shared twinkle
+const FORAGE_LOOK = {
+  herb: () => { const parts = []; for (let i = 0; i < 5; i++) { const g = new THREE.ConeGeometry(0.05, 0.42, 4, 1); g.translate(0, 0.21, 0); g.rotateZ(0.35); g.rotateY((i / 5) * 6.283); parts.push(col(g, [0.42, 0.62, 0.3])); } const b = new THREE.IcosahedronGeometry(0.07, 0); b.translate(0, 0.4, 0); parts.push(col(b, [1.6, 1.45, 0.9])); return parts; },
+  wheat: () => { const parts = []; for (let i = 0; i < 6; i++) { const a = (i / 6) * 6.283, s = new THREE.CylinderGeometry(0.008, 0.012, 0.75, 4); s.translate(0, 0.37, 0); s.rotateZ(0.08); s.rotateY(a); s.translate(Math.cos(a) * 0.05, 0, Math.sin(a) * 0.05); parts.push(col(s, [0.78, 0.66, 0.32])); const e = new THREE.OctahedronGeometry(0.04, 0); e.scale(0.7, 2.4, 0.7); e.translate(Math.cos(a) * 0.1, 0.8, Math.sin(a) * 0.1); parts.push(col(e, [1.15, 0.88, 0.38])); } return parts; },
+  honey: () => { const c = new THREE.DodecahedronGeometry(0.2, 0); c.scale(1, 0.75, 0.85); c.translate(0, 0.15, 0); const d = new THREE.SphereGeometry(0.08, 8, 6); d.translate(0.1, 0.02, 0.08); return [col(c, [1.25, 0.72, 0.18]), col(d, [1.4, 0.85, 0.25])]; },
+  cap: () => { const parts = []; [[0, 0, 1], [0.16, 0.08, 0.7], [-0.12, 0.12, 0.6]].forEach(([x, z, k]) => { const st = new THREE.CylinderGeometry(0.03 * k, 0.04 * k, 0.22 * k, 6); st.translate(x, 0.11 * k, z); parts.push(col(st, [0.86, 0.82, 0.74])); const cp = new THREE.SphereGeometry(0.12 * k, 10, 6, 0, 6.283, 0, 1.6); cp.translate(x, 0.2 * k, z); parts.push(col(cp, [0.55, 0.32, 0.5])); }); return parts; },
+  berry: () => { const parts = []; const b = new THREE.IcosahedronGeometry(0.32, 0); b.scale(1, 0.7, 1); b.translate(0, 0.22, 0); parts.push(col(b, [0.24, 0.36, 0.3])); for (let i = 0; i < 7; i++) { const a = i * 2.4, s = new THREE.SphereGeometry(0.055, 6, 5); s.translate(Math.cos(a) * 0.27, 0.22 + Math.sin(i * 1.7) * 0.12, Math.sin(a) * 0.27); parts.push(col(s, [0.72, 0.86, 1.25])); } return parts; },
+};
+function col(g, c) { g = g.index ? g.toNonIndexed() : g; const n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) a.set(c, i * 3); g.setAttribute('color', new THREE.BufferAttribute(a, 3)); for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'color'].includes(k)) g.deleteAttribute(k); return g; }
+function mergeCol(geos) { // non-indexed parts with position, normal and colour
+  let n = 0; for (const g of geos) n += g.attributes.position.count;
+  const P = new Float32Array(n * 3), N = new Float32Array(n * 3), Cc = new Float32Array(n * 3); let o = 0;
+  for (const g of geos) { P.set(g.attributes.position.array, o * 3); N.set(g.attributes.normal.array, o * 3); Cc.set(g.attributes.color.array, o * 3); o += g.attributes.position.count; }
+  const out = new THREE.BufferGeometry(); out.setAttribute('position', new THREE.BufferAttribute(P, 3)); out.setAttribute('normal', new THREE.BufferAttribute(N, 3)); out.setAttribute('color', new THREE.BufferAttribute(Cc, 3));
+  return out;
+}
+function buildForage(root, list) {
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), zero = new THREE.Vector3(0, 0, 0), p = new THREE.Vector3();
+  const SC = { herb: 1.9, wheat: 1.7, cap: 1.7, berry: 1.5, honey: 1.35 }, sc = (k) => new THREE.Vector3(SC[k], SC[k], SC[k]);
+  const glintY = (o) => o.y + (o.k === 'honey' ? 0.7 : o.k === 'wheat' ? 1.7 : 1.25);
+  const meshes = {};
+  for (const k of Object.keys(FORAGE_LOOK)) {
+    const items = list.filter((o) => o.k === k); if (!items.length) continue;
+    const geo = mergeCol(FORAGE_LOOK[k]());
+    const im = new THREE.InstancedMesh(geo, haze(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7 }), 0.6), items.length);
+    im.castShadow = true;
+    items.forEach((o, i) => { o.im = im; o.ii = i; o.rot = (o.id * 1.7) % 6.283; m4.compose(p.set(o.x, o.y, o.z), q.setFromEuler(e.set(0, o.rot, 0)), sc(k)); im.setMatrixAt(i, m4); });
+    im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); im.frustumCulled = false;
+    root.add(im); meshes[k] = im;
+  }
+  // a faint glint over each, so they read from a little way off
+  const pos = new Float32Array(list.length * 3); list.forEach((o, i) => pos.set([o.x, glintY(o), o.z], i * 3));
+  const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const pm = new THREE.PointsMaterial({ map: TEX.spark, color: new THREE.Color(2.2, 1.9, 1.25), size: 0.7, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+  const pts = new THREE.Points(pg, pm); pts.frustumCulled = false; root.add(noReflect(pts));
+  W.animated.push((t) => { pm.opacity = 0.55 + Math.sin(t * 2.2) * 0.25; pm.size = 0.62 + Math.sin(t * 3.1) * 0.14; });
+  EARTH.setForage = (o, on) => { // picked (hidden) or grown back
+    m4.compose(p.set(o.x, o.y, o.z), q.setFromEuler(e.set(0, o.rot, 0)), on ? sc(o.k) : zero); o.im.setMatrixAt(o.ii, m4); o.im.instanceMatrix.needsUpdate = true;
+    pos[o.id * 3 + 1] = on ? glintY(o) : -1e5; pg.attributes.position.needsUpdate = true;
+  };
 }
 
 // ---------------------------------------------------------------- a chest: an old reliquary box, white wood bound in gold, a feather on the lid

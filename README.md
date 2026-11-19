@@ -83,6 +83,25 @@ Sized after Monster Hunter's hunt HUD so the scene stays the subject:
 - The crater's pillar sleeps (a faint thread of light) until Camael's echo has spoken, so the sky cannot be reached early;
   arriving in the sky early (old saves) points you back down
 
+## Forage, cooking and fire (v1.9, after Breath of the Wild)
+
+- **Forage**: dawnleaf (meadows), golden wheat (by the town and the mill), wild honey (on top of tall rocks and in tree
+  crowns: climb for it), marsh caps (the swamp) and frostberries (the abbey's ridge) glint where they grow; walk over
+  them to pick them up (up to 30 of each). They grow back after a few minutes
+- **Cooking**: at any lit beacon or the new cooking fire in Belldawn's square, Interact opens the reliquary's 糧食 tab
+  with a pot: up to three ingredients. Dawnleaf and wheat heal; honey, caps and berries add a blessing (stamina use
+  −35%, attack +15% or damage taken −20%) that lasts longer the more of it is in the pot; a pot of mixed blessings
+  becomes a heartier stew. Dawnleaf + wheat + honey is his mother's recipe: full health and a long stamina blessing.
+  Eat from the 糧食 tab; the blessing shows as a chip under the stamina bar
+- **Fire**: the mortal world's grass burns. Rotwalkers' bursts set it alight; a weapon swung by a fire (a lit beacon,
+  the town's fire, a burning meadow) catches for 40 s, sets grass alight where it swings and hits a little harder; the
+  fallen seraph's blade lights the grass on its heavy blows. Fire spreads cell by cell, burns beasts and the seraph,
+  leaves the ground scorched black (it greens again later) and throws up hot air: glide over it to rise. Water puts
+  a burning weapon out
+- **Crates and boulders**: crates by the old camps break under a blow and hold ingredients (sometimes a light-dew
+  flask); boulders sit on the slopes above where beasts roam: hit one and it rolls downhill, crushing what it meets,
+  then breaks apart (another appears later)
+
 ## Exploration (v1.8, after Breath of the Wild)
 
 - **Climb anything**: push into any wall, tower, tree, roof, rock or island face and he grabs on. Stick/WASD climbs

@@ -93,10 +93,18 @@ function worldVaryings(sh) {
   sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP; varying vec3 vWN;\n' + NOISE);
 }
 // stratified rock on steep faces, macro colour breakup on flats
+// the mortal world's burn map (set by the game): scorched ground and embers under burning grass
+export const BURN = { tex: { value: null }, grid: { value: new THREE.Vector3(1, 1, 1) } };
 export function terrainDetail(m, o = {}) {
   if (o.tint) m.defines = Object.assign({}, m.defines, { TINT_ROCK: 1 }); // cliffs take on the painted ground's tone (scorched rift walls)
+  if (o.burn) m.defines = Object.assign({}, m.defines, { BURNMAP: 1 });
   m.onBeforeCompile = (sh) => {
     worldVaryings(sh);
+    if (o.burn) {
+      if (!BURN.tex.value) { const t = new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat); t.needsUpdate = true; BURN.tex.value = t; }
+      sh.uniforms.uBurnT = BURN.tex; sh.uniforms.uBurnG = BURN.grid;
+      sh.fragmentShader = 'uniform sampler2D uBurnT; uniform vec3 uBurnG;\n' + sh.fragmentShader;
+    }
     sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
       {
         vec3 vc0 = diffuseColor.rgb;
@@ -110,6 +118,11 @@ export function terrainDetail(m, o = {}) {
           rk *= clamp(vc0 / ${lin('#9a9184')}, vec3(0.1), vec3(1.2));
         #endif
         diffuseColor.rgb = mix(diffuseColor.rgb, rk, steep);
+        #ifdef BURNMAP
+          vec2 lfBn = texture2D(uBurnT, ((vWP.xz + uBurnG.x)*uBurnG.y + 0.5)/uBurnG.z).rg;
+          float lfAsh = lfBn.r*(0.75 + 0.25*en(vWP.xz*0.8))*(1.0 - steep);
+          diffuseColor.rgb = mix(diffuseColor.rgb, ${lin('#1c1714')}*(0.8 + 0.4*m2), lfAsh*0.88);
+        #endif
         #ifdef CRACKS
           // basalt plates split by glowing seams of the fire below
           vec2 wq = vWP.xz + vec2(en(vWP.xz*0.07), en(vWP.xz*0.07 + 5.2))*6.0; // warp so the seams wander
@@ -132,7 +145,12 @@ export function terrainDetail(m, o = {}) {
     }
   };
   if (o.cracks) m.defines = Object.assign({}, m.defines, { CRACKS: 1 });
-  m.customProgramCacheKey = () => 'lf-terrain' + (o.tint ? '-t' : '') + (o.cracks ? '-c' : '');
+  if (o.burn) { // embers glow in the ash while the grass above still burns
+    const prev = m.onBeforeCompile;
+    m.onBeforeCompile = (sh) => { prev(sh); sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+      { vec2 lfE = texture2D(uBurnT, ((vWP.xz + uBurnG.x)*uBurnG.y + 0.5)/uBurnG.z).rg; totalEmissiveRadiance += ${lin('#ff5a14')}*lfE.g*lfE.g*(0.18 + 0.3*smoothstep(0.55, 0.8, en(vWP.xz*1.7)));} `); };
+  }
+  m.customProgramCacheKey = () => 'lf-terrain' + (o.tint ? '-t' : '') + (o.cracks ? '-c' : '') + (o.burn ? '-b' : '');
   return m;
 }
 export function strataMaterial(moss = 0.85, o = {}) {

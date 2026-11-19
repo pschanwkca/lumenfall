@@ -329,6 +329,7 @@ const GRASS_VS = (flower) => `
   #include <common>
   #include <fog_pars_vertex>
   uniform sampler2D uHeight; uniform vec3 uCenter; uniform vec3 uPlayer; uniform float uTime; uniform float uRadius; uniform float uBaseY; uniform vec3 uGrid; varying float vWheat;
+  uniform sampler2D uBurn; uniform float uBurnOn; varying vec2 vBurn;
   attribute vec3 aOff; attribute vec2 aRnd; ${flower ? 'attribute vec3 aCol; varying vec3 vCol;' : ''}
   varying float vH; varying float vVar; varying vec3 vW; varying float vGust; varying float vPatch; varying float vCloud; uniform float uCloudT;
   ${NOISE}
@@ -340,6 +341,8 @@ const GRASS_VS = (flower) => `
     float fade = 1.0 - smoothstep(uRadius*0.6, uRadius*0.97, length(rel));
     ${flower ? 'float s = aRnd.y*0.9*fade*step(aRnd.x, hm.b*0.55)*step(0.5, hm.g);' : 'float s = aRnd.y*fade*smoothstep(0.3, 0.75, hm.g);'}
     vWheat = hm.a; ${flower ? '' : 's *= 1.0 + hm.a*0.9;'}
+    vBurn = texture2D(uBurn, huv).rg*uBurnOn; // burnt (r) and burning (g): scorched stubble, flame-lit tips
+    s *= 1.0 - vBurn.x*${flower ? '1.0' : '0.78'};
     float c = cos(aOff.y), sn = sin(aOff.y);
     vec3 p = position;
     p.xz = mat2(c, -sn, sn, c)*p.xz;
@@ -372,7 +375,9 @@ function buildGrass(scene, quality) {
     uGold: { value: new THREE.Color('#e6cf78') }, uSilver: { value: new THREE.Color('#d3e3a9') },
     uSunDir: { value: sunDir }, uLight: { value: 1.25 }, uCloudT: CLOUD, uBaseY: { value: 0 }, uWheat: { value: new THREE.Color('#d8b25a') },
     uGrid: { value: new THREE.Vector3(HALF, SEG / WORLD, GN) },
+    uBurn: { value: null }, uBurnOn: { value: 0 },
   }]);
+  { const t = new THREE.DataTexture(new Uint8Array(4), 1, 1, THREE.RGBAFormat); t.needsUpdate = true; uniforms.uBurn.value = t; }
   uniforms.uHeight.value = W.heightTex;
   const grassMat = new THREE.ShaderMaterial({
     uniforms,
@@ -380,8 +385,8 @@ function buildGrass(scene, quality) {
     fragmentShader: `
       #include <common>
       #include <fog_pars_fragment>
-      uniform vec3 uBase, uTip, uGold, uSilver, uSunDir, uWheat; uniform float uLight;
-      varying float vH; varying float vVar; varying vec3 vW; varying float vGust; varying float vPatch; varying float vCloud; varying float vWheat;
+      uniform vec3 uBase, uTip, uGold, uSilver, uSunDir, uWheat; uniform float uLight; uniform float uTime;
+      varying float vH; varying float vVar; varying vec3 vW; varying float vGust; varying float vPatch; varying float vCloud; varying float vWheat; varying vec2 vBurn;
       void main(){
         float patchN = vPatch;
         vec3 tip = mix(uTip, uGold, smoothstep(0.72, 1.0, vVar) + smoothstep(0.62, 0.8, patchN)*0.6);
@@ -394,6 +399,8 @@ function buildGrass(scene, quality) {
         col += vec3(1.0, 0.86, 0.55)*back*vH*vH*0.9;
         col += vec3(0.95, 0.95, 0.75)*vGust*vH*vH*0.22;
         col *= uLight*(0.62 + 0.38*vH)*(0.55 + 0.45*vCloud);
+        col = mix(col, vec3(0.13, 0.105, 0.09)*(0.7 + 0.6*vH), vBurn.x);
+        col += vec3(1.7, 0.62, 0.16)*vBurn.y*smoothstep(0.25, 1.0, vH)*(0.55 + 0.45*sin(uTime*23.0 + vW.x*2.7 + vW.z*1.9));
         gl_FragColor = vec4(col, 1.0);
         #include <fog_fragment>
       }`,
@@ -405,7 +412,7 @@ function buildGrass(scene, quality) {
 
   const fu = THREE.UniformsUtils.clone(uniforms);
   fu.uHeight.value = W.heightTex;
-  fu.uCloudT = CLOUD; fu.uBaseY = uniforms.uBaseY; fu.uGrid = uniforms.uGrid;
+  fu.uCloudT = CLOUD; fu.uBaseY = uniforms.uBaseY; fu.uGrid = uniforms.uGrid; fu.uBurn = uniforms.uBurn; fu.uBurnOn = uniforms.uBurnOn;
   fu.uRadius.value = 34;
   const flowerMat = new THREE.ShaderMaterial({
     uniforms: fu,

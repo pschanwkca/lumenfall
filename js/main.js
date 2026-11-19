@@ -7,7 +7,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import * as C from './core.js';
 import { buildWorld, W, colliders, sunDir, updateAmbient, setWaterQuality, HALO_POS, COL, sanitizeNormals, noReflect, LANDMARKS, REALM } from './world.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-import { GradeShader, GodRayShader, CLOUD, hookCloudClock, rockGeo } from './env.js';
+import { GradeShader, GodRayShader, CLOUD, hookCloudClock, rockGeo, BURN } from './env.js';
 import { setLang, tr } from './i18n.js';
 import { buildEarthGrid, buildEarth, EARTH, earthRegion, earthCull, inRift, SEA_NORTH, EP as EARTH_EP, riftZ } from './earth.js';
 import { createFolk, FOLK_PAL } from './folk.js';
@@ -37,7 +37,7 @@ const settings = Object.assign({ quality: isTouch ? 'mid' : 'high', sound: true,
 const TEST = Object.assign({ on: false, god: false, oneHit: false, powers: false, coords: false }, store.get('lumenfall_test', {}));
 const progKey = () => (TEST.on ? 'lumenfall_progress_test' : 'lumenfall_progress');
 let prog = Object.assign({ f: [], s: [false, false, false, false], end: false, boss: false, boss2: false, boss3: false, realm: false, earth: false, weapon: 'sword', kills: {}, seen: {}, broken: {}, rescued: {}, beacons: {} }, store.get(progKey(), {}));
-if (!prog.rescued) prog.rescued = {}; if (!prog.beacons) prog.beacons = {}; if (!prog.vigil) prog.vigil = {}; if (!prog.tips) prog.tips = {}; if (!prog.chests) prog.chests = {};
+if (!prog.rescued) prog.rescued = {}; if (!prog.beacons) prog.beacons = {}; if (!prog.vigil) prog.vigil = {}; if (!prog.tips) prog.tips = {}; if (!prog.chests) prog.chests = {}; if (!prog.ingr) prog.ingr = {}; if (!prog.dishes) prog.dishes = {};
 // weapons are found in the world now; a journey that already beat Ophiel keeps the greatsword it was given
 if (!prog.weapons) prog.weapons = prog.end || prog.earth || prog.f.length ? { spear: true, greatsword: !!prog.boss } : {}; // older journeys keep the lance they woke with
 prog.weapons.sword = true; // the father's sword: everyone sets out with it
@@ -784,6 +784,7 @@ function explodeShade(s, siege) {
   burst(FX.smoke, s.pos.x, s.pos.y + 1, s.pos.z, 50, { speed: 8, up: 2, life: 1.4, size: 3.4, c: [0.4, 0.5, 0.25], g: 0.2 });
   burst(FX.sparks, s.pos.x, s.pos.y + 1, s.pos.z, 40, { speed: 9, up: 3, life: 0.8, size: 1.2, c: [1.6, 2.0, 0.6] });
   CAM.shake = Math.max(CAM.shake, 0.4); Audio.sfx('slam');
+  if (s.earth) igniteAt(s.pos.x, s.pos.z, 4);
   s.body.scale.copy(s.bodyScale);
   killShade(s, false); s.t = 0.6;
   if (P.lock === s) P.lock = null;
@@ -1366,6 +1367,8 @@ function tryGrab(dt, wish, mag) {
   P.grabT = (P.grabT || 0) + dt;
   if (!P.grounded || P.grabT > (w.top - P.pos.y < 2.1 ? 0.06 : 0.2)) { P.grabT = 0; startClimb(w); }
 }
+// a meal's blessing: stamina, strength or guard for a while
+const stMul = () => (P.buff && P.buff.fx === 'stamina' ? 0.65 : 1);
 function climbMove(dt) {
   const K = P.climb;
   K.t += dt;
@@ -1384,7 +1387,7 @@ function climbMove(dt) {
   } else if (m > 0.15) {
     const k = Math.min(1, m) * CLIMB.sp;
     vy = (up / m) * k; vs = (side / m) * k;
-    P.stamina -= CLIMB.drain * dt * Math.min(1, m); P.staminaDelay = 0.6;
+    P.stamina -= CLIMB.drain * dt * Math.min(1, m) * stMul(); P.staminaDelay = 0.6;
     K.mv = damp(K.mv, 1, 10, dt);
     const ph0 = P.phase; P.phase += dt * 5.2 * Math.min(1, m);
     if (Math.floor(ph0 / Math.PI) !== Math.floor(P.phase / Math.PI)) { Audio.sfx('climb'); if (Math.random() < 0.4) emit(FX.smoke, { x: P.pos.x - K.nx * 0.4, y: P.pos.y + 1.8, z: P.pos.z - K.nz * 0.4, vy: -0.6, life: 0.7, s: 0.5, g: 0.6, c: C.LAYER.cur === 2 ? [0.42, 0.26, 0.22] : [0.92, 0.88, 0.8], drag: 2 }); }
@@ -1666,6 +1669,7 @@ function impact(x, y, z, power, ang, col) {
 const IMP_ANG = { l0: 0.62, l1: -0.62, l2: 0.06, l3: 0.18, heavy: 0.12, counter: 1.1, focus: 1.1 };
 const OFFSET_KINDS = new Set(['heavy', 'l3', 'counter', 'focus']);
 function doHit(A) {
+  if (P.inEarth) propsHit(A, Math.sin(P.yaw + P.spin), Math.cos(P.yaw + P.spin));
   if (A.slam) { slam(A); return; }
   const fx = Math.sin(P.yaw + P.spin), fz = Math.cos(P.yaw + P.spin), L = wlook();
   let n = 0;
@@ -1675,7 +1679,7 @@ function doHit(A) {
     if (d - er > A.reach * (WP.reach || 1)) continue;
     if (Math.abs(e.pos.y - P.pos.y) > (e.hy || 2.8)) continue;
     if (A.cone > -1.5 && d > er + 0.8 && (dx * fx + dz * fz) / (d + 1e-5) < A.cone) continue;
-    const dmg = (A.dmg[0] + Math.random() * (A.dmg[1] - A.dmg[0])) * P.atk.mult * P.atkMul * (WP.dmg || 1) * (kd0 === 'counter' ? WP.counter || 1 : kd0 === 'focus' ? WP.focus || 1 : 1);
+    const dmg = (A.dmg[0] + Math.random() * (A.dmg[1] - A.dmg[0])) * P.atk.mult * P.atkMul * (WP.dmg || 1) * (P.buff && P.buff.fx === 'attack' ? 1.15 : 1) * (P.ember > 0 ? 1.12 : 1) * (kd0 === 'counter' ? WP.counter || 1 : kd0 === 'focus' ? WP.focus || 1 : 1);
     if (!(e.isBoss && bossBlow(e, dmg))) hitEnemy(e, dmg, A.poise * P.atk.mult * (WP.poise || 1), P.atk.kind === 'counter' || P.atk.kind === 'heavy' ? 'crit' : '', { aim: P.atk.aim });
     // the point of impact: on the target's surface, facing you, at chest height
     const hy = e.pos.y + Math.min(2.4, (e.hy || 2.2) * 0.55) * (e.isBoss ? 1 : e.sc || 1), k = (d - er * 0.6) / (d + 1e-5);
@@ -1714,6 +1718,7 @@ function startAttack(kind, mult = 1) {
   const A = atkT()[kind];
   P.atk = { kind, t: 0, dur: A.dur, hitsDone: 0, queued: false, mult, combo: COMBO.indexOf(kind), quake: kind === 'heavy' && mult >= 1.6 && has('oath'),
     hit: A.hits[0], sw: SWING[wbase()] || 0.09, last: A.hits[A.hits.length - 1] };
+  if (P.inEarth) emberSwing();
   const lead = Math.max(0, A.hits[0] - P.atk.sw); // the effects wait for the swing, not the wind-up
   let tgt = P.lock && !P.lock.dead ? P.lock : nearestEnemy(7, -0.2);
   if (kind === 'focus' && P.aim) { tgt = P.aim.e; P.atk.aim = P.aim.part; P.aim.e.anchor(P.aim.part, _v); P.yaw = Math.atan2(_v.x - P.pos.x, _v.z - P.pos.z); }
@@ -1862,6 +1867,7 @@ function hurtPlayer(dmg, from, fromBoss) {
   }
   if (P.inHell && !holyBlade()) dmg *= 3;
   if (P.climb) letGo(2, 0); // a blow knocks him off the wall
+  if (P.buff && P.buff.fx === 'guard') dmg *= 0.8;
   P.hp -= dmg; P.inv = 0.9; P.hurtT = 0.35; P.lastHurt = time;
   const d = _p.copy(P.pos).sub(from); d.y = 0; d.normalize();
   P.vel.x = d.x * 9; P.vel.z = d.z * 9; P.vel.y = 3.5; P.grounded = false; P.glide = false; P.atk.kind = null; P.charge = -1; P.healT = -1; P.spin = 0;
@@ -1955,9 +1961,10 @@ function updatePlayer(dt) {
     const sp = P.flapT > 0 ? 12.5 : 11;
     P.vel.x = damp(P.vel.x, Math.sin(P.yaw) * sp, 3, dt); P.vel.z = damp(P.vel.z, Math.cos(P.yaw) * sp, 3, dt);
     let lift = has('wings') ? -1.6 : -2.3;
+    if (fireLift()) { lift = 12.5; if (Math.random() < 0.4) emit(FX.sparks, { x: P.pos.x + (Math.random() - 0.5) * 4, y: P.pos.y - 1.5, z: P.pos.z + (Math.random() - 0.5) * 4, vy: 9, life: 0.6, s: 0.7, c: [2.4, 1.1, 0.35] }); }
     for (const u of W.updrafts) if (Math.hypot(P.pos.x - u.x, P.pos.z - u.z) < 4.2 && P.pos.y < u.top && P.pos.y > (u.g ?? -99) - 3) { lift = 12; if (Math.random() < 0.3) emit(FX.sparks, { x: P.pos.x + (Math.random() - 0.5) * 3, y: P.pos.y - 1, z: P.pos.z + (Math.random() - 0.5) * 3, vy: 8, life: 0.6, s: 0.6 }); }
     P.vel.y = damp(P.vel.y, lift, P.flapT > 0 ? 0.7 : lift > 0 ? 2.5 : 4, dt);
-    P.stamina -= (lift > 0 ? 2 : has('wings') ? 4 : 6) * dt; P.staminaDelay = 0.8;
+    P.stamina -= (lift > 0 ? 2 : has('wings') ? 4 : 6) * dt * stMul(); P.staminaDelay = 0.8;
     if (P.stamina <= 0) { P.stamina = 0; P.glide = false; }
   } else {
     const sprint = mag > 0.88;
@@ -1966,7 +1973,7 @@ function updatePlayer(dt) {
     if (!held) P.sprintSpent = false;
     P.sprinting = held && !P.sprintSpent && mag > 0.3 && P.grounded && P.rollT < 0 && !P.lock && P.castT < 0 && !P.atk.kind && P.healT < 0 && P.stamina > 0;
     if (P.sprinting) {
-      P.stamina -= (P.calm ? 5 : 11) * dt; P.staminaDelay = 0.5;
+      P.stamina -= (P.calm ? 5 : 11) * dt * stMul(); P.staminaDelay = 0.5;
       if (P.stamina <= 0) { P.stamina = 0; P.sprintSpent = true; }
       if (Math.random() < dt * 9) emit(FX.smoke, { x: P.pos.x - wish.x * 0.6, y: P.pos.y + 0.1, z: P.pos.z - wish.z * 0.6, vy: 0.4, life: 0.5, s: 0.7, g: 0.2, c: C.LAYER.cur === 2 ? [0.42, 0.26, 0.22] : [0.92, 0.88, 0.8], drag: 3 });
     }
@@ -1983,7 +1990,7 @@ function updatePlayer(dt) {
         const ux = gx / sl, uz = gz / sl, into = mag > 0.2 ? (wish.x * ux + wish.z * uz) / mag : 0;
         if (into > 0.25 && !P.climbSpent && P.slideT <= 0 && !P.atk.kind) {
           P.scramble = 1; run = Math.min(run, 2.7 / Math.hypot(1, sl)); P.sprinting = false;
-          P.stamina -= 6 * dt; P.staminaDelay = 0.6;
+          P.stamina -= 6 * dt * stMul(); P.staminaDelay = 0.6;
           if (P.stamina <= 0) { P.stamina = 0; P.climbSpent = true; P.slideT = 0.8; }
           P.yaw = dampAngle(P.yaw, Math.atan2(ux, uz), 8, dt);
         } else if (into > 0.25 && (P.climbSpent || P.slideT > 0)) P.slideT = Math.max(P.slideT, 0.25);
@@ -2284,6 +2291,292 @@ function awakenVigil(v) {
   setTimeout(() => toast(`<i class="dia"></i>${v.name} · 地圖已揭示 · 成為據點，可從地圖傳送`, true), 3600);
   updateQuest();
 }
+// ---- forage & cooking (as in the wilds): gather what the land gives, cook at a fire, eat for health and a blessing
+const INGR = {
+  herb: { name: '晨光草', en: 'DAWNLEAF', heal: 20, where: '墜光坑、麥原一帶的草地', desc: '墜光之後最先長回來的草，葉尖帶一點光。煮湯最好。' },
+  wheat: { name: '金麥穗', en: 'GOLDEN WHEAT', heal: 14, where: '晨鐘堡與風車丘外的麥田', desc: '晨鐘堡外的麥。可以做餅、做粥，和甚麼都配。' },
+  honey: { name: '野蜂蜜', en: 'WILD HONEY', heal: 8, fx: 'stamina', where: '高處：大石頂、樹冠上', desc: '野蜂把巢築在高處。要爬上去才拿得到——吃了，爬得更久。' },
+  cap: { name: '沼菇', en: 'MARSH CAP', heal: 8, fx: 'attack', where: '沉沼與森林的濕地', desc: '紫色的沼地菇，味道很衝。吃了渾身是勁。' },
+  berry: { name: '霜莓', en: 'FROSTBERRY', heal: 8, fx: 'guard', where: '霜脊修道院一帶的山脊', desc: '修士們冬天靠它過活的藍莓。吃了皮肉像結了一層霜，不怕痛。' },
+};
+const FX_INFO = { stamina: { g: '耐', name: '耐力', desc: '攀爬、衝刺與滑翔的耐力消耗 −35%' }, attack: { g: '力', name: '力量', desc: '攻擊 +15%' }, guard: { g: '守', name: '守護', desc: '受到的傷害 −20%' } };
+const INGR_MAX = 30, POT_MAX = 3;
+function cookResult(pot) {
+  if (!pot.length) return null;
+  const cnt = {}; for (const k of pot) cnt[k] = (cnt[k] || 0) + 1;
+  const has = (k) => cnt[k] > 0, key = [...pot].sort().join('+');
+  if (has('herb') && has('wheat') && has('honey')) // what his mother made on mornings before the hunt
+    return { key, n: '母親的晨光蜜粥', h: 999, fx: 'stamina', d: 360, mom: true };
+  let h = pot.reduce((a, k) => a + INGR[k].heal, 0);
+  const fc = {}; for (const k of pot) if (INGR[k].fx) fc[INGR[k].fx] = (fc[INGR[k].fx] || 0) + 1;
+  const fs = Object.entries(fc).sort((a, b) => b[1] - a[1]);
+  const mixed = fs.length > 1 && fs[0][1] === fs[1][1], fx = fs.length && !mixed ? fs[0][0] : null, nfx = fx ? fc[fx] : 0;
+  let n;
+  if (mixed) { n = '雜錦燉菜'; h = Math.round(h * 1.25); }
+  else if (fx === 'stamina') n = has('wheat') ? '野蜜麥餅' : has('herb') ? '野蜜草茶' : '野蜜甜湯';
+  else if (fx === 'attack') n = has('wheat') ? '沼菇麥派' : has('herb') ? '沼菇燉草' : '烤沼菇串';
+  else if (fx === 'guard') n = has('wheat') ? '霜莓麥糕' : has('herb') ? '霜莓草茶' : '霜莓果凍';
+  else n = has('wheat') && has('herb') ? '晨光麥粥' : has('wheat') ? '烤麥餅' : '晨光草湯';
+  return { key, n, h, fx, d: fx ? 100 * nfx + 30 * (pot.length - nfx) : 0 };
+}
+const POT = []; // what's in the pot right now (the cooking view of the reliquary)
+let cookAt = null; // the fire he is cooking at, or null
+function updateForage(dt) {
+  for (const o of EARTH.forage) {
+    if (o.gone) { if (time > o.back) { o.gone = false; EARTH.setForage(o, true); } continue; }
+    if (Math.abs(P.pos.x - o.x) > 1.6 || Math.abs(P.pos.z - o.z) > 1.6 || Math.abs(P.pos.y - o.y) > 1.8) continue;
+    const have = prog.ingr[o.k] || 0;
+    if (have >= INGR_MAX) { if (!o.full || time > o.full) { o.full = time + 6; pickFeed(`${INGR[o.k].name} 已經帶不下了`, true); } continue; }
+    o.gone = true; o.back = time + 420; EARTH.setForage(o, false);
+    prog.ingr[o.k] = have + 1; P.ingrDirty = true; (prog.ingrSeen ||= {})[o.k] = true;
+    burst(FX.sparks, o.x, o.y + 0.4, o.z, 10, { speed: 1.6, up: 2.2, life: 0.7, size: 0.7, c: [1.9, 1.7, 1.1] });
+    Audio.sfx('pickup'); pickFeed(`${INGR[o.k].name} <b>+1</b> <small>${prog.ingr[o.k]}</small>`);
+    if (!prog.tips.forage) { prog.tips.forage = true; setTimeout(() => toast(`<i class="dia"></i>撿到食材 · 在點亮的燈火或晨鐘堡的灶火旁可以烹調 · 料理在聖匣的「糧食」裡`, true), 900); }
+  }
+  if (P.ingrDirty && ((P.ingrSave = (P.ingrSave || 0) - dt) <= 0)) { P.ingrDirty = false; P.ingrSave = 2; save(); }
+}
+function pickFeed(html, muted) {
+  const box = $('pickFeed'); if (!box) return;
+  const el = document.createElement('div'); el.className = 'pf' + (muted ? ' m' : ''); el.innerHTML = html; box.appendChild(el);
+  while (box.children.length > 4) box.firstChild.remove();
+  setTimeout(() => el.classList.add('out'), 2200); setTimeout(() => el.remove(), 2800);
+}
+function cook() {
+  const r = cookResult(POT); if (!r || !cookAt) return;
+  for (const k of POT) prog.ingr[k] = Math.max(0, (prog.ingr[k] || 0) - 1);
+  POT.length = 0;
+  const d = prog.dishes[r.key] || (prog.dishes[r.key] = { n: r.n, h: r.h, fx: r.fx, d: r.d, c: 0, mom: r.mom });
+  d.c = Math.min(20, d.c + 1); save();
+  Audio.sfx('purify'); pickFeed(`做好了 · ${r.n}`);
+  if (r.mom && !prog.tips.mom) { prog.tips.mom = true; setTimeout(() => toast('<i class="dia"></i>母親的晨光蜜粥 · 「吃飽了才有力氣飛。」', true), 400); }
+  BAG.sel = 0; renderBag();
+}
+function eatDish(key) {
+  const d = prog.dishes[key]; if (!d || d.c <= 0) return;
+  d.c--; if (d.c <= 0) delete prog.dishes[key];
+  P.hp = Math.min(P.maxHp, P.hp + d.h);
+  if (d.fx) P.buff = { fx: d.fx, t: Math.max(d.d, P.buff && P.buff.fx === d.fx ? P.buff.t : 0), max: d.d };
+  save(); Audio.sfx('pickup');
+  burst(FX.sparks, P.pos.x, P.pos.y + 1.2, P.pos.z, 24, { speed: 2, up: 2.5, life: 1, size: 0.9, c: [1.6, 1.8, 1.2] });
+  pickFeed(`吃了 ${d.n}${d.fx ? ` · ${FX_INFO[d.fx].name} ${Math.round(d.d / 60 * 10) / 10} 分鐘` : ''}`);
+  renderBag();
+}
+function updateBuff(dt) {
+  const el = $('buffChip'); if (!el) return;
+  if (P.buff && state === 'play' && !paused) { P.buff.t -= dt; if (P.buff.t <= 0) { P.buff = null; pickFeed('料理的效果消失了', true); } }
+  const key = P.buff ? P.buff.fx + Math.ceil(P.buff.t) : '';
+  if (key === hud.buffKey) return; hud.buffKey = key;
+  el.classList.toggle('hidden', !P.buff);
+  if (P.buff) { const t = Math.ceil(P.buff.t); el.innerHTML = `<b>${FX_INFO[P.buff.fx].g}</b><i>${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}</i>`; el.classList.toggle('low', t < 20); }
+}
+// ---- fire (the mortal world's grass burns): it spreads through the meadow, scorches, lifts a glider, and grows back
+const FIRE = { tex: null, data: null, live: new Map(), burnt: new Map(), acc: 0, hurtCd: 0, dirty: false, tipShown: false };
+const fcell = (x, z) => { const ix = Math.round((x + C.EHALF) / C.ECELL), iz = Math.round((z + C.EHALF) / C.ECELL); return ix < 1 || iz < 1 || ix >= C.EGN - 1 || iz >= C.EGN - 1 ? -1 : iz * C.EGN + ix; };
+const fpos = (i) => [-C.EHALF + (i % C.EGN) * C.ECELL, -C.EHALF + Math.floor(i / C.EGN) * C.ECELL];
+function initFire() {
+  const N = C.EGN; FIRE.data = new Uint8Array(N * N * 4);
+  FIRE.tex = new THREE.DataTexture(FIRE.data, N, N, THREE.RGBAFormat); FIRE.tex.minFilter = FIRE.tex.magFilter = THREE.LinearFilter; FIRE.tex.needsUpdate = true;
+  for (const gm of W.grassMats) if (gm.uniforms.uBurn) { gm.uniforms.uBurn.value = FIRE.tex; gm.uniforms.uBurnOn.value = C.LAYER.cur === 1 ? 1 : 0; }
+  BURN.tex.value = FIRE.tex; BURN.grid.value.set(C.EHALF, C.ESEG / C.EWORLD, C.EGN);
+  // a pool of flames, set over the burning cells nearest the camera
+  FIRE.flames = [];
+  for (let i = 0; i < 40; i++) { // soft tongues of flame: a tinted glow drawn tall
+    const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.glow, color: new THREE.Color(1.5, 0.62, 0.2), transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+    m.center.set(0.5, 0.18); m.visible = false; m.renderOrder = 3; EARTH.root.add(noReflect(m)); FIRE.flames.push(m);
+  }
+}
+function placeFlames() {
+  const fl = FIRE.flames; if (!fl) return;
+  let n = 0;
+  if (FIRE.live.size && P.inEarth) {
+    const near = [];
+    for (const [i, f] of FIRE.live) { if (f.t > 3.6) continue; const [x, z] = fpos(i), d = Math.abs(x - camera.position.x) + Math.abs(z - camera.position.z); if (d < 90) near.push([d, i, f]); }
+    near.sort((a, b) => a[0] - b[0]);
+    for (const [, i, f] of near) {
+      if (n >= fl.length) break;
+      const [x, z] = fpos(i), m = fl[n++], k = f.t < 0.6 ? f.t / 0.6 : f.t > 3 ? Math.max(0, 1 - (f.t - 3) / 0.6) : 1, w = (i * 0.618) % 1;
+      m.visible = true; m.position.set(x + (w - 0.5) * 2, C.groundAtL(x, z, 1), z + (((i * 0.37) % 1) - 0.5) * 2);
+      const fl2 = 0.8 + Math.sin(time * 17 + i) * 0.15 + Math.sin(time * 9.3 + i * 2.1) * 0.1;
+      m.scale.set((1.6 + w * 0.8) * k, (2.6 + w * 1.6) * k * fl2, 1); m.material.opacity = 0.45 + 0.2 * Math.sin(time * 13 + i);
+    }
+  }
+  for (let j = n; j < fl.length; j++) fl[j].visible = false;
+}
+function burnable(i) { return i >= 0 && C.grid2.mask[i] > 0.3 && !FIRE.live.has(i) && !FIRE.burnt.has(i); }
+function igniteAt(x, z, r = 0, gen = 0) { // r in metres
+  if (!FIRE.tex) return 0;
+  let n = 0;
+  for (let dz = -r; dz <= r; dz += C.ECELL) for (let dx = -r; dx <= r; dx += C.ECELL) {
+    if (dx * dx + dz * dz > r * r + 1) continue;
+    const i = fcell(x + dx, z + dz); if (!burnable(i)) continue;
+    FIRE.live.set(i, { t: 0, gen }); FIRE.data[i * 4 + 1] = 200; FIRE.dirty = true; n++;
+  }
+  if (n && !FIRE.tipShown && !prog.tips.fire) { FIRE.tipShown = true; prog.tips.fire = true; setTimeout(() => toast('<i class="dia"></i>草地著火了 · 火會燒傷人和瘴獸 · 燃燒的草地上空有熱氣流，展翼就能乘著它升高', true), 600); }
+  return n;
+}
+const NB = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]];
+function updateFire(dt) {
+  if (!FIRE.tex) return;
+  FIRE.acc += dt; FIRE.hurtCd -= dt;
+  if (FIRE.acc < 0.2) return;
+  const tk = FIRE.acc; FIRE.acc = 0;
+  const N = C.EGN, D = FIRE.data, crowd = FIRE.live.size > 700 ? 0.35 : 1;
+  const born = [];
+  for (const [i, f] of FIRE.live) {
+    f.t += tk;
+    if (f.t > 0.5 && f.t < 2.6 && f.gen < 24) for (let k = 0; k < NB.length; k++) {
+      const j = i + NB[k][0] + NB[k][1] * N;
+      if (burnable(j) && Math.random() < (k < 4 ? 0.2 : 0.09) * C.grid2.mask[j] * crowd * tk / 0.2) born.push([j, f.gen + 1]);
+    }
+    D[i * 4] = Math.min(255, (f.t / 3.4) * 255) | 0;
+    D[i * 4 + 1] = f.t < 3 ? 255 : Math.max(0, 255 * (1 - (f.t - 3) / 1.4)) | 0;
+    if (f.t > 4.4) { FIRE.live.delete(i); FIRE.burnt.set(i, time); D[i * 4 + 1] = 0; D[i * 4] = 255; }
+  }
+  for (const [j, g] of born) if (burnable(j)) { FIRE.live.set(j, { t: 0, gen: g }); }
+  // the scorched meadow greens again after a while
+  for (const [i, t0] of FIRE.burnt) { const a = time - t0; if (a > 150) { const v = Math.max(0, 255 - ((a - 150) / 40) * 255) | 0; D[i * 4] = v; if (!v) FIRE.burnt.delete(i); } }
+  FIRE.dirty = FIRE.dirty || FIRE.live.size > 0 || FIRE.burnt.size > 0;
+  if (FIRE.dirty) { FIRE.tex.needsUpdate = true; FIRE.dirty = FIRE.live.size > 0; }
+  if (!FIRE.live.size) return;
+  // flames and smoke over a handful of burning cells near the camera; heat on whoever stands in it
+  let shown = 0;
+  for (const [i, f] of FIRE.live) {
+    const [x, z] = fpos(i);
+    if (Math.abs(x - P.pos.x) > 70 || Math.abs(z - P.pos.z) > 70) continue;
+    const y = C.groundAtL(x, z, 1);
+    if (shown < 36 && Math.random() < 0.5) { shown++;
+      emit(FX.sparks, { x: x + (Math.random() - 0.5) * 3.5, y: y + 0.3, z: z + (Math.random() - 0.5) * 3.5, vx: (Math.random() - 0.5) * 0.6, vy: 2.5 + Math.random() * 2.5, vz: (Math.random() - 0.5) * 0.6, life: 0.6 + Math.random() * 0.5, s: 0.7 + Math.random() * 0.6, c: [2.2, 0.95 + Math.random() * 0.3, 0.28] });
+      if (Math.random() < 0.35) emit(FX.smoke, { x: x + (Math.random() - 0.5) * 3, y: y + 1.5, z: z + (Math.random() - 0.5) * 3, vy: 2.2, life: 2.2, s: 2.6, g: -0.1, c: [0.32, 0.3, 0.3], drag: 0.6 });
+    }
+    if (f.t < 3.2) {
+      if (FIRE.hurtCd <= 0 && P.grounded && Math.hypot(P.pos.x - x, P.pos.z - z) < 2.6 && P.pos.y - y < 2) { FIRE.hurtCd = 0.9; P.ember = Math.max(P.ember || 0, 0); hurtPlayer(7, _v.set(P.pos.x - Math.sin(P.yaw), P.pos.y, P.pos.z - Math.cos(P.yaw))); }
+      for (const sh of shades) if (!sh.dead && sh.earth && Math.abs(sh.pos.x - x) < 2.6 && Math.abs(sh.pos.z - z) < 2.6 && (sh.fireCd = (sh.fireCd || 0) - tk) <= 0) { sh.fireCd = 0.6; damageShade(sh, 9, _v.set(sh.pos.x + 0.1, sh.pos.y, sh.pos.z), 'fire'); }
+    }
+  }
+}
+function fireLift() { // hot air over a burning meadow
+  if (!FIRE.live.size || !P.inEarth) return false;
+  const g = C.groundAtL(P.pos.x, P.pos.z, 1); if (P.pos.y - g > 48) return false;
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) { const f = FIRE.live.get(fcell(P.pos.x + dx * C.ECELL, P.pos.z + dz * C.ECELL)); if (f && f.t < 3.4) return true; }
+  return false;
+}
+// a weapon held into a fire catches it for a while: swings set grass alight and burn what they hit
+function emberSource() {
+  const H = EARTH.hearth; if (H && Math.hypot(P.pos.x - H.x, P.pos.z - H.z) < 3 && Math.abs(P.pos.y - H.y) < 2.5) return true;
+  for (const b of beacons) if (b.st === 'lit' && Math.hypot(P.pos.x - b.x, P.pos.z - b.z) < 3.2 && Math.abs(P.pos.y - b.y) < 3) return true;
+  for (const [i, f] of FIRE.live) if (f.t < 3) { const [x, z] = fpos(i); if (Math.abs(x - P.pos.x) < 2.4 && Math.abs(z - P.pos.z) < 2.4) return true; }
+  return false;
+}
+function updateEmber(dt) {
+  if (!(P.ember > 0)) return;
+  P.ember -= dt;
+  if (P.onWater || P.inRealm || state !== 'play') { if (P.onWater) { burst(FX.smoke, P.pos.x, P.pos.y + 1, P.pos.z, 10, { speed: 1.5, up: 2, life: 1, size: 1.2, c: [0.85, 0.85, 0.85] }); pickFeed('火熄了', true); } P.ember = 0; return; }
+  if (P.ember <= 0) { pickFeed('武器上的火熄了', true); return; }
+  if (Math.random() < dt * 30) { hero.tipWorld(0, _tip); emit(FX.sparks, { x: _tip.x, y: _tip.y, z: _tip.z, vx: (Math.random() - 0.5) * 0.5, vy: 1.4 + Math.random(), vz: (Math.random() - 0.5) * 0.5, life: 0.45, s: 0.8 + Math.random() * 0.5, c: [2.6, 1.0, 0.3] }); }
+}
+function emberSwing() { // called as a swing starts
+  const fallenHeavy = prog.weapon === 'fallen' && (P.atk.kind === 'heavy' || P.atk.kind === 'l3');
+  if (!(P.ember > 0) && !fallenHeavy && emberSource()) { P.ember = 40; Audio.sfx('charge'); pickFeed('武器著火了 · 揮動可以點燃草地'); }
+  if ((P.ember > 0 || fallenHeavy) && P.inEarth) { const fx = Math.sin(P.yaw), fz = Math.cos(P.yaw); igniteAt(P.pos.x + fx * 2.6, P.pos.z + fz * 2.6, fallenHeavy ? 4 : 0); }
+}
+
+// ---- props: crates to smash (what's inside goes into the reliquary) and boulders to roll down onto beasts
+const PROPS = { crates: [], rocks: [] };
+function buildProps() {
+  const R = mulberry(9090), gA = (x, z) => C.groundAtL(x, z, 1);
+  // crates: stacked by the old camps, ruins and roadsides
+  const spots = [[60, 92], [118, 150], [-90, 140], [-130, 40], [122, -86], [-250, -80], [350, 40], [-200, 400], [150, -300], [-60, -330], [-420, -60], [240, -200], [-30, -250], [210, 30]];
+  const box = new THREE.BoxGeometry(1, 1, 1); box.translate(0, 0.5, 0);
+  const cm = new THREE.MeshStandardMaterial({ color: '#8b6a4a', roughness: 0.85, map: TEX.marble });
+  const crates = new THREE.InstancedMesh(box, cm, spots.length * 3); crates.castShadow = true; crates.receiveShadow = true;
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), v = new THREE.Vector3(), sc = new THREE.Vector3();
+  let n = 0;
+  for (const [cx, cz] of spots) {
+    const k = 1 + Math.floor(R() * 3);
+    for (let j = 0; j < k; j++) {
+      const x = cx + 6 + (R() - 0.5) * 6, z = cz + 6 + (R() - 0.5) * 6, sz = 0.8 + R() * 0.35, y = gA(x, z);
+      if (y < C.EARTH_Y + 0.3) continue;
+      const c = { i: n++, x, y, z, sz, rot: R() * 6.28 };
+      c.set = (on) => { m4.compose(v.set(c.x, c.y - 0.05, c.z), q.setFromEuler(e.set(0, c.rot, 0)), on ? sc.set(c.sz, c.sz * 0.85, c.sz) : sc.set(0, 0, 0)); crates.setMatrixAt(c.i, m4); crates.instanceMatrix.needsUpdate = true; };
+      c.set(true); PROPS.crates.push(c);
+      c.col = { x, z, r: sz * 0.62, y0: y - 0.5, y1: y + sz * 0.85, noClimb: true }; colliders.solids.push(c.col);
+    }
+  }
+  crates.count = n; crates.frustumCulled = false; EARTH.root.add(crates);
+  // boulders resting on slopes above where beasts roam
+  const rg = new THREE.IcosahedronGeometry(1, 1);
+  const rm = new THREE.MeshStandardMaterial({ color: '#8f877c', roughness: 0.95, flatShading: true, map: TEX.marble });
+  const tries = [[90, 40], [150, 120], [-70, 120], [-140, 10], [170, -110], [-160, -170], [260, -170], [-270, 10], [300, 110], [-240, 360], [140, -280], [-40, -230]];
+  for (const [tx, tz] of tries) {
+    // walk uphill a little from the camp to find a shoulder to perch it on
+    let x = tx, z = tz;
+    for (let s2 = 0; s2 < 12; s2++) { const gx = gA(x + 1, z) - gA(x - 1, z), gz = gA(x, z + 1) - gA(x, z - 1), l = Math.hypot(gx, gz); if (l < 0.08) break; x += (gx / l) * 3; z += (gz / l) * 3; }
+    const r = 1.1 + R() * 0.5, m = new THREE.Mesh(rg, rm); m.scale.setScalar(r); m.castShadow = true; m.receiveShadow = true; EARTH.root.add(m);
+    const b = { m, r, home: new THREE.Vector3(x, gA(x, z) + r * 0.85, z), pos: new THREE.Vector3(), vel: new THREE.Vector3(), rolling: false, t: 0, hit: new Set() };
+    b.reset = () => { b.pos.copy(b.home); b.vel.set(0, 0, 0); b.rolling = false; b.m.position.copy(b.pos); b.m.visible = true; b.hit.clear(); };
+    b.reset(); b.col = { x: b.pos.x, z: b.pos.z, r: r * 0.9, y0: b.pos.y - r, y1: b.pos.y + r * 0.8, noClimb: false }; colliders.solids.push(b.col);
+    PROPS.rocks.push(b);
+  }
+}
+// a blow lands: crates in reach break; a boulder in reach is shoved and starts to roll
+function propsHit(A, fx, fz) {
+  const reach = A.reach * (wperk().reach || 1) + 0.6;
+  for (const c of PROPS.crates) {
+    if (c.gone) continue;
+    const dx = c.x - P.pos.x, dz = c.z - P.pos.z, d = Math.hypot(dx, dz);
+    if (d > reach + c.sz * 0.5 || Math.abs(c.y - P.pos.y) > 2 || (d > 1 && (dx * fx + dz * fz) / d < 0)) continue;
+    c.gone = true; c.back = time + 480; c.set(false); c.col.y1 = -1e9;
+    burst(FX.smoke, c.x, c.y + 0.5, c.z, 14, { speed: 3, up: 2, life: 0.8, size: 1.3, c: [0.7, 0.6, 0.48] });
+    burst(FX.sparks, c.x, c.y + 0.5, c.z, 18, { speed: 5, up: 3, life: 0.6, size: 0.9, c: [1.3, 0.95, 0.6] });
+    Audio.sfx('hit'); CAM.shake = Math.max(CAM.shake, 0.12);
+    // what was packed inside
+    const ks = Object.keys(INGR), k = ks[Math.floor(Math.random() * ks.length)], nn = 1 + (Math.random() < 0.35 ? 1 : 0);
+    prog.ingr[k] = Math.min(INGR_MAX, (prog.ingr[k] || 0) + nn); (prog.ingrSeen ||= {})[k] = true; P.ingrDirty = true;
+    setTimeout(() => pickFeed(`木箱裡有 ${INGR[k].name} <b>+${nn}</b> <small>${prog.ingr[k]}</small>`), 250);
+    if (Math.random() < 0.3) { P.flasks = Math.min(P.maxFlasks, P.flasks + 1); setTimeout(() => pickFeed('還有一瓶光露 <b>+1</b>'), 650); }
+  }
+  for (const b of PROPS.rocks) {
+    const dx = b.pos.x - P.pos.x, dz = b.pos.z - P.pos.z, d = Math.hypot(dx, dz);
+    if (d > reach + b.r || Math.abs(b.pos.y - P.pos.y) > b.r + 2 || (d > 1 && (dx * fx + dz * fz) / d < 0.2)) continue;
+    const k = A.heavyHit || P.atk.kind === 'heavy' || P.atk.kind === 'l3' ? 9 : 5;
+    b.vel.x += (dx / (d || 1)) * k; b.vel.z += (dz / (d || 1)) * k; b.rolling = true; b.t = 0; b.hit.clear();
+    burst(FX.sparks, b.pos.x - dx / (d || 1) * b.r, b.pos.y, b.pos.z - dz / (d || 1) * b.r, 12, { speed: 4, up: 1.5, life: 0.5, size: 0.8, c: [1.6, 1.4, 1.1] });
+    Audio.sfx('slam'); CAM.shake = Math.max(CAM.shake, 0.18);
+  }
+}
+const _ax = new THREE.Vector3();
+function updateProps(dt) {
+  for (const c of PROPS.crates) if (c.gone && time > c.back && Math.hypot(c.x - P.pos.x, c.z - P.pos.z) > 60) { c.gone = false; c.set(true); c.col.y1 = c.y + c.sz * 0.85; }
+  for (const b of PROPS.rocks) {
+    if (!b.rolling) { if (!b.m.visible && time > b.back && Math.hypot(b.home.x - P.pos.x, b.home.z - P.pos.z) > 70) { b.reset(); b.col.x = b.pos.x; b.col.z = b.pos.z; b.col.y0 = b.pos.y - b.r; b.col.y1 = b.pos.y + b.r * 0.8; } continue; }
+    b.t += dt;
+    const gA = (x, z) => C.groundAtL(x, z, 1), x = b.pos.x, z = b.pos.z;
+    const gx = (gA(x + 1, z) - gA(x - 1, z)) / 2, gz = (gA(x, z + 1) - gA(x, z - 1)) / 2;
+    b.vel.x += -gx * 22 * dt; b.vel.z += -gz * 22 * dt; // gravity along the slope
+    const sp = Math.hypot(b.vel.x, b.vel.z), fr = Math.exp(-(sp > 1 ? 0.45 : 2.5) * dt); b.vel.x *= fr; b.vel.z *= fr;
+    if (sp > 16) { b.vel.x *= 16 / sp; b.vel.z *= 16 / sp; }
+    b.pos.x += b.vel.x * dt; b.pos.z += b.vel.z * dt;
+    const gy = gA(b.pos.x, b.pos.z);
+    b.pos.y = Math.max(gy + b.r * 0.85, b.pos.y - 20 * dt);
+    b.m.position.copy(b.pos);
+    if (sp > 0.05) { _ax.set(b.vel.z, 0, -b.vel.x).normalize(); b.m.rotateOnWorldAxis(_ax, (sp * dt) / b.r); }
+    if (Math.random() < sp * dt * 2) emit(FX.smoke, { x: b.pos.x, y: gy + 0.2, z: b.pos.z, vy: 0.6, life: 0.8, s: 1.2, g: 0.2, c: [0.85, 0.8, 0.7], drag: 2 });
+    // what it runs over
+    if (sp > 3) {
+      for (const sh of shades) if (!sh.dead && sh.earth && !b.hit.has(sh) && Math.hypot(sh.pos.x - b.pos.x, sh.pos.z - b.pos.z) < b.r + 1 && Math.abs(sh.pos.y - b.pos.y) < 3) { b.hit.add(sh); damageShade(sh, 70 + sp * 6, b.pos, 'crit'); CAM.shake = Math.max(CAM.shake, 0.3); Audio.sfx('slam'); }
+      if (!b.hit.has('p') && P.inv <= 0 && Math.hypot(P.pos.x - b.pos.x, P.pos.z - b.pos.z) < b.r + 0.6 && Math.abs(P.pos.y - b.pos.y) < 2.5 && b.t > 0.5) { b.hit.add('p'); hurtPlayer(25, b.pos); }
+      for (const c of PROPS.crates) if (!c.gone && Math.hypot(c.x - b.pos.x, c.z - b.pos.z) < b.r + 0.6) { c.gone = true; c.back = time + 480; c.set(false); c.col.y1 = -1e9; burst(FX.smoke, c.x, c.y + 0.5, c.z, 12, { speed: 3, up: 2, life: 0.8, size: 1.3, c: [0.7, 0.6, 0.48] }); }
+    }
+    b.col.x = b.pos.x; b.col.z = b.pos.z; b.col.y0 = b.pos.y - b.r; b.col.y1 = b.pos.y + b.r * 0.8;
+    // into water, or stopped after its run: it breaks apart and a new one will sit up on the hill later
+    if (gy < C.EARTH_Y - 0.2 || (b.t > 1.2 && sp < 0.4) || b.t > 25) {
+      b.rolling = false; b.m.visible = false; b.back = time + 120; b.col.y1 = -1e9;
+      burst(FX.smoke, b.pos.x, b.pos.y, b.pos.z, 26, { speed: 4, up: 2, life: 1.2, size: 2, c: [0.75, 0.7, 0.62] });
+      burst(FX.sparks, b.pos.x, b.pos.y, b.pos.z, 20, { speed: 6, up: 3, life: 0.7, size: 1, c: [1.3, 1.2, 1.0] });
+      if (Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) < 40) Audio.sfx('slam');
+    }
+  }
+}
 // ---- chests: kneel, lift the lid, light pours out, and the weapon inside is his (it goes into the reliquary)
 function openChest(c) {
   if (prog.chests[c.id]) return;
@@ -2422,6 +2715,8 @@ function updateInteract() {
       for (const b of beacons) if (b.st === 'won' && Math.hypot(P.pos.x - b.x, P.pos.z - b.z) < 6 && Math.abs(P.pos.y - b.y) < 4) t = { kind: 'kindle', b };
       for (const v of EARTH.vigils) if (Math.hypot(P.pos.x - v.x, P.pos.z - v.z) < 3.2 && Math.abs(P.pos.y - v.y) < 2.4) t = { kind: prog.vigil[v.id] ? 'vigilLook' : 'vigil', v, k: v.id };
       for (const c of EARTH.chests) if (!prog.chests[c.id] && Math.hypot(P.pos.x - c.x, P.pos.z - c.z) < 2.4 && Math.abs(P.pos.y - c.y) < 1.8) t = { kind: 'chest', c, k: c.id };
+      if (!t) { const H = EARTH.hearth; if (H && Math.hypot(P.pos.x - H.x, P.pos.z - H.z) < 3.4 && Math.abs(P.pos.y - H.y) < 2) t = { kind: 'cook', f: H, k: 'hearth' }; }
+      if (!t) for (const b of beacons) if (b.st === 'lit' && Math.hypot(P.pos.x - b.x, P.pos.z - b.z) < 5 && Math.abs(P.pos.y - b.y) < 3) t = { kind: 'cook', f: b, k: 'cook' + b.id };
     }
   }
   const key = (o) => JSON.stringify(o && { k: o.kind, n: o.n, i: o.s?.i ?? o.c?.id ?? o.b?.id ?? o.k });
@@ -2439,7 +2734,7 @@ function updateInteract() {
         descend: ['返回人間之島', 'RETURN TO THE ISLE'], rise: ['乘光柱前往雲上', 'RIDE THE PILLAR INTO THE SKY'], riseLocked: ['光柱沒有回應', 'THE PILLAR DOES NOT ANSWER'], coreWarden: ['聖核被守衛封住', 'THE WARDEN STILL HOLDS THE CORE'],
         riseHell: ['返回人間', 'RETURN TO THE MORTAL WORLD'], hellGate: [prog.boss4 ? '查看冥門' : '冥門被封印', 'THE GATE OF THE ABYSS'],
         purify: ['淨化蝕晶', 'PURIFY THE CRYSTAL'], crystalSealed: [`擊退看守的瘴獸 <em>${t.n}</em>`, 'GUARDED BY BEASTS'], kindle: ['點亮燈火', 'KINDLE THE BEACON'],
-        vigil: ['喚醒守望羽石', 'AWAKEN THE VIGIL STONE'], vigilLook: ['眺望四方', 'SURVEY THE LAND'], chest: ['打開寶匣', 'OPEN THE CHEST'],
+        vigil: ['喚醒守望羽石', 'AWAKEN THE VIGIL STONE'], vigilLook: ['眺望四方', 'SURVEY THE LAND'], chest: ['打開寶匣', 'OPEN THE CHEST'], cook: ['烹調', 'COOK BY THE FIRE'],
         story: t.sp && (typeof t.sp.label === 'function' ? t.sp.label() : t.sp.label),
       }[t.kind];
       $('intLbl').innerHTML = L[0]; $('intSub').textContent = L[1];
@@ -2464,6 +2759,7 @@ function doInteract() {
   else if (t.kind === 'vigil') { awakenVigil(t.v); interactTarget = null; $('bInteract').classList.add('hidden'); }
   else if (t.kind === 'vigilLook') openMap();
   else if (t.kind === 'chest') { openChest(t.c); interactTarget = null; $('bInteract').classList.add('hidden'); }
+  else if (t.kind === 'cook') { openBag('food'); cookAt = t.f; POT.length = 0; renderBag(); }
   else if (t.kind === 'ascendLocked') { toast(`<i class="dia"></i>需要 Lv${ASCEND_LV} 才能踏上天梯 · 目前 Lv${P.lv}`); Audio.sfx('ui'); }
   else Audio.sfx('ui');
 }
@@ -3237,6 +3533,7 @@ function travelTo(id) {
   updateQuest();
 }
 function closeOverlays() {
+  cookAt = null; POT.length = 0;
   for (const id of ['mapOv', 'setOv', 'howOv', 'codexOv', 'testOv', 'bagOv', 'questOv']) $(id).classList.add('hidden');
   paused = false;
 }
@@ -3758,6 +4055,12 @@ const POWER_HOW = { shield: '光羽之境 · 墮翼之丘的守衛', wings: '天
 const POWER_GIFT = { shield: '光之結晶 · 生命上限 +25', wings: '審判之羽 · 生命上限 +25 · 聖瓶 +1', oath: '騎士之誓 · 生命上限 +25 · 攻擊 +10%' };
 const BAG = { tab: 'weapons', sel: 0 };
 const ICON = {
+  herb: '<path d="M60 102V58"/><path d="M60 74C44 70 32 56 32 38c16 2 28 14 28 36z" class="f"/><path d="M60 66c14-4 26-16 26-34-16 2-26 14-26 34z" class="f"/><circle cx="60" cy="48" r="6" class="f"/>',
+  wheat: '<path d="M60 104V34"/><path d="M60 44l-11-9M60 44l11-9M60 58l-12-10M60 58l12-10M60 72l-12-10M60 72l12-10"/><path d="M60 16c5 6 5 14 0 20c-5-6-5-14 0-20z" class="f"/>',
+  honey: '<path d="M60 26l24 14v28L60 82 36 68V40z" class="f"/><path d="M60 40l12 7v14l-12 7-12-7V47z"/><path d="M58 82c0 8-3 12-3 15"/><circle cx="55" cy="101" r="3" class="f"/>',
+  cap: '<path d="M26 64c0-20 15-32 34-32s34 12 34 32z" class="f"/><path d="M52 64v26c0 6 16 6 16 0V64"/><circle cx="46" cy="50" r="3"/><circle cx="70" cy="46" r="3"/>',
+  berry: '<circle cx="47" cy="68" r="13" class="f"/><circle cx="73" cy="68" r="13" class="f"/><circle cx="60" cy="88" r="13" class="f"/><path d="M60 55c0-13 8-21 20-24"/>',
+  dish: '<path d="M24 62h72c0 20-16 32-36 32S24 82 24 62z" class="f"/><path d="M20 62h80"/><path d="M48 52c-4-6 4-10 0-16M60 50c-4-6 4-10 0-16M72 52c-4-6 4-10 0-16"/>',
   sword: '<path d="M34 86 92 28l4 4-58 58z" class="f"/><path d="M92 28l7-3-3 7"/><path d="M28 74l18 18"/><path d="M22 98l12-12"/><circle cx="20" cy="100" r="3"/>',
   spear: '<path d="M18 102 92 28"/><path d="M92 28c4-10 12-16 18-18c-2 6-8 14-18 18z" class="f"/><circle cx="84" cy="36" r="5"/><path d="M26 94l-6-6"/>',
   greatsword: '<path d="M30 90 96 24l4 14-52 52z" class="f"/><path d="M96 24l8-4-4 8"/><path d="M26 74l20 20"/><path d="M18 102l14-14"/>',
@@ -3781,6 +4084,14 @@ function bagItems() {
     return { own, icon: glyphIcon(pw.glyph), name: own ? pw.name : '？？？', en: own ? pw.en : 'UNKNOWN',
       body: own ? `<p>${pw.desc}</p><dl><dt>信物</dt><dd>${POWER_GIFT[k]}</dd><dt>來自</dt><dd>${POWER_HOW[k]}</dd></dl>` : `<p class="hint">線索：${POWER_HOW[k]}</p>` };
   });
+  if (BAG.tab === 'food') {
+    const dishes = Object.entries(prog.dishes).filter(([, d]) => d.c > 0).map(([key, d]) => ({ own: true, icon: ICON.dish, name: d.n, en: d.fx ? `${FX_INFO[d.fx].name} · ${d.h >= 999 ? '全回復' : '+' + d.h + ' HP'}` : `+${d.h} HP`, n: `×${d.c}`, dish: key,
+      tag: d.fx ? FX_INFO[d.fx].g : '', body: `<p>${d.mom ? '母親的味道。「吃飽了才有力氣飛。」' : '在火邊煮好的料理。'}</p><dl><dt>回復</dt><dd>${d.h >= 999 ? '生命全回復' : '生命 +' + d.h}</dd>${d.fx ? `<dt>效果</dt><dd>${FX_INFO[d.fx].desc}</dd><dt>時間</dt><dd>${Math.round(d.d / 6) / 10} 分鐘</dd>` : ''}</dl>` }));
+    const ingr = Object.keys(INGR).map((k) => { const I = INGR[k], c = prog.ingr[k] || 0, seen = c > 0 || prog.ingrSeen?.[k];
+      return { own: c > 0, icon: ICON[k], name: seen || c ? I.name : '？？？', en: seen || c ? I.en : 'UNKNOWN', n: c ? `${c}` : '', ingr: k, tag: I.fx ? FX_INFO[I.fx].g : '',
+        body: c ? `<p>${I.desc}</p><dl><dt>回復</dt><dd>生命 +${I.heal}</dd>${I.fx ? `<dt>效果</dt><dd>${FX_INFO[I.fx].desc}</dd>` : ''}<dt>產地</dt><dd>${I.where}</dd></dl>` : `<p class="hint">線索：${I.where}</p>` }; });
+    return dishes.concat(ingr);
+  }
   if (BAG.tab === 'collect') {
     const rows = [['isle', '光羽 · 光羽之境', 'FEATHERS · THE ISLE'], ['realm', '光羽 · 天上神域', 'FEATHERS · THE EMPYREAN'], ['earth', '光羽 · 人間', 'FEATHERS · THE MORTAL WORLD'], ['hell', '光羽 · 地獄', 'FEATHERS · THE ABYSS']].map(([L, n, en]) => {
       const c = fCount(L); return { own: true, icon: ICON.feather, name: n, en, n: `${c.got}/${c.all}`, k: c.all ? c.got / c.all : 0, body: `<p>散落各地的光羽。每一根都曾經屬於某位天使。</p>${meter(c.got, c.all)}` };
@@ -3804,12 +4115,27 @@ function renderBag() {
   $('bagGrid').innerHTML = items.map((it, i) => `<button class="slot${it.own ? '' : ' lock'}${i === BAG.sel ? ' sel' : ''}" data-i="${i}">
       <svg viewBox="0 0 120 120">${it.icon}</svg>${it.tag && it.own ? `<s>${it.tag}</s>` : ''}${it.badge ? `<em>${it.badge}</em>` : ''}${it.n ? `<b>${it.n}</b>` : ''}${it.k !== undefined ? `<i class="bar" style="--k:${it.k}"></i>` : ''}</button>`).join('') + '<i class="slot empty"></i>'.repeat(Math.max(8, Math.ceil(items.length / 4) * 4) - items.length);
   const it = items[BAG.sel];
-  const act = BAG.tab === 'weapons' && it.own ? (prog.weapon === it.w ? '<button class="lbtn on" disabled><span>裝備中</span><small>EQUIPPED</small></button>' : '<button class="lbtn" id="bagEquip"><span>裝備</span><small>EQUIP</small></button>') : '';
-  $('bagDetail').innerHTML = `<div class="bigi${it.own ? '' : ' lock'}"><svg viewBox="0 0 120 120">${it.icon}</svg></div><h3>${it.name}</h3><small>${it.en}</small>${it.body}${act}`;
+  let act = BAG.tab === 'weapons' && it.own ? (prog.weapon === it.w ? '<button class="lbtn on" disabled><span>裝備中</span><small>EQUIPPED</small></button>' : '<button class="lbtn" id="bagEquip"><span>裝備</span><small>EQUIP</small></button>') : '';
+  if (BAG.tab === 'food' && it.dish) act = '<button class="lbtn" id="bagEat"><span>食用</span><small>EAT</small></button>';
+  if (BAG.tab === 'food' && it.ingr && cookAt) { const left = (prog.ingr[it.ingr] || 0) - POT.filter((k) => k === it.ingr).length; act = `<button class="lbtn" id="bagAdd"${left > 0 && POT.length < POT_MAX ? '' : ' disabled'}><span>放入鍋中</span><small>ADD TO THE POT</small></button>`; }
+  let pot = '';
+  if (BAG.tab === 'food' && cookAt) {
+    const r = cookResult(POT);
+    pot = `<div class="pot"><div class="ph">${cookAt.name || '燈火'}<small>COOKING</small></div><div class="ps">${[0, 1, 2].map((i) => POT[i] ? `<button data-pi="${i}"><svg viewBox="0 0 120 120">${ICON[POT[i]]}</svg></button>` : '<i></i>').join('')}</div>` +
+      `<div class="pr">${r ? `<b>${r.n}</b><span>${r.h >= 999 ? '生命全回復' : '生命 +' + r.h}${r.fx ? ' · ' + FX_INFO[r.fx].name + ' ' + Math.round(r.d / 6) / 10 + ' 分' : ''}</span>` : '<span>點食材放入鍋中（最多三樣）</span>'}</div>` +
+      `<div class="pb"><button class="lbtn" id="potCook"${r ? '' : ' disabled'}><span>烹調</span><small>COOK</small></button>${POT.length ? '<button class="lbtn" id="potClear"><span>清空</span></button>' : ''}</div></div>`;
+  }
+  $('bagDetail').innerHTML = pot + `<div class="bigi${it.own ? '' : ' lock'}"><svg viewBox="0 0 120 120">${it.icon}</svg></div><h3>${it.name}</h3><small>${it.en}</small>${it.body}${act}`;
+  const ea = $('bagEat'); if (ea) ea.addEventListener('click', () => eatDish(it.dish));
+  const ad = $('bagAdd'); if (ad) ad.addEventListener('click', () => { if (POT.length < POT_MAX) { POT.push(it.ingr); Audio.sfx('ui'); renderBag(); } });
+  const pc = $('potCook'); if (pc) pc.addEventListener('click', cook);
+  const pcl = $('potClear'); if (pcl) pcl.addEventListener('click', () => { POT.length = 0; Audio.sfx('ui'); renderBag(); });
+  document.querySelectorAll('#bagDetail .ps button').forEach((b) => b.addEventListener('click', () => { POT.splice(+b.dataset.pi, 1); Audio.sfx('ui'); renderBag(); }));
   const eq = $('bagEquip'); if (eq) eq.addEventListener('click', () => { equipWeapon(it.w); Audio.sfx('pickup'); renderBag(); });
   document.querySelectorAll('#bagGrid button.slot').forEach((b) => b.addEventListener('click', () => {
     const i = +b.dataset.i;
     if (i === BAG.sel && BAG.tab === 'weapons' && items[i].own && prog.weapon !== items[i].w) { equipWeapon(items[i].w); Audio.sfx('pickup'); }
+    else if (i === BAG.sel && BAG.tab === 'food' && items[i].ingr && cookAt && POT.length < POT_MAX && (prog.ingr[items[i].ingr] || 0) > POT.filter((k) => k === items[i].ingr).length) { POT.push(items[i].ingr); Audio.sfx('ui'); }
     else Audio.sfx('ui');
     BAG.sel = i; renderBag();
   }));
@@ -4016,6 +4342,7 @@ function syncLayer() {
   C.LAYER.cur = want;
   for (const gm of W.grassMats) {
     gm.uniforms.uHeight.value = want ? EARTH.heightTex : W.heightTex; gm.uniforms.uBaseY.value = want ? C.EARTH_Y : 0;
+    if (gm.uniforms.uBurnOn) { gm.uniforms.uBurnOn.value = want === 1 && FIRE.tex ? 1 : 0; if (FIRE.tex) gm.uniforms.uBurn.value = FIRE.tex; }
     if (gm.uniforms.uGrid) gm.uniforms.uGrid.value.set(want ? C.EHALF : C.HALF, want ? C.ESEG / C.EWORLD : C.SEG / C.WORLD, want ? C.EGN : C.GN);
   }
   if (EARTH.root) EARTH.root.visible = want === 1;
@@ -4118,7 +4445,7 @@ function frame() {
   if (state === 'play') updateQuestDist(realDt);
   updateTestInfo(realDt);
   updateStory();
-  updateFeathers(dt);
+  updateFeathers(dt); if (state === 'play' && P.inEarth) { updateForage(dt); updateFire(dt); updateProps(dt); } placeFlames(); updateBuff(dt); updateEmber(dt);
   updateFX(dt);
   // seraph pose
   const mode = state === 'landing' || state === 'loading' ? 'title' : 'play';
@@ -4198,6 +4525,7 @@ async function init() {
   buildFolk();
   buildBoss();
   buildBreakables();
+  buildProps(); initFire();
   buildFeathers();
   buildStory();
   if (!prog.weapons[prog.weapon]) prog.weapon = 'sword';
@@ -4238,4 +4566,4 @@ addEventListener('resize', resize);
 addEventListener('orientationchange', () => setTimeout(resize, 250));
 document.addEventListener('visibilitychange', () => { if (Audio.ctx) { if (document.hidden) Audio.ctx.suspend(); else Audio.ctx.resume(); } });
 init().catch((e) => { console.error(e); $('loadMsg').textContent = '載入失敗：' + e.message; });
-window.__LF = { dbg: () => ({ hitstop, slowT, enemyScale, paused, time, DT_MAX }), clash: (b) => startClash(b), impact: (...a) => impact(...a), EARTH, talk: (id) => talk(id), dlg: () => DLG, dlgNext: () => dlgNext(), bag: (t) => openBag(t), spots: () => STORY_SPOTS, warp: (id) => warpTo(id), test: TEST, quest: () => QS, layer: () => C.LAYER.cur, hell: () => HELL, sites: () => ({ captives, beacons, folk }), kill: (sh) => killShade(sh), interact: () => doInteract(), dyn: () => ({ ...dyn, pr: renderer.getPixelRatio() }), levelUp: (n) => levelUp(n), showPower: (k) => showPower(k), breakables, equipWeapon: (w) => equipWeapon(w), calls: () => { renderer.info.autoReset = false; renderer.info.reset(); composer.render(0.016); const r = { ...renderer.info.render }; renderer.info.autoReset = true; return r; }, pause: (b) => (paused = b), FX, slow: () => (DT_MAX = 0.05), act: { attackDown, attackUp, lightAttack, doLock, doHeal, startAttack, perfectDodge, doAttack, doJump, doSkill, doDodge, doInteract, openMap, openSettings, damageShade, regionCard, toast }, fast: () => (DT_MAX = 0.25), THREE, scene, composer, q: (o) => { Object.assign(QUAL[settings.quality], o); applyQuality(); }, P, CAM, W, hero: () => hero, boss: () => boss, state: () => state, prog, shades, feathers, setState: (s) => (state = s), camera, renderer };
+window.__LF = { dbg: () => ({ hitstop, slowT, enemyScale, paused, time, DT_MAX }), fire: (x, z, r) => igniteAt(x, z, r), FIRE, PROPS, clash: (b) => startClash(b), impact: (...a) => impact(...a), EARTH, talk: (id) => talk(id), dlg: () => DLG, dlgNext: () => dlgNext(), bag: (t) => openBag(t), spots: () => STORY_SPOTS, warp: (id) => warpTo(id), test: TEST, quest: () => QS, layer: () => C.LAYER.cur, hell: () => HELL, sites: () => ({ captives, beacons, folk }), kill: (sh) => killShade(sh), interact: () => doInteract(), dyn: () => ({ ...dyn, pr: renderer.getPixelRatio() }), levelUp: (n) => levelUp(n), showPower: (k) => showPower(k), breakables, equipWeapon: (w) => equipWeapon(w), calls: () => { renderer.info.autoReset = false; renderer.info.reset(); composer.render(0.016); const r = { ...renderer.info.render }; renderer.info.autoReset = true; return r; }, pause: (b) => (paused = b), FX, slow: () => (DT_MAX = 0.05), act: { attackDown, attackUp, lightAttack, doLock, doHeal, startAttack, perfectDodge, doAttack, doJump, doSkill, doDodge, doInteract, openMap, openSettings, damageShade, regionCard, toast }, fast: () => (DT_MAX = 0.25), THREE, scene, composer, q: (o) => { Object.assign(QUAL[settings.quality], o); applyQuality(); }, P, CAM, W, hero: () => hero, boss: () => boss, state: () => state, prog, shades, feathers, setState: (s) => (state = s), camera, renderer };
