@@ -1,6 +1,7 @@
 // LUMENFALL · environment pass: aerial-perspective height fog, colour grade, strata rock, leaf-card foliage
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { mulberry } from './core.js';
 
 export const lin = (hex) => { const c = new THREE.Color(hex); return `vec3(${c.r.toFixed(4)},${c.g.toFixed(4)},${c.b.toFixed(4)})`; };
@@ -79,6 +80,92 @@ export const GradeShader = {
       gl_FragColor = vec4(mix(c0, clamp(c, 0.0, 1.0), uAmt), 1.0);
     }`,
 };
+
+// ------------------------------------------------------------------ final pass: god rays + tone map + sRGB + colour grade in ONE full-screen pass
+// (was three passes: GodRayShader → OutputPass → GradeShader). Same maths, fewer full-screen reads/writes — the
+// cost that matters most on phones. Ray taps are a define so phones can take fewer, longer steps with the same falloff.
+export class FinalPass extends Pass {
+  constructor(rayTaps = 22) {
+    super();
+    this.rayTaps = rayTaps;
+    this.uniforms = {
+      tDiffuse: { value: null }, toneMappingExposure: { value: 1 },
+      uSun: { value: new THREE.Vector2(0.5, 0.8) }, uAmt: { value: 0 }, // god rays
+      uGAmt: { value: 1 }, uTint: { value: new THREE.Vector3(0, 0, 0) }, // grade
+    };
+    this.material = new THREE.RawShaderMaterial({
+      name: 'LumenFinal', uniforms: this.uniforms,
+      vertexShader: `precision highp float; uniform mat4 modelViewMatrix; uniform mat4 projectionMatrix;
+        attribute vec3 position; attribute vec2 uv; varying vec2 vUv;
+        void main(){ vUv = uv; gl_Position = projectionMatrix*modelViewMatrix*vec4(position, 1.0); }`,
+      fragmentShader: `precision highp float;
+        uniform sampler2D tDiffuse; uniform vec2 uSun; uniform float uAmt; uniform float uGAmt; uniform vec3 uTint;
+        #include <tonemapping_pars_fragment>
+        #include <colorspace_pars_fragment>
+        varying vec2 vUv;
+        void main(){
+          vec3 base = texture2D(tDiffuse, vUv).rgb;
+          if (uAmt > 0.01) { // radial light scattering toward the sun (scene-referred, before tone mapping)
+            vec2 d = (uSun - vUv) * (0.9 / float(RAY_N));
+            vec2 uv = vUv + d * 0.5;
+            float w = 1.0; vec3 acc = vec3(0.0);
+            for (int i = 0; i < RAY_N; i++) {
+              uv += d;
+              vec3 c = texture2D(tDiffuse, clamp(uv, 0.001, 0.999)).rgb;
+              float l = max(dot(c, vec3(0.3, 0.5, 0.2)) - 1.3, 0.0);
+              acc += c * l * w; w *= RAY_DECAY;
+            }
+            float fall = 1.0 - smoothstep(0.05, 0.9, length((vUv - uSun) * vec2(1.6, 1.0)));
+            base += acc * (uAmt / float(RAY_N)) * fall * vec3(1.0, 0.85, 0.6);
+          }
+          gl_FragColor = vec4(base, 1.0);
+          #if defined( ACES_FILMIC_TONE_MAPPING )
+            gl_FragColor.rgb = ACESFilmicToneMapping(gl_FragColor.rgb);
+          #elif defined( AGX_TONE_MAPPING )
+            gl_FragColor.rgb = AgXToneMapping(gl_FragColor.rgb);
+          #elif defined( REINHARD_TONE_MAPPING )
+            gl_FragColor.rgb = ReinhardToneMapping(gl_FragColor.rgb);
+          #elif defined( LINEAR_TONE_MAPPING )
+            gl_FragColor.rgb = LinearToneMapping(gl_FragColor.rgb);
+          #endif
+          #ifdef SRGB_TRANSFER
+            gl_FragColor = sRGBTransferOETF(gl_FragColor);
+          #endif
+          // colour grade, display space (identical to the old GradeShader)
+          vec3 c0 = gl_FragColor.rgb, c = c0;
+          float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+          c = mix(vec3(l), c, 1.16);
+          c = mix(c, c*c*(3.0 - 2.0*c), 0.3);
+          c += vec3(-0.02, -0.004, 0.03)*(1.0 - l)*(1.0 - l);
+          c += vec3(0.032, 0.014, -0.028)*l*l;
+          c += uTint;
+          vec2 dv = (vUv - 0.5)*vec2(1.0, 0.78);
+          c *= mix(0.78, 1.0, smoothstep(0.66, 0.2, length(dv)));
+          gl_FragColor = vec4(mix(c0, clamp(c, 0.0, 1.0), uGAmt), 1.0);
+        }`,
+    });
+    this.fsQuad = new FullScreenQuad(this.material);
+    this._cs = null; this._tm = null;
+  }
+  render(renderer, writeBuffer, readBuffer) {
+    this.uniforms.tDiffuse.value = readBuffer.texture;
+    this.uniforms.toneMappingExposure.value = renderer.toneMappingExposure;
+    if (this._cs !== renderer.outputColorSpace || this._tm !== renderer.toneMapping) {
+      this._cs = renderer.outputColorSpace; this._tm = renderer.toneMapping;
+      const d = { RAY_N: this.rayTaps, RAY_DECAY: Math.pow(0.955, 22 / this.rayTaps).toFixed(5) };
+      if (THREE.ColorManagement.getTransfer(this._cs) === THREE.SRGBTransfer) d.SRGB_TRANSFER = '';
+      if (this._tm === THREE.ACESFilmicToneMapping) d.ACES_FILMIC_TONE_MAPPING = '';
+      else if (this._tm === THREE.AgXToneMapping) d.AGX_TONE_MAPPING = '';
+      else if (this._tm === THREE.ReinhardToneMapping) d.REINHARD_TONE_MAPPING = '';
+      else if (this._tm === THREE.LinearToneMapping) d.LINEAR_TONE_MAPPING = '';
+      this.material.defines = d; this.material.needsUpdate = true;
+    }
+    renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
+    if (!this.renderToScreen && this.clear) renderer.clear(renderer.autoClearColor, renderer.autoClearDepth, renderer.autoClearStencil);
+    this.fsQuad.render(renderer);
+  }
+  dispose() { this.material.dispose(); this.fsQuad.dispose(); }
+}
 
 // ------------------------------------------------------------------ world-space detail shaders
 function worldVaryings(sh) {

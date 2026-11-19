@@ -548,7 +548,10 @@ html.ja .act span{letter-spacing:.04em;padding-left:0;font-size:9px}
 #bossBar .bar em{position:absolute;left:50%;top:-3px;bottom:-3px;width:2px;background:#fff2cf;box-shadow:0 0 4px #c69a4a}
 #bossBar.p2 #bossHp{background:linear-gradient(90deg,#5a2a6e,#a8425a 40%,#ffb15a)}
 .glb{display:flex;gap:8px;align-items:center}
-.glb .lbtn{cursor:pointer}
+.glb .lbtn{cursor:pointer;white-space:nowrap}
+html.ja .glb .lbtn{letter-spacing:.08em;padding:9px 14px}
+html.ja .glb .lbtn small{display:none}
+html.ja .row .k{letter-spacing:.12em;white-space:nowrap}
 .mini{margin:6px 0 0;font:400 11px/1.7 var(--serif);color:var(--ink-s);letter-spacing:.05em}
 
 /* ================= DESKTOP (html.desk) — landscape stage + keyboard & mouse HUD ================= */
@@ -1118,7 +1121,7 @@ body.looking #hud,body.looking #pickFeed,body.looking #buffChip{opacity:0;pointe
     </nav>
   </div>
   <div id="tapHint"><span class="c t-only">觸碰開始</span><span class="e t-only">TAP TO BEGIN</span><span class="c d-only">點擊或按任意鍵開始</span><span class="e d-only">PRESS ANY KEY</span></div>
-  <div class="corner bl">PROTOTYPE · v2.0.1 · 黎恩</div>
+  <div class="corner bl">PROTOTYPE · v2.0.2 · 黎恩</div>
   <div class="corner br t-only">MOBILE · LANDSCAPE</div><div class="corner br d-only">DESKTOP · KEYBOARD &amp; MOUSE</div>
 </div>
 
@@ -1153,6 +1156,7 @@ body.looking #hud,body.looking #pickFeed,body.looking #buffChip{opacity:0;pointe
     <div class="row"><div class="k">聲音<small>SOUND</small></div><button class="tog" id="sndToggle"><em>開啟</em><i></i></button></div>
     <div class="row d-only"><div class="k">滑鼠靈敏度<small>MOUSE SENSITIVITY</small></div><div class="seg"><button data-sens="0.6">低</button><button data-sens="1">中</button><button data-sens="1.5">高</button></div></div>
     <div class="row"><div class="k">鏡頭自動跟隨<small>AUTO CAMERA</small></div><button class="tog" id="camToggle"><em>關閉</em><i></i></button></div>
+    <div class="row"><div class="k">省電模式<small>BATTERY SAVER · 30 FPS</small></div><button class="tog" id="fpsToggle"><em>關閉</em><i></i></button></div>
     <div class="row"><div class="k">角色模型<small>CHARACTER MODEL</small></div><div class="glb"><label class="lbtn" for="glbIn"><span>上載 GLB</span><small>UPLOAD</small></label><input type="file" id="glbIn" accept=".glb,.gltf" hidden><button class="lbtn" id="glbReset"><span>還原</span></button></div></div>
     <p class="mini" id="glbStat">支援 Mixamo 標準骨架嘅人形模型（例如 Tripo 綁骨後匯出嘅 GLB）。</p>
     <div class="row"><div class="k">測試模式<small>TEST MODE</small></div><button class="lbtn" id="openTest"><span>打開測試面板</span><small class="d-only">F2</small></button></div>

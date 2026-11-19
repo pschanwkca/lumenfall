@@ -3,11 +3,9 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import * as C from './core.js';
 import { buildWorld, W, colliders, sunDir, updateAmbient, setWaterQuality, HALO_POS, COL, sanitizeNormals, noReflect, LANDMARKS, REALM } from './world.js';
-import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-import { GradeShader, GodRayShader, CLOUD, hookCloudClock, rockGeo, BURN } from './env.js';
+import { FinalPass, CLOUD, hookCloudClock, rockGeo, BURN } from './env.js';
 import { setLang, tr } from './i18n.js';
 import { buildEarthGrid, buildEarth, EARTH, earthRegion, earthCull, inRift, SEA_NORTH, EP as EARTH_EP, riftZ } from './earth.js';
 import { createFolk, FOLK_PAL } from './folk.js';
@@ -33,7 +31,7 @@ const store = {
   get(k, d) { try { const v = JSON.parse(localStorage.getItem(k)); return v ?? d; } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
 };
-const settings = Object.assign({ quality: isTouch ? 'mid' : 'high', sound: true, autoCam: false, lang: 'zh', sens: 1 }, store.get('lumenfall_settings', {}));
+const settings = Object.assign({ quality: isTouch ? 'mid' : 'high', sound: true, autoCam: false, lang: 'zh', sens: 1, fps30: false }, store.get('lumenfall_settings', {}));
 // test mode plays on its own save slot, so jumping around never touches the real journey
 const TEST = Object.assign({ on: false, god: false, oneHit: false, powers: false, coords: false }, store.get('lumenfall_test', {}));
 const progKey = () => (TEST.on ? 'lumenfall_progress_test' : 'lumenfall_progress');
@@ -70,21 +68,27 @@ const camera = new THREE.PerspectiveCamera(58, VIEW.w / VIEW.h, 0.1, 2600);
 camera.layers.enable(1); camera.layers.enable(2);
 const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: Q.samples }));
 composer.addPass(new RenderPass(scene, camera));
-const rays = new ShaderPass(GodRayShader);
-composer.addPass(rays);
 const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.55, 0.5, 1.45);
 composer.addPass(bloom);
-composer.addPass(new OutputPass());
-const grade = new ShaderPass(GradeShader);
-composer.addPass(grade);
+// god rays, tone mapping, sRGB and the colour grade share one full-screen pass (phones take fewer ray steps)
+const final = new FinalPass(DESK ? 22 : 12);
+composer.addPass(final);
+const rays = { uniforms: final.uniforms }, grade = { uniforms: final.uniforms };
+if (!DESK) { // phones: bloom works at quarter resolution; it is a soft glow anyway, and this is its biggest cost
+  const bs = bloom.setSize.bind(bloom);
+  bloom.setSize = (w, h) => bs(Math.max(4, Math.round(w * 0.5)), Math.max(4, Math.round(h * 0.5)));
+  bloom.strength = 0.6; bloom.radius = 0.3; // measured against full-res bloom: same glow energy, same tightness
+}
 
-// desktop: resolution follows a pixel budget and drops / recovers automatically to hold the frame rate
-const dyn = { scale: 1, acc: 0, n: 0, last: 0, on: DESK && !window.__noDyn };
+// resolution follows the frame rate on every device: it drops a little when frames run long and climbs back once
+// they hold (phones: two calm readings in a row before climbing, so it doesn't see-saw)
+const dyn = { scale: 1, acc: 0, n: 0, last: 0, good: 0, on: !window.__noDyn };
 function resize() {
   const V = window.__layoutStage ? window.__layoutStage() : VIEW;
   const w = V.w, h = V.h;
   let pr = Math.min(devicePixelRatio || 1, Q.pr) * (V.s || 1);
-  if (DESK) { const px = w * h * pr * pr, cap = (Q.mp || 2.4) * 1e6; if (px > cap) pr *= Math.sqrt(cap / px); pr *= dyn.scale; }
+  if (DESK) { const px = w * h * pr * pr, cap = (Q.mp || 2.4) * 1e6; if (px > cap) pr *= Math.sqrt(cap / px); }
+  pr *= dyn.scale;
   pr = Math.max(0.5, pr);
   renderer.setPixelRatio(pr);
   renderer.setSize(w, h, false);
@@ -101,6 +105,7 @@ function applyQuality() {
   Q = QUAL[settings.quality] || QUAL.mid;
   bloom.enabled = Q.bloom;
   W.sun.castShadow = Q.shadow;
+  W.reflEvery = DESK ? 1 : 2; // phones refresh the lake's mirror every other frame (one frame of lag is invisible under the ripples)
   { const ms = DESK && settings.quality === 'high' ? 2048 : 1024; const sh = W.sun.shadow; if (sh.mapSize.x !== ms) { sh.mapSize.set(ms, ms); if (sh.map) { sh.map.dispose(); sh.map = null; } } }
   W.grass.geometry.instanceCount = Q.grass;
   W.flowers.geometry.instanceCount = Q.flowers;
@@ -3947,6 +3952,8 @@ function syncSettingsUI() {
   $('camToggle').querySelector('em').textContent = settings.autoCam ? '開啟' : '關閉';
   $('sndToggle').classList.toggle('on', settings.sound);
   $('sndToggle').querySelector('em').textContent = settings.sound ? '開啟' : '關閉';
+  $('fpsToggle').classList.toggle('on', !!settings.fps30);
+  $('fpsToggle').querySelector('em').textContent = settings.fps30 ? '開啟' : '關閉';
 }
 function setupMenus() {
   document.querySelectorAll('[data-q]').forEach((b) => b.addEventListener('click', () => { settings.quality = b.dataset.q; store.set('lumenfall_settings', settings); applyQuality(); syncSettingsUI(); Audio.sfx('ui'); }));
@@ -3956,6 +3963,7 @@ function setupMenus() {
   document.querySelectorAll('[data-lang]').forEach((b) => b.addEventListener('click', () => { settings.lang = b.dataset.lang; store.set('lumenfall_settings', settings); setLang(settings.lang); syncSettingsUI(); Audio.sfx('ui'); }));
   document.querySelectorAll('[data-sens]').forEach((b) => b.addEventListener('click', () => { settings.sens = +b.dataset.sens; store.set('lumenfall_settings', settings); syncSettingsUI(); Audio.sfx('ui'); }));
   $('camToggle').addEventListener('click', () => { settings.autoCam = !settings.autoCam; store.set('lumenfall_settings', settings); syncSettingsUI(); Audio.sfx('ui'); });
+  $('fpsToggle').addEventListener('click', () => { settings.fps30 = !settings.fps30; store.set('lumenfall_settings', settings); dyn.acc = 0; dyn.n = 0; dyn.last = 0; dyn.good = 0; syncSettingsUI(); Audio.sfx('ui'); });
   $('glbIn').addEventListener('change', async (e) => {
     const f = e.target.files && e.target.files[0]; if (!f) return;
     $('glbStat').textContent = '載入中…';
@@ -4648,6 +4656,20 @@ function updateAtmos(dt, snap) {
   renderer.toneMappingExposure = c.exp;
   for (const gm of W.grassMats) { if (gm.uniforms.uBase) gm.uniforms.uBase.value.copy(c.gB); if (gm.uniforms.uTip) gm.uniforms.uTip.value.copy(c.gT); }
 }
+// phones: small static props (posts, lanterns, pebbles, forage) stop casting into the sun's shadow map; the
+// terrain, buildings, trees, rocks and every character keep theirs. Fewer draws in the shadow pass, same look.
+const WORLD_MESH = new Set();
+function trimShadows() {
+  const s = new THREE.Vector3(); let n = 0;
+  for (const o of WORLD_MESH) {
+    if (!o.castShadow || o.isSkinnedMesh) continue;
+    const g = o.geometry; if (!g.boundingSphere) g.computeBoundingSphere(); if (!g.boundingSphere || !isFinite(g.boundingSphere.radius)) continue;
+    o.getWorldScale(s); const r = g.boundingSphere.radius * Math.max(s.x, s.y, s.z);
+    if (r < (o.isInstancedMesh ? 0.4 : 0.5)) { o.castShadow = false; n++; }
+  }
+  WORLD_MESH.clear();
+  return n;
+}
 // ------------------------------------------------------------------ loop
 function sampleDyn() {
   if (!dyn.on || paused || document.hidden || !(state === 'play' || state === 'landing')) { dyn.last = 0; return; }
@@ -4656,12 +4678,19 @@ function sampleDyn() {
   dyn.last = now;
   if (dyn.acc < 2000) return;
   const ms = dyn.acc / dyn.n; dyn.acc = 0; dyn.n = 0;
+  const tgt = settings.fps30 ? 1000 / 30 : 1000 / 60;
   let ns = dyn.scale;
-  if (ms > 22) ns = Math.max(0.6, dyn.scale * 0.88); else if (ms < 18 && dyn.scale < 1) ns = Math.min(1, dyn.scale * 1.07);
+  if (ms > tgt * 1.3) { ns = Math.max(DESK ? 0.6 : 0.62, dyn.scale * 0.88); dyn.good = 0; }
+  else if (ms < tgt * 1.08 && dyn.scale < 1) { if (++dyn.good >= (DESK ? 1 : 2)) { ns = Math.min(1, dyn.scale * 1.07); dyn.good = 0; } }
+  else dyn.good = 0;
   if (Math.abs(ns - dyn.scale) > 0.005) { dyn.scale = ns; resize(); }
 }
-function frame() {
+let lastDraw = 0;
+function frame(now) {
   requestAnimationFrame(frame);
+  // battery saver: draw every other refresh (30 fps); the skipped refreshes cost nothing
+  if (settings.fps30 && now) { if (now - lastDraw < 1000 / 30 - 4) return; lastDraw = now; }
+  W.frameNo = (W.frameNo || 0) + 1;
   sampleDyn();
   let dt = Math.min(clock.getDelta(), DT_MAX);
   const realDt = paused ? 0 : dt; LOOK.dt = Math.min(dt, 0.05);
@@ -4728,8 +4757,8 @@ function frame() {
   { // god rays: only when the camera looks roughly toward the sun
     camera.getWorldDirection(_v); const face = _v.dot(sunDir);
     const amt = Q.bloom && C.LAYER.cur !== 2 ? smooth(0.35, 0.85, face) * 0.22 : 0;
-    rays.enabled = amt > 0.01;
-    if (rays.enabled) { _v.copy(camera.position).addScaledVector(sunDir, 800).project(camera); rays.uniforms.uSun.value.set(_v.x * 0.5 + 0.5, _v.y * 0.5 + 0.5); rays.uniforms.uAmt.value = amt; }
+    rays.uniforms.uAmt.value = amt;
+    if (amt > 0.01) { _v.copy(camera.position).addScaledVector(sunDir, 800).project(camera); rays.uniforms.uSun.value.set(_v.x * 0.5 + 0.5, _v.y * 0.5 + 0.5); rays.uniforms.uAmt.value = amt; }
   }
   updateAmbient(time, dt, _p.set(P.pos.x, P.pos.y, P.pos.z), camera.position);
   for (const gm of W.grassMats) { gm.uniforms.uCenter.value.copy(P.pos); gm.uniforms.uPlayer.value.copy(P.pos); }
@@ -4758,6 +4787,7 @@ async function init() {
   buildWorld(scene, renderer, Q);
   buildEarth(scene);
   buildHell(scene);
+  if (!DESK) scene.traverse((o) => { if (o.isMesh) WORLD_MESH.add(o); }); // the static world, before any character is built
   setLoad(0.65, '聖所的光環正在轉動…');
   await wait();
   buildPlayer();
@@ -4776,6 +4806,7 @@ async function init() {
   applyWeaponLook();
   buildMinimapBase();
   sanitizeNormals(scene);
+  if (!DESK) trimShadows();
   hookCloudClock(scene);
   placeAtStart();
   hud.hpf = $('hpf'); hud.hpd = $('hpd'); hud.hpn = $('hpn'); hud.hpw = $('hpw');

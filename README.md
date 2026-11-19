@@ -14,7 +14,7 @@ three.js r160 and fonts load from CDNs.
 
 ## Platforms
 
-- **Mobile** — landscape, touch joystick + action buttons
+- **Mobile** — landscape, touch joystick + action buttons, adaptive resolution, lighter bloom / god rays / lake mirror, optional 30 fps battery saver (Settings)
 - **Desktop** — always a landscape stage (letterboxed in tall windows), its own keyboard & mouse HUD, pointer-lock mouse look (drag-to-look fallback), adaptive resolution
 - Force a layout with `?ui=desk` or `?ui=touch`
 

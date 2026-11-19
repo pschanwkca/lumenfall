@@ -482,6 +482,15 @@ function buildWater(scene, quality) {
   });
   reflector.rotation.x = -Math.PI / 2;
   reflector.position.set(LAKE.x, 0, LAKE.z);
+  { // W.reflEvery > 1 (phones): re-render the mirror only every n-th frame. A skipped frame keeps the last image AND
+    // the matrix it was taken with, so it stays aligned; the first frame back after the lake was out of view always renders.
+    const rb = reflector.onBeforeRender; let drawn = -99, seen = -99;
+    reflector.onBeforeRender = function (...a) {
+      const f = W.frameNo || 0, cont = f - seen === 1; seen = f;
+      if (cont && f - drawn < (W.reflEvery || 1)) return;
+      drawn = f; rb.apply(this, a);
+    };
+  }
   scene.add(reflector);
   const simple = new THREE.Mesh(geo, new THREE.ShaderMaterial({
     uniforms: THREE.UniformsUtils.clone(uniforms),
