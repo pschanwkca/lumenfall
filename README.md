@@ -75,6 +75,13 @@ Sized after Monster Hunter's hunt HUD so the scene stays the subject:
 - Phone: a compact thumb cluster (attack 64 px, dodge / jump 46, holy ring 44, flask 36, lock 34); the joystick rests
   as a faint ring and the full pad appears under the thumb
 - Desktop keeps the same layout one size up, with the key hotbar alone at the bottom
+- The tracker shows the main quest only; sub-steps, side quests and feathers fold under 「其他任務」 (tap to open)
+- Tap the quest (or press O) for the quest detail, like a hunt's quest info: place and direction, who asked, the story
+  so far, how to do it, the steps, side quests, and 「顯示指引」
+- An objective marker floats over the target with its distance and pins to the screen side when it is off-screen
+- The guiding light (G, or automatically for a while when the objective changes) is a wisp that flies ahead toward it
+- The crater's pillar sleeps (a faint thread of light) until Camael's echo has spoken, so the sky cannot be reached early;
+  arriving in the sky early (old saves) points you back down
 
 ## Story and guidance
 

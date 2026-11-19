@@ -506,7 +506,14 @@ export function buildEarth(scene) {
     beam.scale.set(1, 260, 1); beam.position.set(K.x, kg, K.z); root.add(noReflect(beam));
     const rune = new THREE.Mesh(new THREE.RingGeometry(2.6, 6.5, 64), new THREE.MeshBasicMaterial({ map: TEX.rune, color: new THREE.Color(1.3, 1.0, 0.6), transparent: true, depthWrite: false, side: THREE.DoubleSide }));
     rune.rotation.x = -Math.PI / 2; rune.position.set(K.x, kg + 0.12, K.z); root.add(rune);
-    W.animated.push((t) => { rune.rotation.z = t * 0.2; beamM.opacity = 0.55 + Math.sin(t * 1.3) * 0.12; });
+    // asleep until the story wakes it (EARTH.pillarOn): a faint thread of light instead of a beacon that lures you in
+    let pk = 0;
+    W.animated.push((t) => {
+      pk += ((EARTH.pillarOn ? 1 : 0) - pk) * 0.02;
+      rune.rotation.z = t * (0.05 + pk * 0.15); rune.material.opacity = 0.3 + pk * 0.7;
+      beamM.opacity = (0.55 + Math.sin(t * 1.3) * 0.12) * (0.22 + pk * 0.78);
+      beam.scale.x = beam.scale.z = 0.35 + pk * 0.65; beam.scale.y = 70 + pk * 190;
+    });
   }
   EARTH.pillar = new THREE.Vector3(K.x, kg, K.z);
   EARTH.landing = new THREE.Vector3(K.x - 14, kg + 4, K.z + 18);

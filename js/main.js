@@ -2291,26 +2291,27 @@ function questState() {
   const at = (v, kind = 'core') => () => qT(v.x, v.z, kind);
   const colossusStep = () => {
     // chapter IV, by the rift: light the three seals, take the Lord's sword, go down
-    if (!prog.hellBlade && !prog.talk.seals) return { t: '前往墮天巨像', tgt: at(EARTH.riftRim) };
-    if (!prog.hellBlade && nSeals() < 3) return { t: '讓巨像的三個紋章亮起', n: `${nSeals()}/3` };
-    if (!prog.hellBlade) return { t: '回到墮天巨像', tgt: at(EARTH.riftRim) };
-    return { t: prog.hell ? '再次墜入墮天裂谷' : '墜入墮天裂谷的深處', tgt: at(EARTH.colossus) };
+    if (!prog.hellBlade && !prog.talk.seals) return { id: 'colossus', t: '前往墮天巨像', tgt: at(EARTH.riftRim) };
+    if (!prog.hellBlade && nSeals() < 3) return { id: 'seals', t: '讓巨像的三個紋章亮起', n: `${nSeals()}/3` };
+    if (!prog.hellBlade) return { id: 'colossusBack', t: '回到墮天巨像', tgt: at(EARTH.riftRim) };
+    return { id: 'rift', t: prog.hell ? '再次墜入墮天裂谷' : '墜入墮天裂谷的深處', tgt: at(EARTH.colossus) };
   };
   const sealRows = () => [task('誓 · 傾城遺跡的騎士', prog.boss3), task('盾 · 墮翼之丘的守衛', prog.boss), task('翼 · 審判之環的審判者', prog.boss2)];
   let ch, en, main, rows = [];
+  const hints = [];
   if (P.inHell) {
     ch = '第四章 · 地獄前庭'; en = 'CHAPTER IV';
     if (!prog.boss4) {
-      main = { t: '擊倒冥門守衛 · 亞巴頓', tag: holyBlade() ? '' : '極度危險', tgt: at(HELL.bossHome, 'boss') };
+      main = { id: 'abaddon', t: '擊倒冥門守衛 · 亞巴頓', tag: holyBlade() ? '' : '極度危險', tgt: at(HELL.bossHome, 'boss') };
       rows.push(task('取得神域之主的武器', prog.hellBlade, '未取得'));
       if (prog.hellBlade) rows.push(task('在聖匣裡換上天樞之劍', prog.weapon === 'tianshu'));
-    } else if (!prog.talk.abaddon) main = { t: '聆聽亞巴頓的殘響', tgt: at(HELL.bossHome) };
-    else if (!prog.talk.gate) main = { t: '前往冥門', tgt: at(HELL.gate) };
-    else main = { t: '冥門依然緊閉 · 待續' };
-    rows.push({ k: 'hint', t: '墜落之地的光柱可返回人間' });
+    } else if (!prog.talk.abaddon) main = { id: 'abaddonEcho', t: '聆聽亞巴頓的殘響', tgt: at(HELL.bossHome) };
+    else if (!prog.talk.gate) main = { id: 'gate', t: '前往冥門', tgt: at(HELL.gate) };
+    else main = { id: 'gateWait', t: '冥門依然緊閉 · 待續' };
+    hints.push('墜落之地的光柱可返回人間');
   } else if (P.inEarth && !prog.talk.father) {
     ch = '序章 · 晨鐘堡'; en = 'PROLOGUE';
-    main = { t: '和父親說話', tgt: () => (EARTH.parents ? qT(EARTH.parents.father.x, EARTH.parents.father.z) : null) };
+    main = { id: 'father', t: '和父親說話', tgt: () => (EARTH.parents ? qT(EARTH.parents.father.x, EARTH.parents.father.z) : null) };
     rows.push({ ...task('和母親說話', prog.talk.mother), side: true });
   } else if (P.inEarth && (prog.boss2 || prog.hellBlade || prog.talk.seals)) {
     ch = '第四章 · 墮天巨像'; en = 'CHAPTER IV';
@@ -2320,45 +2321,168 @@ function questState() {
   } else if (P.inEarth) {
     ch = '第一章 · 人間'; en = 'CHAPTER I';
     const r = nRescued(), b = nBeacons(), R = captives.length, B = beacons.length, left = r < R || b < B;
-    if (left) main = { t: '解救受困的人 · 守住燈火', n: `${r + b}/${R + B}`, tgt: nearestOpen };
-    else if (!prog.boss3) main = { t: '挑戰傾城遺跡的墮天騎士', tgt: at(EARTH.bossHome, 'boss') };
-    else if (!prog.talk.camael) main = { t: '聆聽墮天騎士的殘響', tgt: at(EARTH.bossHome) };
-    else main = { t: '乘墜光坑的光柱，前往雲上', tgt: at(EARTH.pillar) };
-    if (!pillarAwake() && !left && !prog.boss3) rows.push({ k: 'hint', t: '墜光坑的光柱還沒有回應' });
+    if (left) main = { id: 'rescue', t: '解救受困的人 · 守住燈火', n: `${r + b}/${R + B}`, tgt: nearestOpen };
+    else if (!prog.boss3) main = { id: 'knight', t: '挑戰傾城遺跡的墮天騎士', tgt: at(EARTH.bossHome, 'boss') };
+    else if (!prog.talk.camael) main = { id: 'knightEcho', t: '聆聽墮天騎士的殘響', tgt: at(EARTH.bossHome) };
+    else main = { id: 'pillar', t: '乘墜光坑的光柱，前往雲上', tgt: at(EARTH.pillar) };
+    if (!pillarAwake()) hints.push('墜光坑的光柱還在沉睡，要等傾城的騎士長安息之後才會醒來');
     rows.push(task('解救被蝕晶封住的人', r >= R, `${r}/${R}`), task('守住人們的燈火', b >= B, `${b}/${B}`));
     if (left) rows.push(task('挑戰墮天騎士', prog.boss3, '未挑戰'));
     rows.push(feathersRow('earth'));
+  } else if (!pillarAwake() && !prog.boss2) {
+    // up in the sky before the mortal world's part is done (an old save, or a fall upward): send them home
+    ch = '第一章 · 人間'; en = 'CHAPTER I';
+    main = { id: 'back', t: '從天緣躍下，回到人間' };
   } else if (P.inRealm) {
     ch = '第三章 · 天上神域'; en = 'CHAPTER III';
-    if (!prog.boss2) main = { t: '挑戰審判之環的審判者', tgt: at(REALM.bossHome, 'boss') };
-    else if (!prog.talk.astraea) main = { t: '聆聽審判者的殘響', tgt: at(REALM.bossHome) };
-    else main = { t: '從天緣躍下，前往墮天巨像' };
+    if (!prog.boss2) main = { id: 'judge', t: '挑戰審判之環的審判者', tgt: at(REALM.bossHome, 'boss') };
+    else if (!prog.talk.astraea) main = { id: 'judgeEcho', t: '聆聽審判者的殘響', tgt: at(REALM.bossHome) };
+    else main = { id: 'leap', t: '從天緣躍下，前往墮天巨像' };
     if (!prog.talk.vault) rows.push({ ...task('星淵寶庫裡的名冊', false, '支線'), side: true });
     rows.push(feathersRow('realm'));
   } else {
     ch = '第二章 · 光羽之境'; en = 'CHAPTER II';
     const lit = prog.s.filter(Boolean).length;
-    if (!prog.end && lit < 4) main = { t: '點亮四座聖壇', n: `${lit}/4`, tgt: nearestShrine };
-    else if (!prog.boss) main = { t: '挑戰墮翼之丘的守衛', tgt: at(BOSS_HOME, 'boss') };
-    else if (!prog.weapons.greatsword) main = { t: '拔出歐菲爾的大劍', tgt: () => qT(swordPlanted.position.x, swordPlanted.position.z) };
-    else if (!prog.end) main = { t: '前往環光聖所，觸碰聖核', tgt: () => qT(TEMPLE.x, TEMPLE.z) };
-    else if (!prog.boss2) main = P.lv < ASCEND_LV && !prog.realm ? { t: `收集光羽，升到 Lv${ASCEND_LV}`, n: `Lv ${P.lv}/${ASCEND_LV}` } : { t: prog.realm ? '經環光聖所的天梯，返回神域' : '回到環光聖所，踏上天梯', tgt: () => qT(TEMPLE.x, TEMPLE.z) };
-    else { ch = '第四章 · 墮天巨像'; en = 'CHAPTER IV'; main = { t: '從天緣躍下，前往墮天巨像' }; }
+    if (!prog.end && lit < 4) main = { id: 'shrines', t: '點亮四座聖壇', n: `${lit}/4`, tgt: nearestShrine };
+    else if (!prog.boss) main = { id: 'warden', t: '挑戰墮翼之丘的守衛', tgt: at(BOSS_HOME, 'boss') };
+    else if (!prog.weapons.greatsword) main = { id: 'greatsword', t: '拔出歐菲爾的大劍', tgt: () => qT(swordPlanted.position.x, swordPlanted.position.z) };
+    else if (!prog.end) main = { id: 'core', t: '前往環光聖所，觸碰聖核', tgt: () => qT(TEMPLE.x, TEMPLE.z) };
+    else if (!prog.boss2) main = P.lv < ASCEND_LV && !prog.realm ? { id: 'level', t: `收集光羽，升到 Lv${ASCEND_LV}`, n: `Lv ${P.lv}/${ASCEND_LV}` } : { id: 'ascend', t: prog.realm ? '經環光聖所的天梯，返回神域' : '回到環光聖所，踏上天梯', tgt: () => qT(TEMPLE.x, TEMPLE.z) };
+    else { ch = '第四章 · 墮天巨像'; en = 'CHAPTER IV'; main = { id: 'leap', t: '從天緣躍下，前往墮天巨像' }; }
     rows.push(feathersRow('isle'));
   }
-  return { ch, en, main, rows: rows.filter(Boolean) };
+  return { ch, en, main, rows: rows.filter(Boolean), hints };
 }
+// the tracker shows the main quest only; everything else folds under one line, like a hunt's bounties
+const qRow = (r) => `<div class="qrow ${r.k}${r.done ? ' done' : ''}${r.side ? ' side' : ''}"><i class="${r.k === 'col' ? 'fe' : 'box'}"></i><span>${r.t}</span>${r.n ? `<b>${r.n}</b>` : ''}</div>`;
+let qMainId = '';
 function updateQuest() {
   QS = questState();
   const { ch, en, main, rows } = QS;
-  const row = (r) => r.k === 'hint'
-    ? `<div class="qrow hint"><i class="up"></i><span>${r.t}</span></div>`
-    : `<div class="qrow ${r.k}${r.done ? ' done' : ''}${r.side ? ' side' : ''}"><i class="${r.k === 'col' ? 'fe' : 'box'}"></i><span>${r.t}</span>${r.n ? `<b>${r.n}</b>` : ''}</div>`;
+  EARTH.pillarOn = pillarAwake();
   const meta = main.tag || main.tgt ? `<div class="meta">${main.tag ? `<em class="qtag">${main.tag}</em>` : ''}${main.tgt ? '<em class="qd" id="qDist"></em>' : ''}</div>` : '';
-  const html = `<div class="qmain"><i class="qm"></i><span class="t">${main.t}</span>${main.n ? `<b>${main.n}</b>` : ''}${meta}</div>` +
-    (rows.length ? `<div class="qlist">${rows.map(row).join('')}</div>` : '');
+  const open = rows.filter((r) => !r.done).length;
+  const html = `<button class="qmain" id="qMain"><i class="qm"></i><span class="t">${main.t}</span>${main.n ? `<b>${main.n}</b>` : ''}${meta}</button>` +
+    (rows.length ? `<button class="qmore" id="qMore"><span>其他任務</span><b>${open || '✓'}</b><i class="chev"></i></button><div class="qlist">${rows.map(qRow).join('')}</div>` : '');
   $('qTitle').textContent = ch; $('qEn').textContent = en;
   if (html !== qHtml) { qHtml = html; qDistS = ''; $('qObj').innerHTML = html; }
+  // a new objective: the guiding light shows the way for a little while
+  const mid = main.id + '|' + ch;
+  if (mid !== qMainId) { const first = !qMainId; qMainId = mid; if (!first && main.tgt && state === 'play') guideOn(14); }
+  if (!$('questOv').classList.contains('hidden')) renderQuestDetail();
+}
+// ---- quest detail: what to do, where, who asked, how — opened from the tracker (or O)
+const QINFO = {
+  father: { who: '父親 · 薩奇爾', desc: '今天是你出發的日子。父親在村口等你，說有東西要交給你。', how: '走到父親身邊按「對話」。母親在燈旁，也可以先和她說幾句。' },
+  rescue: { who: '父親 · 薩奇爾', desc: '墮落的靈魂在村外作亂：有人被蝕晶封住，各處的燈火也快要熄滅。先把人救出來，把燈守住。', how: '蝕晶旁有瘴獸看守，全部擊退後按「淨化蝕晶」救人。走近燈火會引來一波怪物，守到牠們退去，再按「點亮燈火」。每點亮一盞，生命上限 +10。' },
+  knight: { who: '父親 · 薩奇爾', desc: '父親說，傾城的方向以前有一位騎士長。城已經倒了，騎士卻沒有安息。', how: '看準他出手的時機翻滾避開，趁收招時反擊。出發前先帶足光露。' },
+  knightEcho: { who: '卡麥爾的殘響', desc: '騎士倒下的地方留下了一道殘響。他好像認得你身上的光。', how: '回到騎士倒下的地方，按「聆聽殘響」。' },
+  pillar: { who: '卡麥爾的殘響', desc: '騎士長說，墜光坑的光柱是他當年降下來的路。現在，它為你醒來了。', how: '走進墜光坑中央的光柱，按「乘光柱前往雲上」。' },
+  back: { who: '墜光坑 · 光柱', desc: '你提早來到了雲上，但人間的事還沒有完成。墜光坑的光柱，還沒有真正為你醒來。', how: '從島嶼的邊緣（天緣）躍下，就會回到人間。' },
+  shrines: { who: '光的記憶', desc: '光羽之境的四座聖壇都熄了。每點亮一座，就會看見一段關於聖所守衛的記憶。', how: '有些聖壇被蝕影圍住，先淨化周圍的怪物，再按「點亮聖壇」。四座都亮起後，就可以挑戰墮翼之丘的守衛。' },
+  warden: { who: '光的記憶', desc: '一位手持大劍的守衛擋在聖所前，守了不知多少年，已經分不清誰是敵人。', how: '看準他出手的時機翻滾避開，趁收招時反擊。出發前先帶足光露。' },
+  greatsword: { who: '歐菲爾的殘響', desc: '「這把劍已經守不住任何東西了。帶走它，去守你要守的。」', how: '走到插在地上的大劍旁，按「拔出墮光大劍」。之後可以在聖匣裡換上。' },
+  core: { who: '歐菲爾的殘響', desc: '守衛放下了劍，聖核的封印也鬆開了。聖核裡，好像藏著和父親有關的東西。', how: '走進環光聖所，按「觸碰聖核」。' },
+  level: { who: '環光聖所 · 石刻', desc: '石刻寫著：「天梯為攜五重光者而開。」', how: '在各處收集光羽升級，升到 Lv5 後回到環光聖所。' },
+  ascend: { who: '環光聖所 · 石刻', desc: '聖所的天梯，通往更高的天上神域。', how: '站上環光聖所的聖核，按「升往天上神域」。' },
+  judge: { who: '空玉座', desc: '神域之主的玉座是空的。守著神域的，只剩下審判之環的審判者。', how: '看準她出手的時機翻滾避開，趁收招時反擊。出發前先帶足光露。' },
+  judgeEcho: { who: '阿斯特萊亞的殘響', desc: '審判者倒下後留下了一道殘響。她好像知道父親的名字。', how: '回到審判之環，按「聆聽殘響」。' },
+  leap: { who: '阿斯特萊亞的殘響', desc: '「祂不在這裡。去下面找祂——在那道裂縫的上面。」', how: '從天緣躍下回到人間，再一路向北，找到墮天裂谷。' },
+  colossus: { who: '阿斯特萊亞的殘響', desc: '裂谷之上站著一尊巨像，雙手握著一把劍。', how: '沿著朝聖者之路一直向北，走到裂谷邊。' },
+  seals: { who: '墮天巨像', desc: '劍柄上有三個紋章：盾、翼、誓。每一個，都由一位墮落的守護者握著。', how: '擊倒三位守護者，紋章就會逐一亮起。' },
+  colossusBack: { who: '墮天巨像', desc: '三個紋章都亮了。巨像在等你。', how: '回到裂谷邊的巨像前。' },
+  rift: { who: '神域之主', desc: '神域之主把天樞之劍交給了你，叫你不要回頭。冥門就在裂谷的最深處。', how: '從巨像前的裂谷邊緣躍下。' },
+  abaddon: { who: '神域之主', desc: '冥門前庭由亞巴頓看守。沒有天樞之劍，幾乎傷不了他。', how: '在聖匣裡換上天樞之劍，再去挑戰他。' },
+  abaddonEcho: { who: '亞巴頓的殘響', desc: '冥門的守衛倒下了，殘響卻像有話要說。', how: '回到亞巴頓倒下的地方，按「聆聽殘響」。' },
+  gate: { who: '亞巴頓的殘響', desc: '「去吧。我守了一千年……」冥門就在前方。', how: '走到冥門前查看。' },
+  gateWait: { who: '冥門', desc: '門上的鎖孔，正好是一把劍的形狀。第一部到此為止。', how: '第二部「人間煉獄」製作中。' },
+};
+const COMPASS = ['北', '東北', '東', '東南', '南', '西南', '西', '西北'];
+function questWhere(t) {
+  if (!t) return '';
+  const [cn] = regionAt(t.x, t.z, P.pos.y);
+  const d = Math.hypot(t.x - P.pos.x, t.z - P.pos.z);
+  if (d < 8) return `${cn} · 就在附近`;
+  const a = Math.atan2(t.x - P.pos.x, -(t.z - P.pos.z)); // map north is -z
+  const dir = COMPASS[((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8];
+  return `${cn} · ${dir}方 ${d < 1000 ? Math.round(d / 5) * 5 + 'm' : (d / 1000).toFixed(1) + 'km'}`;
+}
+function renderQuestDetail() {
+  if (!QS) QS = questState();
+  const { ch, en, main, rows, hints } = QS, I = QINFO[main.id] || {}, t = questTarget();
+  $('qdCh').textContent = ch; $('qdEn').textContent = en;
+  $('qdTitle').innerHTML = `<span>${main.t}</span>${main.n ? `<b>${main.n}</b>` : ''}${main.tag ? `<em class="qtag">${main.tag}</em>` : ''}`;
+  $('qdWhere').textContent = t ? questWhere(t) : main.id === 'leap' || main.id === 'back' ? '天緣 · 島嶼的邊緣' : '—';
+  $('qdWho').textContent = I.who || '—';
+  $('qdDesc').textContent = I.desc || '';
+  $('qdHow').innerHTML = (I.how ? `<p><i class="dia"></i>${I.how}</p>` : '') + hints.map((h) => `<p class="hint"><i class="up"></i>${h}</p>`).join('');
+  const steps = rows.filter((r) => !r.side && r.k === 'task'), side = rows.filter((r) => r.side || r.k !== 'task');
+  $('qdSteps').innerHTML = steps.length ? steps.map(qRow).join('') : '<div class="qnone">—</div>';
+  $('qdSide').innerHTML = side.length ? side.map(qRow).join('') : '<div class="qnone">—</div>';
+  $('qdGuide').disabled = !t;
+}
+function openQuest() {
+  if (state !== 'play' || DLG) return;
+  closeOverlays(); paused = true; freeMouse();
+  renderQuestDetail(); $('questOv').classList.remove('hidden'); Audio.sfx('ui');
+}
+
+// ---- the guiding light: a wisp that flies ahead toward the objective, then comes back and goes again
+const GUIDE = { left: 0, t: 0, sp: null, from: new THREE.Vector3(), to: new THREE.Vector3() };
+function guideOn(sec) { if (questTarget()) { GUIDE.left = Math.max(GUIDE.left, sec); GUIDE.t = 0; } }
+function guideGroundY(x, z) {
+  if (P.inRealm) return P.pos.y;
+  if (P.inHell) return C.groundAtL(x, z, 2);
+  if (P.inEarth) return C.groundAtL(x, z, 1);
+  return Math.max(0, groundAt(x, z));
+}
+function updateGuide(dt) {
+  if (!GUIDE.sp) {
+    GUIDE.sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.glow, color: new THREE.Color(2.4, 2.0, 1.3), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
+    GUIDE.sp.scale.setScalar(1.3); GUIDE.sp.visible = false; scene.add(GUIDE.sp);
+  }
+  const sp = GUIDE.sp, tg = state === 'play' && !paused && GUIDE.left > 0 ? questTarget() : null;
+  const far = tg && Math.hypot(tg.x - P.pos.x, tg.z - P.pos.z) > 14;
+  if (!far) { sp.visible = false; if (GUIDE.left > 0 && state === 'play' && !paused) GUIDE.left -= dt; return; }
+  GUIDE.left -= dt;
+  const PER = 2.6, u0 = GUIDE.t / PER; GUIDE.t += dt;
+  if (GUIDE.t >= PER || u0 === 0) { // each run starts at the hero and heads for the objective
+    if (GUIDE.t >= PER) GUIDE.t = 0;
+    const dx = tg.x - P.pos.x, dz = tg.z - P.pos.z, d = Math.hypot(dx, dz), run = Math.min(24, d - 6);
+    GUIDE.from.set(P.pos.x, 0, P.pos.z); GUIDE.to.set(P.pos.x + (dx / d) * run, 0, P.pos.z + (dz / d) * run);
+  }
+  const u = GUIDE.t / PER, k = smooth(0, 0.78, u), x = GUIDE.from.x + (GUIDE.to.x - GUIDE.from.x) * k, z = GUIDE.from.z + (GUIDE.to.z - GUIDE.from.z) * k;
+  const gy = Math.max(guideGroundY(x, z), P.inRealm ? -1e9 : P.pos.y - 6);
+  sp.position.set(x, gy + 1.5 + Math.sin(time * 5) * 0.12, z);
+  const a = smooth(0, 0.08, u) * (1 - smooth(0.8, 1, u)) * Math.min(1, GUIDE.left);
+  sp.material.opacity = a; sp.visible = a > 0.01;
+  if (a > 0.2 && Math.random() < 0.8) emit(FX.sparks, { x: x + (Math.random() - 0.5) * 0.3, y: sp.position.y + (Math.random() - 0.5) * 0.3, z: z + (Math.random() - 0.5) * 0.3, vy: 0.25, life: 0.9, s: 0.45, drag: 2, c: [1.7, 1.45, 0.95] });
+}
+
+// ---- the objective marker: a small diamond over the target with its distance; pinned to the edge when off-screen
+function updateQuestMark() {
+  const el = hud.qMark, t = state === 'play' && !paused && !DLG ? questTarget() : null;
+  const d = t ? Math.hypot(t.x - P.pos.x, t.z - P.pos.z) : 0;
+  if (!t || d < 10) { if (hud.qmOn) { el.classList.remove('on'); hud.qmOn = false; } return; }
+  if (!hud.qmOn) { el.classList.add('on'); hud.qmOn = true; }
+  _v.set(t.x, guideGroundY(t.x, t.z) + 2.4, t.z).project(camera);
+  let x = _v.x, y = _v.y;
+  const behind = _v.z > 1;
+  if (behind) { x = -x; y = -y; }
+  // on screen it sits over the target; off screen it is pinned to the side, in the middle band clear of the corner HUD
+  const edge = behind || Math.abs(x) > 0.94 || Math.abs(y) > 0.9, ax = x, ay = y;
+  if (edge) {
+    // the band runs along the screen's sides just above the middle (below the map, above the thumb buttons)
+    const cy = 0.235, hx = 0.88, hy = 0.08;
+    if (behind && Math.abs(x) < 0.25 && Math.abs(y) < 0.25) { x = 0; y = -0.3; }
+    else { const k = Math.max(Math.abs(x) / hx, Math.abs(y - cy) / hy, 1e-6); x /= k; y = cy + (y - cy) / k; }
+  }
+  const px = (x * 0.5 + 0.5) * VIEW.w, py = (-y * 0.5 + 0.5) * VIEW.h;
+  el.style.transform = `translate(${px.toFixed(1)}px, ${py.toFixed(1)}px)`;
+  el.classList.toggle('edge', edge);
+  if (edge) hud.qmArrow.style.transform = `rotate(${Math.atan2(-ay, ax) + Math.PI / 2}rad)`;
+  const s = d < 1000 ? `${Math.round(d / 5) * 5}m` : `${(d / 1000).toFixed(1)}km`;
+  if (s !== hud.qmS) { hud.qmS = s; hud.qmD.textContent = s; }
 }
 let qTick = 0;
 function updateQuestDist(dt) {
@@ -2606,7 +2730,7 @@ function openMap() {
   Audio.sfx('ui');
 }
 function closeOverlays() {
-  for (const id of ['mapOv', 'setOv', 'howOv', 'codexOv', 'testOv', 'bagOv']) $(id).classList.add('hidden');
+  for (const id of ['mapOv', 'setOv', 'howOv', 'codexOv', 'testOv', 'bagOv', 'questOv']) $(id).classList.add('hidden');
   paused = false;
 }
 
@@ -2762,6 +2886,8 @@ function setupInput() {
     else if (k === 'KeyK' || k === 'KeyQ') doSkill();
     else if (k === 'KeyE' || k === 'KeyF') doInteract();
     else if (k === 'KeyM') openMap();
+    else if (k === 'KeyO') openQuest();
+    else if (k === 'KeyG') guideOn(18);
     else if (k === 'KeyB' || k === 'KeyC') openCodex();
   });
   addEventListener('keyup', (e) => { input.keys.delete(e.code); if (e.code === 'KeyJ') attackUp(); });
@@ -2835,8 +2961,14 @@ function setupMenus() {
   $('setTitle').addEventListener('click', () => { closeOverlays(); goTitle(); });
   // on a phone held sideways the full list would sit over the move stick, so it starts folded (tap the title to open)
   if (settings.qMin === undefined) settings.qMin = isTouch && innerHeight < 500;
-  $('quest').classList.toggle('min', !!settings.qMin);
-  $('qHead').addEventListener('click', (e) => { e.stopPropagation(); settings.qMin = !settings.qMin; store.set('lumenfall_settings', settings); $('quest').classList.toggle('min', settings.qMin); Audio.sfx('ui'); });
+  $('quest').classList.toggle('others', !!settings.qOthers);
+  $('quest').addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (e.target.closest('#qMore')) { settings.qOthers = !settings.qOthers; store.set('lumenfall_settings', settings); $('quest').classList.toggle('others', settings.qOthers); Audio.sfx('ui'); return; }
+    if (e.target.closest('#qHead,#qMain')) openQuest();
+  });
+  $('qdGuide').addEventListener('click', () => { closeOverlays(); guideOn(18); Audio.sfx('ui'); });
+  $('qdMap').addEventListener('click', () => { closeOverlays(); openMap(); });
   initTestMode();
   initBag();
   document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => { closeOverlays(); Audio.sfx('ui'); }));
@@ -3262,7 +3394,8 @@ function initTestMode() {
   syncTestUI();
 }
 // the crater's pillar only answers once Camael has woken it (older journeys that already went up keep it)
-const pillarAwake = () => !!(prog.talk.camael || prog.end || prog.realm || TEST.powers);
+// the crater's pillar is the story's door to the sky: it wakes only once the fallen knight's echo has spoken
+const pillarAwake = () => !!(prog.talk.camael || TEST.powers);
 function placeAtStart() {
   P.pos.copy(START); P.yaw = START_YAW; P.vel.set(0, 0, 0);
   P.inEarth = true; P.inRealm = false; P.inHell = false;
@@ -3470,6 +3603,7 @@ function frame() {
   W.sun.position.copy(P.pos).addScaledVector(sunDir, 120);
   W.sun.target.position.copy(P.pos);
   if (state === 'play' || state === 'ending' || state === 'trans') updateHUD(dt);
+  updateQuestMark(); updateGuide(dt);
   if (state === 'landing' || state === 'trans') placeTitleHalo();
   Audio.tick();
   composer.render(dt);
@@ -3507,7 +3641,7 @@ async function init() {
   hookCloudClock(scene);
   placeAtStart();
   hud.hpf = $('hpf'); hud.hpd = $('hpd'); hud.hpn = $('hpn'); hud.hpw = $('hpw');
-  hud.stw = $('stw'); hud.stf = $('stf'); hud.skCd = $('skCd'); hud.bSkill = $('bSkill'); hud.skNum = $('skNum');
+  hud.stw = $('stw'); hud.stf = $('stf'); hud.qMark = $('qMark'); hud.qmD = $('qMarkD'); hud.qmArrow = $('qMarkA'); hud.skCd = $('skCd'); hud.bSkill = $('bSkill'); hud.skNum = $('skNum');
   hud.jumpLbl = $('jumpLbl'); hud.bJump = $('bJump');
   hud.lockRet = $('lockRet'); hud.lockHp = $('lockHp'); hud.bLock = $('bLock'); hud.healN = $('healN'); hud.bHeal = $('bHeal'); hud.bAtk = $('bAtk'); hud.atkLbl = $('atkLbl');
   hud.mmg = $('mmc').getContext('2d');
