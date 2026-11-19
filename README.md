@@ -47,12 +47,19 @@ with the story: weakest by Belldawn's gate, stronger the farther out, then the i
   waits until Ophiel lays down his sword; the stairway needs Lv5
 - Flight comes in two steps: the father's wings (at the core) only glide; Astraea's wings let you flap upward and air-dash
 - The wings only appear while used (glide, flap, air dash, holy ring) and fold away otherwise; no halo until then
+- The wings are articulated (arm + hand hinged at the wrist, an instanced fan of primaries). They unfurl in stages on a
+  spring (the arm rises, the wrist opens, the primaries fan out, a small overshoot, then one shake-out beat) and fold away
+  by sweeping down and breaking into feathers. In flight they ripple, bank into turns and trail light from the tips; each
+  flap is a full stroke (raise, hard downstroke with the hand open, wrist drawn in on the recovery)
 - Mortal world terrain: 1.28 km with Belldawn Hold, the harbour, the abbey, the fallen keep, the mire, the rift and the colossus
 - Jump off any layer to fall to the one below; light pillars carry you back up
 
 ## Systems
 
 - Skinned seraph (Mixamo-compatible; upload a GLB in Settings), cloth, combo / charge / perfect dodge / counter
+- Dodge is a forward roll on the ground (0.5 s, i-frames for the first 0.34 s, dust per world); locked on with no
+  direction it is a quick hop back instead. Attack during the roll to come up out of it swinging. In the air with
+  Astraea's wings the dodge is still the air dash
 - Four bosses in story order (Camael, Ophiel, Astraea, Abaddon), each granting a power; Abaddon guards hell
 - 13 kinds of minion with their own HP, speed and tells: shades, archers, armoured brutes (slam), stalkers (fast, fragile),
   shielded guards (front block, break with a charged hit), healer priests, horned chargers, swollen bombers (explode),

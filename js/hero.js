@@ -63,27 +63,36 @@ export function makeHeroMats(stone) {
 }
 
 // ---------- wing: a fan of feathers on a flat plane, folded by rotating the plane ----------
-export function buildWing(mat, side) {
+// opt.joint: an articulated wing — the arm (secondaries, coverts) and the hand (primaries) hinge at the
+// wrist, and the primaries are one instanced fan the actor spreads, folds and ripples every frame.
+export function buildWing(mat, side, opt = {}) {
   const root = new THREE.Group();
   const plane = new THREE.Group();
   plane.scale.x = side;
   root.add(plane);
   const fg = getFeatherGeo();
   const feathers = [];
-  const add = (x, y, z, len, w, th) => {
+  const boneY = (x) => 0.3 * Math.sin(Math.min(1, x / 1.35) * Math.PI * 0.85);
+  const WX = 0.96, WY = boneY(0.96);
+  const arm = new THREE.Group(), hand = new THREE.Group(), handStatic = new THREE.Group();
+  plane.add(arm);
+  if (opt.joint) { hand.position.set(WX, WY, 0); hand.add(handStatic); plane.add(hand); }
+  const prim = [];
+  const add = (x, y, z, len, w, th, primary) => {
+    const inHand = opt.joint && x >= WX;
+    if (primary && opt.joint) { prim.push({ x: x - WX, y: y - WY, z, len, w, th }); return null; }
     const m = new THREE.Mesh(fg, mat);
-    m.position.set(x, y, z);
+    m.position.set(inHand ? x - WX : x, inHand ? y - WY : y, z);
     m.scale.set(w, len, 1);
     m.rotation.z = Math.PI + th;
     m.userData.th = th;
     m.userData.ph = Math.random() * 6.28;
-    plane.add(m); feathers.push(m);
+    (inHand ? handStatic : arm).add(m); feathers.push(m);
     return m;
   };
-  const boneY = (x) => 0.3 * Math.sin(Math.min(1, x / 1.35) * Math.PI * 0.85);
   for (let k = 0; k < 9; k++) { // primaries
     const f = k / 8;
-    add(1.0 + f * 0.36, boneY(1.0 + f * 0.36) + 0.02, 0, 1.3 - Math.abs(f - 0.35) * 0.45, 0.22, 0.42 + f * 1.1);
+    add(1.0 + f * 0.36, boneY(1.0 + f * 0.36) + 0.02, 0, 1.3 - Math.abs(f - 0.35) * 0.45, 0.22, 0.42 + f * 1.1, true);
   }
   for (let k = 0; k < 9; k++) { // secondaries
     const f = k / 8;
@@ -101,7 +110,13 @@ export function buildWing(mat, side) {
     const f = k / 5;
     add(0.0 + f * 0.4, 0.06 + f * 0.05, 0.034, 0.3, 0.13, -0.05 + f * 0.25);
   }
-  return { root, plane, feathers, side };
+  let primIM = null;
+  if (opt.joint) {
+    primIM = new THREE.InstancedMesh(fg, mat, prim.length);
+    primIM.frustumCulled = false; primIM.castShadow = true;
+    hand.add(primIM);
+  }
+  return { root, plane, arm, hand, handStatic, prim, primIM, feathers, side };
 }
 
 // ---------- cloth / hair ribbon simulated procedurally ----------

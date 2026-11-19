@@ -360,9 +360,9 @@ export class Cloth {
 }
 
 // ---------------------------------------------------------------- pose animator (parameter space -> normalized bone rotations)
-const KEYS = ['thL', 'thR', 'knL', 'knR', 'hipY', 'hipX', 'tX', 'tY', 'tZ', 'hX', 'hY', 'sLx', 'sLz', 'eL', 'sRx', 'sRz', 'sRy', 'eR', 'fold', 'flap', 'wScale', 'wLift'];
+const KEYS = ['thL', 'thR', 'knL', 'knR', 'hipY', 'hipX', 'tX', 'tY', 'tZ', 'hX', 'hY', 'sLx', 'sLz', 'eL', 'sRx', 'sRz', 'sRy', 'eR', 'fold', 'flap', 'wScale', 'wLift', 'hand', 'spread'];
 export class SeraphAnimator {
-  constructor() { this.c = {}; KEYS.forEach((k) => (this.c[k] = 0)); Object.assign(this.c, { hipY: 0.95, fold: 0.8, wScale: 0.78 }); this.t = 0; this.sp = { mode: 'up', tilt: 0.12 }; }
+  constructor() { this.c = {}; KEYS.forEach((k) => (this.c[k] = 0)); Object.assign(this.c, { hipY: 0.95, fold: 0.8, wScale: 0.78, hand: 0.4, spread: 0.5, roll: 0, rY: 0, rZ: 0 }); this.t = 0; this.sp = { mode: 'up', tilt: 0.12 }; }
   update(dt, S) {
     this.t += dt;
     const t = this.t, c = this.c, T = {};
@@ -375,30 +375,55 @@ export class SeraphAnimator {
     T.sRx = -0.12 - Math.sin(ph) * 0.15 * amp; T.sRz = -0.16; T.sRy = 0; T.eR = -0.35;
     let spMode = 'up', spTilt = 0.12 + amp * 0.35;
     T.fold = 0.9 + amp * 0.12; T.flap = Math.sin(t * 1.2) * 0.03; T.wScale = 0.74 - amp * 0.04; T.wLift = 0;
+    T.hand = 0.42 + amp * 0.1; T.spread = 0.45 + Math.sin(t * 0.8) * 0.04; // at rest: folded at the wrist, primaries stacked
+    if (S.display) { // the hero standing with his wings out holds them half-open and raised; on the move they fold in
+      const dp = 1 - amp;
+      T.fold = lerp(0.98, 0.55, dp); T.hand = lerp(0.62, 0.14, dp); T.spread = lerp(0.3, 0.78, dp) + Math.sin(t * 0.8) * 0.03;
+      T.wLift = lerp(0.04, 0.1, dp) + Math.sin(t * 1.3) * 0.025; T.wScale = lerp(0.72, 0.8, dp);
+    }
     let rate = 12;
     if (S.mode === 'title') {
-      T.fold = 0.42; T.wScale = 0.86; T.hX = -0.22; T.hY = 0.25; T.flap = Math.sin(t * 0.9) * 0.05; T.wLift = 0.08;
+      T.fold = 0.42; T.wScale = 0.86; T.hX = -0.22; T.hY = 0.25; T.flap = Math.sin(t * 0.9) * 0.05; T.wLift = 0.08; T.hand = 0.12; T.spread = 0.85;
       T.sLx = -0.4; T.eL = -1.75; T.sLz = 0.24;
     } else if (!S.grounded && S.glide) {
       T.hipX = 0.95; T.thL = 0.18; T.thR = 0.28; T.knL = 0.25; T.knR = 0.4; T.tX = 0.1; T.hX = -0.75; T.tY = 0;
       T.sLx = 0.25; T.sLz = 1.05; T.eL = -0.2; T.sRx = 0.2; T.sRz = -1.0; T.eR = -0.2; spMode = 'back';
       T.fold = -0.06; T.wScale = 1.18; T.flap = Math.sin(t * 2.4) * 0.06; T.wLift = 0.12; rate = 6;
+      T.hand = 0.04 + Math.sin(t * 1.1) * 0.04; T.spread = 1.0; // soaring: fully open, the hand breathing on the air
     } else if (!S.grounded) {
       const up = clamp(S.vy / 9, -1, 1);
       T.thL = -0.7 + up * 0.2; T.thR = -0.1; T.knL = 1.1; T.knR = 0.55; T.tX = 0.08; T.hX = -0.05;
       T.sLx = -0.5; T.sLz = 0.6; T.eL = -0.5; T.sRx = -0.4; T.sRz = -0.5; T.eR = -0.4;
-      T.fold = 0.45; T.wScale = 0.9; T.flap = up * 0.12;
+      T.fold = 0.45; T.wScale = 0.9; T.flap = up * 0.12; T.hand = 0.3 - up * 0.1; T.spread = 0.7;
     }
     if (S.lock && S.grounded && !S.atk?.kind) { T.tX += 0.06; T.sRx = -0.6; T.eR = -0.9; spMode = 'guard'; }
     if (S.charge > 0) {
       const k = clamp(S.charge / 0.9, 0, 1);
       T.thL = -0.5; T.thR = 0.45; T.knL = 0.4; T.knR = 0.45; T.hipY = 0.9 - k * 0.04;
       T.tY = -0.55 - k * 0.2; T.tX = 0.05; T.sRx = -0.6; T.sRz = -0.5; T.eR = -1.7; T.sLx = -1.1; T.sLz = 0.3; T.eL = -0.4;
-      spMode = 'guard'; T.fold = 0.55 - k * 0.3; T.wScale = 0.85 + k * 0.15; rate = 18;
+      spMode = 'guard'; T.fold = 0.55 - k * 0.3; T.wScale = 0.85 + k * 0.15; T.hand = 0.35 - k * 0.3; T.spread = 0.6 + k * 0.4; rate = 18;
     }
-    if (S.dash > 0) {
-      T.hipX = 0.55; T.tX = 0.2; T.thL = 0.4; T.thR = 0.55; T.knL = 0.6; T.knR = 0.8; T.fold = 0.05; T.wScale = 1.0; T.wLift = 0.25;
+    if (S.dash > 0) { // air dash: wings swept back like a stooping falcon
+      T.hipX = 0.55; T.tX = 0.2; T.thL = 0.4; T.thR = 0.55; T.knL = 0.6; T.knR = 0.8; T.fold = 0.62; T.wScale = 1.05; T.wLift = 0.1; T.hand = 0.3; T.spread = 0.4;
       T.sLx = 0.6; T.sLz = 0.5; T.sRx = 0.5; T.sRz = -0.5; spMode = 'back'; rate = 22;
+    }
+    if (S.roll >= 0) {
+      const r = S.roll;
+      if (S.rollKind === 'back') { // a quick hop back, weight low, eyes kept on the foe
+        const k = Math.sin(clamp(r * 1.15, 0, 1) * Math.PI);
+        T.hipY = 0.95 - k * 0.14; T.tX = 0.16 + k * 0.1; T.hX = -0.1; T.tY = 0;
+        T.thL = -0.15 - k * 0.45; T.knL = 0.25 + k * 0.6; T.thR = 0.2 + k * 0.35; T.knR = 0.2 + k * 0.5;
+        T.sLx = -0.2; T.sLz = 0.6; T.eL = -0.7; T.sRx = -0.55; T.sRz = -0.4; T.eR = -0.8;
+        T.fold = 0.95; T.hand = 0.7; T.spread = 0.3; spMode = 'guard'; rate = 26;
+      } else { // a forward roll: curl up, go over the shoulders, come up already moving
+        const tuck = smooth(0, 0.16, r) * (1 - smooth(0.72, 0.98, r));
+        T.tX = lerp(0.25, 1.2, tuck); T.hX = lerp(0.05, 0.8, tuck); T.tY = 0; T.tZ = 0; T.hY = 0;
+        T.thL = lerp(-0.35, -2.05, tuck); T.thR = lerp(0.15, -1.85, tuck); T.knL = lerp(0.45, 2.35, tuck); T.knR = lerp(0.35, 2.45, tuck);
+        T.sLx = lerp(-0.3, -1.2, tuck); T.sLz = lerp(0.3, 0.5, tuck); T.eL = lerp(-0.7, -1.95, tuck);
+        T.sRx = lerp(-0.3, -0.75, tuck); T.sRz = lerp(-0.3, -0.75, tuck); T.sRy = 0; T.eR = lerp(-0.5, -1.35, tuck);
+        T.fold = 1.2; T.hand = 1; T.spread = 0.05; T.wScale = 0.72; T.wLift = 0; T.flap = 0;
+        spMode = 'roll'; rate = 34;
+      }
     }
     const A = S.atk;
     if (A && A.kind) {
@@ -406,7 +431,7 @@ export class SeraphAnimator {
       const k = A.kind, a = easeOut(A.t / ((A.kind === 'heavy' ? 0.14 : 0.2) * (gs ? 1.7 : 1))), rec = clamp((A.t - A.dur * 0.62) / (A.dur * 0.38), 0, 1);
       const W = (x, y) => lerp(x, y, a);
       T.thL = -0.45; T.thR = 0.32; T.knL = 0.25; T.knR = 0.35; T.hipY = 0.9; T.hipX = 0;
-      spMode = 'arm'; T.fold = 0.7; T.wScale = 0.82; rate = 34;
+      spMode = 'arm'; T.fold = 0.7; T.wScale = 0.82; T.hand = 0.45; T.spread = 0.5; rate = 34;
       if (gs && (k === 'l0' || k === 'l1')) {
         // the greatsword: two-handed diagonal cleaves, the whole body turning into it
         const f = k === 'l0';
@@ -422,6 +447,7 @@ export class SeraphAnimator {
         T.tX = lerp(-0.3, 0.55, dn); T.hX = lerp(-0.35, 0.3, dn); T.hipY = lerp(0.96, 0.78, dn);
         T.thL = lerp(-0.4, -0.9, dn); T.knL = lerp(0.3, 0.9, dn); T.thR = 0.55; T.knR = lerp(0.3, 0.8, dn);
         T.fold = k === 'heavy' ? -0.1 : 0.25; T.wScale = k === 'heavy' ? 1.2 : 0.95; T.wLift = k === 'heavy' ? 0.3 : 0;
+        T.hand = k === 'heavy' ? 0.05 : 0.3; T.spread = k === 'heavy' ? 1.1 : 0.7;
       } else if (wp === 'spear' && (k === 'l0' || k === 'l1')) {
         // the lance pierces: draw back, then drive straight through (the second thrust comes in higher)
         const hi = k === 'l1';
@@ -431,11 +457,11 @@ export class SeraphAnimator {
       } else if (k === 'l0') { T.tY = W(-0.85, 0.75); T.sRx = W(-0.9, -1.45); T.sRz = W(-1.2, 0.15); T.eR = W(-0.9, -0.1); T.tX = 0.18; T.sLz = 0.55; T.sLx = -0.2; T.eL = -0.6; }
       else if (k === 'l1') { T.tY = W(0.7, -0.85); T.sRx = W(-1.6, -1.25); T.sRz = W(0.35, -1.3); T.eR = W(-0.25, -0.05); T.tX = 0.16; T.sLz = 0.6; T.sLx = 0.1; T.eL = -0.5; }
       else if (k === 'l2') { T.tY = -0.2; T.sRx = -0.15; T.sRz = -1.45; T.eR = -0.05; T.tX = 0.12; T.sLz = 1.3; T.sLx = 0.1; T.eL = -0.2; T.thL = -0.3; T.thR = 0.2; T.fold = 0.15; T.wScale = 1.0; }
-      else if (k === 'l3' || k === 'heavy') { T.tY = W(-0.45, 0.12); T.sRx = W(-1.0, -1.62); T.sRz = W(-0.4, -0.05); T.eR = W(-1.6, 0.0); T.tX = W(0.0, 0.34); T.thL = -0.8; T.knL = 0.55; T.thR = 0.5; T.sLz = 0.7; T.sLx = 0.3; T.eL = -0.3; T.fold = k === 'heavy' ? -0.05 : 0.2; T.wScale = k === 'heavy' ? 1.1 : 0.9; }
+      else if (k === 'l3' || k === 'heavy') { T.tY = W(-0.45, 0.12); T.sRx = W(-1.0, -1.62); T.sRz = W(-0.4, -0.05); T.eR = W(-1.6, 0.0); T.tX = W(0.0, 0.34); T.thL = -0.8; T.knL = 0.55; T.thR = 0.5; T.sLz = 0.7; T.sLx = 0.3; T.eL = -0.3; T.fold = k === 'heavy' ? -0.05 : 0.2; T.wScale = k === 'heavy' ? 1.1 : 0.9; T.hand = k === 'heavy' ? 0.08 : 0.3; T.spread = k === 'heavy' ? 1.05 : 0.7; }
       else if (k === 'counter') {
         const up = clamp(A.t / 0.22, 0, 1), dn = clamp((A.t - 0.26) / 0.12, 0, 1);
         T.sRx = lerp(lerp(-1.2, -2.9, up), -0.9, dn); T.sRz = -0.2; T.eR = -0.1; T.sLx = lerp(-2.4, -0.6, dn); T.sLz = 0.4; T.eL = -0.3;
-        T.tX = lerp(-0.25, 0.42, dn); T.hX = lerp(-0.4, 0.2, dn); T.hipY = lerp(0.98, 0.84, dn); T.fold = -0.1; T.wScale = 1.2; T.wLift = 0.3;
+        T.tX = lerp(-0.25, 0.42, dn); T.hX = lerp(-0.4, 0.2, dn); T.hipY = lerp(0.98, 0.84, dn); T.fold = -0.1; T.wScale = 1.2; T.wLift = 0.3; T.hand = 0.05; T.spread = 1.15;
       }
       if (rec > 0) for (const key of ['tY', 'sRx', 'sRz', 'eR']) T[key] = lerp(T[key], key === 'sRx' ? -0.5 : key === 'eR' ? -0.4 : key === 'sRz' ? -0.4 : 0, rec * 0.6);
     }
@@ -443,13 +469,21 @@ export class SeraphAnimator {
       const up = clamp(S.cast / 0.32, 0, 1), down = clamp((S.cast - 0.36) / 0.12, 0, 1);
       T.sLx = lerp(-2.9, -1.1, down); T.sRx = lerp(-2.9, -1.1, down); T.sLz = lerp(0.35, 0.5, down); T.sRz = lerp(-0.35, -0.5, down);
       T.eL = -0.2; T.eR = -0.2; T.hX = lerp(-0.45, 0.25, down); T.tX = lerp(-0.12, 0.35, down);
-      T.fold = lerp(0.3, -0.12, up); T.wScale = lerp(0.95, 1.25, up); T.wLift = 0.3; spMode = 'arm'; rate = 26;
+      T.fold = lerp(0.3, -0.12, up); T.wScale = lerp(0.95, 1.25, up); T.wLift = 0.3; T.hand = lerp(0.4, 0, up); T.spread = lerp(0.6, 1.2, up); spMode = 'arm'; rate = 26;
       T.hipY = lerp(0.95, 0.86, down);
     }
     if (S.heal > 0) { T.sLx = -1.2; T.sLz = 0.3; T.eL = -1.6; T.hX = 0.35; T.tX = 0.12; T.fold = 0.3; rate = 10; }
     if (S.hurt > 0) { T.tX = -0.35; T.hX = -0.3; T.sLz = 0.7; T.sRz = -0.7; rate = 30; }
     if (S.override) Object.assign(T, S.override);
     for (const k of KEYS) if (T[k] !== undefined) c[k] = damp(c[k], T[k], rate, dt);
+    // the somersault itself is not damped (it must land exactly on a full turn), and it pivots on the
+    // centre of the curled-up body rather than the hip joint, so he rolls along the ground instead of orbiting
+    if (S.roll >= 0 && S.rollKind !== 'back') {
+      const r = S.roll, tk = smooth(0, 0.2, r) * (1 - smooth(0.68, 1.0, r));
+      const ang = Math.PI * 2 * smooth(0.05, 0.8, r), cs = Math.cos(ang), sn = Math.sin(ang);
+      const cy = 0.1 * tk, cz = 0.24 * tk;
+      c.roll = ang; c.rY = -0.6 * tk + cy - (cy * cs - cz * sn); c.rZ = cz - (cy * sn + cz * cs);
+    } else { c.roll = 0; c.rY = 0; c.rZ = 0; }
     this.sp.mode = S.override?.spMode || spMode; this.sp.tilt = spTilt;
     return c;
   }
@@ -459,7 +493,7 @@ const qe = (x, y, z, o = 'XYZ') => new Q().setFromEuler(_e.set(x, y, z, o));
 export function paramsToPose(c) {
   const H = Math.PI / 2;
   const q = {
-    Hips: qe(c.hipX, 0, 0),
+    Hips: qe(c.hipX + (c.roll || 0), 0, 0),
     Spine: qe(c.tX * 0.3, c.tY * 0.3, c.tZ * 0.3), Spine1: qe(c.tX * 0.35, c.tY * 0.35, c.tZ * 0.35), Spine2: qe(c.tX * 0.35, c.tY * 0.35, c.tZ * 0.35),
     Neck: qe(c.hX * 0.4, c.hY * 0.4, 0), Head: qe(c.hX * 0.6, c.hY * 0.6, 0),
     LeftArm: qe(c.sLx, 0, -H + c.sLz), LeftForeArm: qe(0, c.eL, 0),
@@ -467,16 +501,23 @@ export function paramsToPose(c) {
     LeftUpLeg: qe(c.thL, 0, 0), LeftLeg: qe(c.knL, 0, 0), LeftFoot: qe(-(c.thL + c.knL) * 0.55, 0, 0),
     RightUpLeg: qe(c.thR, 0, 0), RightLeg: qe(c.knR, 0, 0), RightFoot: qe(-(c.thR + c.knR) * 0.55, 0, 0),
   };
-  return { q, hips: new V3(0, c.hipY - 0.95, 0) };
+  return { q, hips: new V3(0, c.hipY - 0.95 + (c.rY || 0), c.rZ || 0) };
 }
 
 // ---------------------------------------------------------------- the actor: body + accessories + cloth
 const _p = new V3(), _q = new Q(), _q2 = new Q(), _v = new V3(), _m = new THREE.Matrix4();
+const _fp = new V3(), _fq = new Q(), _fs = new V3(), _fe = new THREE.Euler(), _fm = new THREE.Matrix4(), _X = new V3(1, 0, 0);
+// keyframed curve with cosine easing between keys: [[t, v], ...]
+const KF = (b, ks) => { for (let i = 1; i < ks.length; i++) if (b <= ks[i][0]) { const [t0, v0] = ks[i - 1], [t1, v1] = ks[i]; const f = (b - t0) / (t1 - t0); return v0 + (v1 - v0) * (0.5 - 0.5 * Math.cos(Math.PI * f)); } return ks[ks.length - 1][1]; };
 export class SeraphActor {
   constructor(scene, opt = {}) {
     this.scene = scene; this.opt = opt;
     this.M = opt.style === 'warrior' ? makeWarriorMats() : makeSeraphMats(opt.fallen);
     this.angel = opt.style === 'warrior' ? 0 : 1; // how far the angel shows: wings, halo, feather mantle
+    // the game sets wingWant (1 = wings out, 0 = folded away into light); a spring with a little overshoot
+    // drives the unfurl so the arm rises first, then the wrist opens, then the primaries fan out
+    this.wingWant = undefined; this.unf = this.angel; this.unfV = 0; this.shook = true;
+    this.beat = -1; this.beatAmp = 1; this.flapPrev = 0; this.bank = 0; this.wingGlow = 0;
     this.root = new THREE.Group(); scene.add(this.root);
     this.scale = opt.scale || 1;
     this.anim = new SeraphAnimator();
@@ -540,11 +581,13 @@ export class SeraphActor {
     const back = this.socket('Spine2', new V3(0, 0.1, -0.1));
     this.wings = [];
     for (const side of [1, -1]) {
-      const w = buildWing(M.feather, side);
+      const w = buildWing(M.feather, side, { joint: true });
       w.root.position.set(side * 0.05, 0, 0);
-      bakeStatic(w.plane);
+      bakeStatic(w.arm); bakeStatic(w.handStatic);
+      w.tipTh = w.prim[w.prim.length - 1].th;
       back.add(w.root); this.wings.push(w);
     }
+    this.featherE0 = M.feather.emissiveIntensity;
     // feather mantle
     const mantle = new THREE.Group();
     const fg = getFeatherGeo();
@@ -672,18 +715,81 @@ export class SeraphActor {
       }
     }
     for (const n in this.sockets) for (const s of this.sockets[n]) s.scale.setScalar(this.scale);
-    // wings
-    for (const w of this.wings) {
-      const s = w.side;
-      w.root.rotation.set(c.fold * 0.42 - c.wLift * 0.3, s * c.fold * 1.32, s * (0.22 + c.wLift - c.fold * 0.18 + c.flap));
-      w.root.scale.setScalar(Math.max(0.001, c.wScale * this.angel));
-    }
+    this.updateWings(dt, S, c);
     this.halo.rotation.z = this.anim.t * 0.25;
     this.halo.scale.setScalar(Math.max(0.001, this.angel)); this.halo.visible = this.angel > 0.02;
     if (this.mantle) { this.mantle.scale.setScalar(Math.max(0.001, this.angel)); this.mantle.visible = this.angel > 0.02; }
     this.updateWeapon(dt, S);
     this.root.updateMatrixWorld(true);
     this.updateCloth(dt, S);
+  }
+  // ---- wings: unfurl / fold-away spring, the wing-beat stroke, banking, and the primary fan
+  updateWings(dt, S, c) {
+    const want = this.wingWant, t = this.anim.t;
+    if (want !== undefined) {
+      const k = want ? 82 : 52, d = want ? 11 : 13.5, n = Math.min(40, Math.ceil(dt / 0.008)), h = dt / Math.max(1, n);
+      for (let i = 0; i < n; i++) { this.unfV += (k * (want - this.unf) - d * this.unfV) * h; this.unf += this.unfV * h; }
+      if (!want && this.unf < 0) { this.unf = 0; this.unfV = 0; }
+      if (want && !this.shook && this.unf > 0.9) { this.shook = true; this.beat = 0; this.beatAmp = 0.6; } // shake the feathers out
+      if (!want && this.unf < 0.5) this.shook = false;
+      this.angel = smooth(0, 0.42, this.unf);
+    }
+    const u = this.unf, over = Math.max(0, u - 1), sc = this.angel;
+    const e1 = smooth(0.04, 0.72, u), e2 = smooth(0.28, 0.95, u) + over * 1.4, e3 = smooth(0.5, 1.0, u) + over * 2.2;
+    // opening, the wings sweep up as they stretch; folding away, they sweep down and back
+    const rise = Math.sin(clamp(u, 0, 1) * Math.PI) * (want === 0 ? -0.35 : 0.4);
+    // a wing-beat: raise, drive down hard with the hand open, then draw the wrist in on the recovery
+    const fl = S.flap || 0;
+    if (fl > this.flapPrev + 0.05) { this.beat = 0; this.beatAmp = 1; }
+    this.flapPrev = fl;
+    let sUp = 0, sFold = 0, sHand = 0, sFan = 0, sPitch = 0;
+    if (this.beat >= 0) {
+      const b = this.beat, A = this.beatAmp;
+      sUp = KF(b, [[0, 0], [0.16, 0.6], [0.44, -0.85], [0.72, -0.15], [1, 0]]) * A;
+      sFold = KF(b, [[0, 0], [0.16, 0.18], [0.44, -0.3], [0.75, 0.12], [1, 0]]) * A;
+      sHand = KF(b, [[0, 0], [0.16, 0.28], [0.32, 0], [0.5, 0.05], [0.7, 0.6], [1, 0]]) * A;
+      sFan = KF(b, [[0, 0], [0.16, -0.25], [0.4, 0.25], [0.62, -0.4], [1, 0]]) * A;
+      sPitch = KF(b, [[0, 0], [0.16, -0.12], [0.44, 0.28], [0.72, -0.1], [1, 0]]) * A;
+      this.beat += dt / 0.52; if (this.beat >= 1) this.beat = -1;
+    }
+    this.bank = damp(this.bank, S.bank || 0, 5, dt);
+    const gl = S.glide && !S.grounded, flA = gl ? 0.045 : 0.012, flF = gl ? 9 : 3;
+    for (const w of this.wings) {
+      const s = w.side;
+      w.root.visible = sc > 0.004;
+      if (!w.root.visible) continue;
+      const fold = lerp(1.38, c.fold, e1) + sFold;
+      const up = lerp(-0.5, 0.22 + c.wLift - c.fold * 0.18 + c.flap, e1) + rise + sUp - s * this.bank * 0.42;
+      const pitch = lerp(0.62, c.fold * 0.42 - c.wLift * 0.3, e1) + sPitch;
+      w.root.rotation.set(pitch, s * fold * 1.32, s * up);
+      w.root.scale.setScalar(Math.max(0.001, c.wScale * sc * (1 + over * 0.35)));
+      // the wrist: folded, the hand lies back along the arm with its primaries drooping
+      const hf = clamp(lerp(1, c.hand, Math.min(e2, 1.3)) + sHand + (gl ? -s * this.bank * 0.06 : 0), -0.08, 1.05);
+      w.hand.rotation.set(-hf * 0.2, hf * 2.7, -hf * 0.32);
+      // the primaries fan: stacked when folded, spread and rippling on the air when open
+      const spread = clamp(lerp(0.04, c.spread, Math.min(e3, 1.3)) + sFan, 0, 1.35), sp1 = Math.min(spread, 1);
+      const n = w.prim.length;
+      for (let i = 0; i < n; i++) {
+        const p = w.prim[i], f = i / (n - 1);
+        const th = lerp(1.3 - f * 0.1, p.th, spread) + Math.sin(t * flF + i * 0.8 + s) * flA * (0.4 + f);
+        if (i === n - 1) w.tipTh = th;
+        _fp.set(p.x * (0.3 + 0.7 * sp1), p.y, p.z - (1 - sp1) * f * 0.03);
+        _fq.setFromEuler(_fe.set(0, 0, Math.PI + th));
+        _fs.set(p.w, p.len * (0.9 + 0.1 * sp1), 1);
+        w.primIM.setMatrixAt(i, _fm.compose(_fp, _fq, _fs));
+      }
+      w.primIM.instanceMatrix.needsUpdate = true;
+    }
+    // the feathers flare with light while they unfurl or dissolve
+    const glow = want !== undefined ? clamp(4 * u * (1 - u), 0, 1) : 0;
+    this.wingGlow = glow;
+    this.M.feather.emissiveIntensity = this.featherE0 + glow * 0.45 + (this.beat >= 0 ? Math.sin(this.beat * Math.PI) * 0.12 : 0);
+  }
+  // world position of a wing's tip (outermost primary)
+  wingTip(i, out) {
+    const w = this.wings[i], p = w.prim[w.prim.length - 1], th = w.tipTh;
+    out.set(p.x + Math.sin(th) * p.len, p.y - Math.cos(th) * p.len, p.z);
+    return w.hand.localToWorld(out);
   }
   updateWeapon(dt, S) {
     const sp = this.anim.sp, mode = S.spMode || sp.mode;
@@ -698,11 +804,12 @@ export class SeraphActor {
     } else if (mode === 'back') dir = new V3(0, -0.35, -1).normalize();
     else if (mode === 'guard') dir = new V3(-0.15, 0.25, 1).normalize();
     else if (mode === 'down') dir = new V3(0, -1, 0.3).normalize();
+    else if (mode === 'roll') dir = new V3(-0.35, -0.75, -0.55).normalize().applyAxisAngle(_X, this.anim.c.roll || 0); // blade laid along his flank, turning with him
     else dir = new V3(0, Math.cos(sp.tilt), Math.sin(sp.tilt));
     const tq = _q2.setFromUnitVectors(new V3(0, 0, 1), dir);
     const twist = new Q().setFromAxisAngle(dir, mode === 'arm' ? Math.PI / 2 : 0);
     tq.premultiply(twist);
-    this.spearQ.slerp(tq, 1 - Math.exp(-(mode === 'arm' ? 40 : 14) * dt));
+    this.spearQ.slerp(tq, 1 - Math.exp(-(mode === 'arm' ? 40 : mode === 'roll' ? 60 : 14) * dt));
     this.weaponHolder.position.copy(hand);
     this.weaponHolder.quaternion.copy(this.spearQ);
   }

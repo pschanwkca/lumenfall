@@ -112,7 +112,7 @@ const clock = new THREE.Clock();
 const P = {
   pos: new THREE.Vector3(SPAWN.x, 0, SPAWN.z), vel: new THREE.Vector3(), yaw: Math.PI,
   grounded: true, glide: false, stamina: 100, staminaDelay: 0, hp: 100, maxHp: 100, hpShown: 100,
-  dashT: 0, dashCd: 0, dashDir: new THREE.Vector3(), inv: 0, hurtT: 0, lastHurt: -99,
+  dashT: 0, dashCd: 0, dashDir: new THREE.Vector3(), inv: 0, hurtT: 0, lastHurt: -99, rollT: -1, rollDur: 0.5, rollKind: 'roll', rollQ: false,
   atk: { idx: -1, t: 0, queued: false, hit: false }, castT: -1, skillCd: 0,
   safe: new THREE.Vector3(SPAWN.x, 0, SPAWN.z), safeT: 0, checkpoint: new THREE.Vector3(SPAWN.x, 0, SPAWN.z),
   phase: 0, onWater: false, stepAcc: 0, idleRipple: 0, speed: 0, lastAirY: 0,
@@ -187,7 +187,7 @@ function applyWeaponLook() {
 }
 // powers granted by the purified
 const POWERS = {
-  shield: { key: 'boss', glyph: '盾', name: '守衛之盾', en: "WARDEN'S AEGIS", desc: '原地按「閃避」舉盾格擋，時機啱可反擊 · 衝刺可擊碎黑晶封印' },
+  shield: { key: 'boss', glyph: '盾', name: '守衛之盾', en: "WARDEN'S AEGIS", desc: '原地按「閃避」舉盾格擋，時機啱可反擊 · 翻滾撞向黑晶封印可將其擊碎' },
   wings: { key: 'boss2', glyph: '翼', name: '審判之翼', en: "ARBITER'S WINGS", desc: '真正飛起來 · 滑翔中按「振翼」向上飛 · 空中按「閃避」向前衝刺' },
   oath: { key: 'boss3', glyph: '誓', name: '騎士之誓', en: "KNIGHT'S OATH", desc: '蓄滿力的重擊會震地 · 擊碎裂石，震飛周圍敵人' },
 };
@@ -283,6 +283,7 @@ const Audio = {
       case 'jump': this.noise(0.25, 300, 900, 0.08); break;
       case 'glide': this.noise(0.5, 250, 1400, 0.12, 0.7); break;
       case 'dash': this.noise(0.2, 1200, 400, 0.15); break;
+      case 'roll': this.noise(0.34, 700, 180, 0.13, 0.8); this.thud(85, 0.07); break;
       case 'skill': this.noise(0.6, 200, 3000, 0.16, 0.6); [64, 71, 76, 83].forEach((x, i) => this.bell(m(x), 0.09, 2.4, 0.3 + i * 0.03)); break;
       case 'hurt': this.thud(70, 0.35); this.noise(0.2, 400, 150, 0.12); break;
       case 'purify': [79, 84, 91].forEach((x, i) => this.bell(m(x), 0.08, 2.2, i * 0.05)); break;
@@ -1273,15 +1274,26 @@ function doDodge() {
   if (canAct() && !P.grounded && has('wings') && canWing()) { airDash(w, noInput); return; }
   if (!canAct() || P.dashCd > 0 || P.stamina < 14 || P.castT >= 0) return;
   if (noInput && !P.lock && P.grounded && has('shield')) { startGuard(); return; }
-  if (noInput) w.set(Math.sin(P.yaw), 0, Math.cos(P.yaw)).multiplyScalar(P.lock ? -1 : 1);
+  if (P.rollT >= 0) return;
+  // a dodge roll; locked on with no direction, a quick hop back instead (eyes stay on the foe)
+  const back = !!(P.lock && noInput);
+  if (noInput) w.set(Math.sin(P.yaw), 0, Math.cos(P.yaw)).multiplyScalar(back ? -1 : 1);
   P.dashDir.copy(w.normalize());
-  if (!(P.lock && noInput)) P.yaw = Math.atan2(P.dashDir.x, P.dashDir.z);
-  P.dashT = 0.2; P.dashCd = 0.45; P.inv = Math.max(P.inv, 0.32);
-  P.stamina -= 14; P.staminaDelay = 0.8; P.glide = false;
+  if (!back) P.yaw = Math.atan2(P.dashDir.x, P.dashDir.z);
+  P.rollT = 0; P.rollKind = back ? 'back' : 'roll'; P.rollDur = back ? 0.36 : 0.5; P.rollQ = false;
+  P.dashCd = back ? 0.42 : 0.55; P.inv = Math.max(P.inv, back ? 0.26 : 0.34);
+  P.stamina -= back ? 10 : 14; P.staminaDelay = 0.8; P.glide = false;
   P.atk.kind = null; P.charge = -1; P.healT = -1; P.spin = 0;
-  featherBurst(P.pos.x, P.pos.y + 1.0, P.pos.z, 6, 2);
-  Audio.sfx('dash');
+  rollDust(back ? 6 : 10, back ? 1.6 : 2.4);
+  Audio.sfx(back ? 'dash' : 'roll');
   if (P.perfectCd <= 0 && threatNear()) perfectDodge();
+}
+// dust kicked up by a roll: pale on stone and grass, ash-dark in hell; water splashes instead
+function rollDust(n, sp) {
+  if (!P.grounded) return;
+  if (P.onWater) { ripple(P.pos.x, P.pos.z, 1.6); burst(FX.sparks, P.pos.x, P.pos.y + 0.1, P.pos.z, n, { speed: sp, up: 2.2, life: 0.5, size: 0.5, c: [1.1, 1.3, 1.5] }); return; }
+  const c = C.LAYER.cur === 2 ? [0.42, 0.26, 0.22] : C.LAYER.cur === 1 ? [0.8, 0.72, 0.6] : [0.95, 0.92, 0.86];
+  burst(FX.smoke, P.pos.x, P.pos.y + 0.15, P.pos.z, n, { speed: sp, up: 0.6, life: 0.75, size: 1.3, g: 0.4, c, drag: 3.5 });
 }
 function threatNear() {
   for (const s of shades) {
@@ -1364,8 +1376,8 @@ function updateBreakables(dt) {
     if (b.broken || Math.abs(b.y - P.pos.y) > 6) continue;
     const d = Math.hypot(P.pos.x - b.x, P.pos.z - b.z);
     if (d > 5) continue;
-    if (b.kind === 'seal' && P.dashT > 0 && has('shield')) { breakIt(b); continue; }
-    if (d < 4.4 && breakHintT <= 0) { breakHintT = 5; toast(has(b.need) ? (b.kind === 'seal' ? '<i class="dia"></i>以盾衝刺擊碎黑晶封印' : '<i class="dia"></i>蓄滿力重擊震碎裂石') : `<i class="dia"></i>需要「${POWERS[b.need].name}」`); }
+    if (b.kind === 'seal' && (P.dashT > 0 || (P.rollT >= 0 && P.rollKind === 'roll' && d < 4.2)) && has('shield')) { breakIt(b); continue; }
+    if (d < 4.4 && breakHintT <= 0) { breakHintT = 5; toast(has(b.need) ? (b.kind === 'seal' ? '<i class="dia"></i>持盾翻滾撞向黑晶封印，將其擊碎' : '<i class="dia"></i>蓄滿力重擊震碎裂石') : `<i class="dia"></i>需要「${POWERS[b.need].name}」`); }
   }
   if (FX.aegis) {
     FX.aegis.visible = P.guardT > 0;
@@ -1476,6 +1488,10 @@ function startAttack(kind, mult = 1) {
   if (kind === 'counter') { bigText('聖裁', 'JUDGEMENT'); burst(FX.sparks, P.pos.x, P.pos.y + 1.2, P.pos.z, 50, { speed: 7, up: 2, life: 0.9, size: 1.1 }); }
 }
 function lightAttack() {
+  if (P.rollT >= 0 && canAct()) { // pressed mid-roll: come up out of it swinging
+    if (P.rollT > P.rollDur * 0.58) { P.rollT = -1; startAttack('l0'); } else P.rollQ = true;
+    return;
+  }
   if (!canAct() || P.dashT > 0 || P.castT >= 0 || P.healT >= 0) return;
   if (P.glide) P.glide = false;
   if (P.counterT > 0 && !P.atk.kind) { P.counterT = 0; startAttack('counter'); return; }
@@ -1500,7 +1516,7 @@ function doLock() {
   else { CAM.recenter = 0.45; CAM.yawTarget = P.yaw + Math.PI; }
 }
 function doHeal() {
-  if (!canAct() || P.flasks <= 0 || P.healT >= 0 || P.hp >= P.maxHp || P.dashT > 0) return;
+  if (!canAct() || P.flasks <= 0 || P.healT >= 0 || P.hp >= P.maxHp || P.dashT > 0 || P.rollT >= 0) return;
   P.flasks--; P.healT = 0; P.healed = false; P.atk.kind = null; P.charge = -1;
   Audio.sfx('ui');
 }
@@ -1508,7 +1524,7 @@ function nearestShade(maxD, cone) { return nearestEnemy(maxD, cone ?? -2); }
 function startSwing() {}
 function doAttack() { lightAttack(); }
 function doSkill() {
-  if (!canAct() || P.skillCd > 0 || P.castT >= 0 || P.dashT > 0) return;
+  if (!canAct() || P.skillCd > 0 || P.castT >= 0 || P.dashT > 0 || P.rollT >= 0) return;
   P.castT = 0; P.skillCd = 7; P.atk.kind = null; P.charge = -1; P.glide = false;
   P.vel.set(0, P.grounded ? 0 : 2, 0);
   Audio.sfx('skill');
@@ -1568,7 +1584,7 @@ function updatePlayer(dt) {
     else if (P.atk.t >= A.dur) { P.atk.kind = null; P.spin = 0; }
   }
   // charging a heavy thrust (hold attack)
-  if (P.atkHeld && P.charge < 0 && time - P.atkDownT > 0.26 && !P.atk.kind && P.dashT <= 0 && P.castT < 0 && P.healT < 0 && P.grounded) { P.charge = 0; Audio.sfx('charge'); }
+  if (P.atkHeld && P.charge < 0 && time - P.atkDownT > 0.26 && !P.atk.kind && P.dashT <= 0 && P.rollT < 0 && P.castT < 0 && P.healT < 0 && P.grounded) { P.charge = 0; Audio.sfx('charge'); }
   if (P.charge >= 0) {
     P.charge += dt;
     if (P.charge > 0.9 && !P.chargeFull) { P.chargeFull = true; hero.tipWorld(0, _tip); burst(FX.sparks, _tip.x, _tip.y, _tip.z, 26, { speed: 3, up: 0.5, life: 0.6, size: 1 }); Audio.sfx('pickup'); }
@@ -1597,7 +1613,16 @@ function updatePlayer(dt) {
 
   // velocity
   const accelG = P.grounded ? 16 : 4.5;
-  if (P.dashT > 0) {
+  if (P.rollT >= 0) {
+    P.rollT += dt;
+    const u = clamp(P.rollT / P.rollDur, 0, 1);
+    // fast off the mark, carried through the turn, braking as he comes up
+    const sp = P.rollKind === 'back' ? 12.5 * Math.pow(1 - u, 1.4) : 13.5 * (u < 0.55 ? 1 : 1 - Math.pow((u - 0.55) / 0.45, 1.6) * 0.82);
+    P.vel.x = P.dashDir.x * sp; P.vel.z = P.dashDir.z * sp;
+    if (P.grounded && P.rollKind === 'roll' && Math.random() < 0.35) emit(FX.smoke, { x: P.pos.x + (Math.random() - 0.5) * 0.6, y: P.pos.y + 0.12, z: P.pos.z + (Math.random() - 0.5) * 0.6, vy: 0.5, life: 0.6, s: 0.9, g: 0.3, c: C.LAYER.cur === 2 ? [0.42, 0.26, 0.22] : [0.92, 0.88, 0.8], drag: 3 });
+    if (P.rollQ && u >= 0.6) { P.rollT = -1; P.rollQ = false; startAttack('l0'); }
+    else if (u >= 1) { P.rollT = -1; if (P.rollKind === 'roll') rollDust(4, 1.2); }
+  } else if (P.dashT > 0) {
     P.dashT -= dt;
     P.vel.x = P.dashDir.x * 24; P.vel.z = P.dashDir.z * 24;
     if (P.grounded) P.vel.y = 0; else P.vel.y = Math.max(P.vel.y, -2);
@@ -2009,7 +2034,7 @@ function startTrip(up) {
   const to = fromHell ? EARTH.riftRim.clone() : rise ? new THREE.Vector3(SPAWN.x, 0, SPAWN.z) : up ? REALM.landing.clone() : new THREE.Vector3(T.x, T.floorY, T.z + 10);
   trip = { up: !!up, rise, fromHell, from: P.pos.clone(), to, t: 0, dur: rise || fromHell ? 5.2 : up ? 4.8 : 3.8 };
   state = 'ascend';
-  P.vel.set(0, 0, 0); P.atk.kind = null; P.lock = null; P.castT = -1; P.charge = -1; P.dashT = 0;
+  P.vel.set(0, 0, 0); P.atk.kind = null; P.lock = null; P.castT = -1; P.charge = -1; P.dashT = 0; P.rollT = -1;
   $('hud').classList.add('cine'); interactTarget = null; $('bInteract').classList.add('hidden');
   if (!tripBeam) {
     tripBeam = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 1, 32, 1, true).translate(0, 0.5, 0), new THREE.MeshBasicMaterial({ map: TEX.beam, color: new THREE.Color(2.2, 1.75, 1.0), transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, fog: false }));
@@ -3409,10 +3434,24 @@ function frame() {
   hero.setVisible(!(P.inv > 0 && P.hurtT < 0 && state === 'play' && Math.floor(time * 20) % 2 === 0 && P.inv < 0.85 && P.lastHurt > time - 1));
   {
     const want = canWing() && (time < (P.wingShow || 0) || P.glide || P.flapT > 0 || (P.dashT > 0 && !P.grounded) || P.castT >= 0 || state === 'ascend' || state === 'ending') ? 1 : 0;
-    if (want && hero.angel < 0.05) featherBurst(P.pos.x, P.pos.y + 1.4, P.pos.z, 8, 2.2);
-    hero.angel = damp(hero.angel, want, want ? 16 : 4.5, dt);
+    const was = hero.wingWant;
+    hero.wingWant = want;
+    if (want && !was && hero.unf < 0.3) { // the wings break out of light at his shoulder blades
+      featherBurst(P.pos.x, P.pos.y + 1.4, P.pos.z, 10, 2.4);
+      burst(FX.sparks, P.pos.x - Math.sin(P.yaw) * 0.2, P.pos.y + 1.35, P.pos.z - Math.cos(P.yaw) * 0.2, 26, { speed: 3.2, up: 1.2, life: 0.7, size: 0.8, c: [1.9, 1.6, 1.1] });
+    }
+    if (!want && was && hero.unf > 0.5) { // folding away: they come apart into feathers and light
+      for (let i = 0; i < 2; i++) { hero.wingTip(i, _tip); featherBurst(_tip.x, _tip.y, _tip.z, 3, 1.2); burst(FX.sparks, _tip.x, _tip.y, _tip.z, 8, { speed: 1.5, up: 0.8, life: 0.6, size: 0.7, c: [1.7, 1.5, 1.1] }); }
+    }
+    const dy = Math.atan2(Math.sin(P.yaw - (P.prevYaw ?? P.yaw)), Math.cos(P.yaw - (P.prevYaw ?? P.yaw))); P.prevYaw = P.yaw;
+    P.bank = P.glide && dt > 0 ? clamp(dy / dt / 1.6, -1, 1) : 0;
   }
-  hero.update(dt, { wpn: prog.weapon, mode, speed: P.speed, phase: P.phase, grounded: P.grounded, vy: P.vel.y, glide: P.glide, dash: P.dashT, atk: P.atk, cast: P.castT, hurt: P.hurtT, charge: P.charge, lock: !!P.lock, heal: P.healT >= 0 ? 1 : 0 });
+  hero.update(dt, { wpn: prog.weapon, mode, speed: P.speed, phase: P.phase, grounded: P.grounded, vy: P.vel.y, glide: P.glide, dash: P.dashT, atk: P.atk, cast: P.castT, hurt: P.hurtT, charge: P.charge, lock: !!P.lock, heal: P.healT >= 0 ? 1 : 0,
+    roll: P.rollT >= 0 ? clamp(P.rollT / P.rollDur, 0, 1) : -1, rollKind: P.rollKind, flap: Math.max(0, P.flapT || 0), bank: P.bank, display: 1 });
+  if (hero.angel > 0.6 && P.glide && !P.grounded) { // light streams off the wingtips in flight
+    for (let i = 0; i < 2; i++) if (Math.random() < 0.75) { hero.wingTip(i, _tip); emit(FX.sparks, { x: _tip.x, y: _tip.y, z: _tip.z, vx: -P.vel.x * 0.08, vy: -0.3, vz: -P.vel.z * 0.08, life: 0.5, s: 0.5, drag: 3, c: [1.5, 1.35, 1.05] }); }
+    if (P.flapT > 0.2 && Math.random() < 0.15) { hero.wingTip(Math.random() < 0.5 ? 0 : 1, _tip); featherBurst(_tip.x, _tip.y, _tip.z, 1, 0.8); }
+  }
   updateTrail(dt, !!(P.atk.kind && P.atk.t < P.atk.dur * 0.75) || (P.dashT > 0 && P.atk.kind));
   updateDmgNums(realDt);
   const gy = support(P.pos.x, P.pos.z, P.pos.y + 0.1).h;
