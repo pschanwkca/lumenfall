@@ -66,7 +66,7 @@ export const CHARS = {
   lian: { name: '黎恩', en: 'LIAN', rar: '主角', sex: 'm', job: '半天使', role: '全能 · 能滑翔', form: 'sword', weapon: 'sword', wings: true, atk: 1, cost: 0,
     perk: '唯一能用天樞之劍斬傷地獄之物 · 能展翼滑翔', line: '' },
   isera: { name: '伊瑟拉', en: 'ISERA', rar: 'UR', sex: 'f', job: '守望天使', role: '遠程 · 狙擊傷口', form: 'bow', weapon: 'bow', wings: true, atk: 1.15, cost: 2400,
-    look: { outfit: 'watcher', hair: 'long', hairCol: '#e8e4da', skin: '#f6e2d4', eye: '#b48a3a', height: 1.08, build: -0.6, cape: 'none', cols: { dress: '#f7f2e8', leather: '#d8b46a', white: '#ece6d9' } },
+    look: { outfit: 'watcher', hair: 'long', hairCol: '#d6d3cc', skin: '#f6e2d4', eye: '#b48a3a', height: 1.08, build: -0.6, cape: 'none', cols: { dress: '#e8e1d3', leather: '#9c7b4e', white: '#b9ae9b' } },
     meet: { vigils: 3 }, perk: '蓄力一箭對傷口傷害 ×1.6 · 能展翼滑翔', line: '守望者從來沒有離開——我們只是在等一個看得見我們的人。' },
   gareth: { name: '加雷斯', en: 'GARETH', rar: 'SSR', sex: 'm', job: '晨鐘堡最後的騎士', role: '前線 · 破盾', form: 'greatsword', weapon: 'greatsword', atk: 1.05, cost: 1100,
     look: { outfit: 'knight', hair: 'short', hairCol: '#8a8580', skin: '#e2b896', eye: '#3b5a7a', height: 1.12, build: 0.9, beard: true, cape: 'long', capeCol: '#2c3d6b' },
@@ -78,7 +78,7 @@ export const CHARS = {
     look: { outfit: 'hunter', hair: 'tied', hairCol: '#9a3a1e', skin: '#d9a57e', eye: '#3f6a48', height: 0.92, build: 0.45, cape: 'none', cols: { dress: '#2d4462', leather: '#e8e2d2', white: '#3b3f48' } },
     meet: { beacon: 'bHarbor' }, perk: '用阿爸的魚叉：攻擊距離最長（第二期：擲叉拉怪、鎖住首領）', line: '阿爸說燈塔不能熄。現在換我去點亮別處的燈。' },
   mira: { name: '米菈', en: 'MIRA', rar: 'SR', sex: 'f', job: '麥原獵人', role: '高速輸出', form: 'dual', weapon: 'dual', atk: 0.95, cost: 450,
-    look: { outfit: 'hunter', hair: 'tied', hairCol: '#24201f', skin: '#f1dccf', eye: '#3d2c22', height: 0.88, build: -0.55, cape: 'none' },
+    look: { outfit: 'hunter', hair: 'tied', hairCol: '#24201f', skin: '#f1dccf', eye: '#3d2c22', height: 0.88, build: -0.55, cape: 'none', hood: 'up', hoodCol: '#4f4756' },
     meet: { captive: 'cField' }, perk: '出手最快 · 一下兩刀 · 蓄力十連亂舞', line: '我追蹤瘴獸三年了。你飛得比牠們快，我跟得上。' },
   rosa: { name: '蘿絲', en: 'ROSA', rar: 'SR', sex: 'f', job: '低語森林的採藥人', role: '支援 · 回復', form: 'censer', weapon: 'censer', atk: 0.85, cost: 500,
     look: { outfit: 'watcher', hair: 'long', hairCol: '#7a3a24', skin: '#f6e2d4', eye: '#3f6a48', height: 0.97, build: 0.5, belly: 0.55, cape: 'none', cols: { dress: '#7c8a5a', leather: '#5a4630', white: '#e2d9c4' } },
@@ -87,7 +87,7 @@ export const CHARS = {
     look: { outfit: 'hunter', hair: 'short', hairCol: '#4a3a30', skin: '#c99572', eye: '#1e1c22', height: 0.86, build: 1.0, beard: true, cape: 'none', cols: { dress: '#6a5a48', leather: '#3a2e24', white: '#4a4038' } },
     meet: { captive: 'cRift' }, perk: '埋炸藥、點燃草地（第二期加入）', line: '裂谷在叫我的名字？那我就把它炸開，看看是誰在叫。' },
   owen: { name: '歐文', en: 'OWEN', rar: 'SR', sex: 'm', job: '沼澤的提燈人', role: '閃盲 · 淨化', form: 'lantern', weapon: 'lantern', atk: 0.9, cost: 450, soon: true,
-    look: { outfit: 'watcher', hair: 'short', hairCol: '#c8c4bc', skin: '#e2b896', eye: '#4d5a70', height: 1.1, build: -0.75, beard: true, cape: 'long', capeCol: '#25242b', cols: { dress: '#3a3a40', leather: '#5a4a38', white: '#2e2d33' } },
+    look: { outfit: 'watcher', hair: 'short', hairCol: '#c8c4bc', skin: '#e2b896', eye: '#4d5a70', height: 1.1, build: -0.75, beard: true, cape: 'long', capeCol: '#25242b', hood: 'up', age: 1, cols: { dress: '#3a3a40', leather: '#5a4a38', white: '#2e2d33' } },
     meet: { captive: 'cSwampB' }, perk: '聖光閃盲首領、淨化瘴氣（第二期加入）', line: '我的燈以為再也點不著了。你點著了它——它跟你走。' },
 };
 export const CHAR_ORDER = ['lian', 'isera', 'gareth', 'bran', 'kasha', 'mira', 'rosa', 'dak', 'owen'];

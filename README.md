@@ -85,6 +85,18 @@ Sized after Monster Hunter's hunt HUD so the scene stays the subject:
 - The crater's pillar sleeps (a faint thread of light) until Camael's echo has spoken, so the sky cannot be reached early;
   arriving in the sky early (old saves) points you back down
 
+## The cast, remade (v2.1) · low-poly, flat-shaded
+
+- `js/figure.js` models every playable character the way a low-poly character artist would: superellipse rings
+  lofted along each bone (12-sided torso with a sternum line, 8-sided limbs, hands with thumbs, boots with cuffs and straps),
+  flat-shaded so each plane catches the light; about 2–3k triangles per character, on the same Mixamo skeleton, so every animation still works
+- The head is sixteen sides packed toward the face (a narrow nose, eye sockets, brow, cheekbones, jaw) with a painted face:
+  eyes with iris and lash line, brows in the hair colour, lips; the hair is a shell whose edge tucks under the skin along a zigzag fringe
+- Clothes are shells over the body: tunic with split skirt and hem trim, belt and buckle, strap, pouch, bracers, pauldrons,
+  breastplate, fur collar, robe; beards and a deep hood with a cowl (the dressing room gains 兜帽 · HOOD; 米菈 and 歐文 wear theirs up)
+- The townsfolk are low-poly hooded figures in the same hand (cloak in folds, cowl, sleeves, a face in the hood's shadow)
+- Cloth (capes, long hair) lays itself out afresh after a teleport instead of trailing across the map
+
 ## The party (v2.0, after Monster Hunter Outlanders) · phase 1
 
 - **Party of four**: one under your hand (主控) and up to three companions fighting on their own. 黎恩 is always in the

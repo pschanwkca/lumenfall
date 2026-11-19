@@ -6,6 +6,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { TEX, clamp, lerp, damp, easeOut, smooth } from './core.js';
 import { buildWing, bakeStatic, getFeatherGeo } from './hero.js';
+import { buildFigure, faceTexture } from './figure.js';
 
 const V3 = THREE.Vector3, Q = THREE.Quaternion;
 export const BONES = ['Hips', 'Spine', 'Spine1', 'Spine2', 'Neck', 'Head',
@@ -82,6 +83,11 @@ export function makeWarriorMats() {
   M.eye = new THREE.MeshStandardMaterial({ color: '#3d2c22', roughness: 0.25, metalness: 0.1 });
   M.fur = new THREE.MeshStandardMaterial({ color: '#d8ccb4', roughness: 0.95 });
   M.sash = new THREE.MeshStandardMaterial({ map: TEX.sash, color: '#e9dcc0', transparent: true, side: THREE.DoubleSide, depthWrite: false, roughness: 0.75, emissive: '#fff6e8', emissiveIntensity: 0.05 });
+  M.face = rim(new THREE.MeshStandardMaterial({ map: faceTexture(LOOK_DEFAULT), roughness: 0.66 }), '#ffe2c2', 0.4);
+  M.hood = rim(new THREE.MeshStandardMaterial({ color: '#57505c', roughness: 0.92, side: THREE.DoubleSide }), '#e8dcc4', 0.1);
+  // the cast is low-poly and flat-shaded: every plane of the body, the clothes and the steel reads on its own
+  for (const k of ['skin', 'dress', 'white', 'gold', 'hair', 'leather', 'steel', 'cape', 'fur', 'face', 'hood', 'gem']) { M[k].flatShading = true; M[k].needsUpdate = true; }
+  M.skin.roughness = 0.66; M.dress.roughness = 0.86; M.white.roughness = 0.85; M.leather.roughness = 0.78; M.hair.roughness = 0.72;
   return M;
 }
 
@@ -107,10 +113,10 @@ export const OUTFITS = {
   watcher: { name: '守望白袍', en: "WATCHER'S WHITE", dress: '#f5f0e6', leather: '#b7955c', white: '#e6dfd1', steel: '#e8d6a6', robe: true, noPauldron: true },
   hunter: { name: '獵人皮衣', en: "HUNTER'S LEATHERS", dress: '#5b6a48', leather: '#4c3a2a', white: '#4e4639', steel: '#8d8a83', fur: true },
 };
-export const HAIRS = { short: { name: '短髮', cloth: [4, 3, 0.2, 0.16] }, long: { name: '長髮', cloth: [5, 8, 0.22, 0.6] }, tied: { name: '束髮', cloth: [2, 6, 0.075, 0.42] } };
+export const HAIRS = { short: { name: '短髮', cloth: null }, long: { name: '長髮', cloth: [5, 8, 0.22, 0.6] }, tied: { name: '束髮', cloth: [2, 6, 0.075, 0.42] } };
 const HAIR_CLOTH = Object.assign({ none: { cloth: null } }, HAIRS);
 export const CAPES = { half: { name: '半披風', cloth: [6, 9, 0.5, 0.86] }, long: { name: '長披風', cloth: [6, 12, 0.54, 1.3] }, none: { name: '不披', cloth: null } };
-export const LOOK_DEFAULT = { outfit: 'belldawn', cape: 'half', capeCol: '#2c3d6b', hair: 'short', hairCol: '#5b4434', skin: '#f1dccf', eye: '#3d2c22', height: 1, build: 0 };
+export const LOOK_DEFAULT = { outfit: 'belldawn', cape: 'half', capeCol: '#2c3d6b', hood: 'off', hair: 'short', hairCol: '#5b4434', skin: '#f1dccf', eye: '#3d2c22', height: 1, build: 0 };
 // ---------------------------------------------------------------- placeholder skinned body
 function capsuleBetween(a, b, r) {
   const d = new V3().subVectors(b, a), L = d.length();
@@ -175,6 +181,9 @@ export function buildBody(M, style, look) {
   const parts = [];
   const add = (geo, mat, cands, custom) => parts.push({ g: skinPart(geo, cands, custom), m: mat });
   const BI = (n) => BONES.indexOf(n);
+  // the cast (the hero and his companions) are modelled in figure.js; the angels keep their own body below
+  if (war) buildFigure(add, L, O, BI);
+  else {
   // torso & dress
   if (war) add(lathe(lt([[0.128, 0.9], [0.126, 0.98], [0.124, 1.06], [0.132, 1.14], [0.152, 1.24], [0.162, 1.32], [0.148, 1.39], [0.1, 1.43], [0.05, 1.46], [0.04, 1.49]]), 26, 0.8), 'dress', ['Hips', 'Spine', 'Spine1', 'Spine2', 'Neck', 'LeftShoulder', 'RightShoulder']);
   else add(lathe([[0.122, 0.9], [0.118, 0.98], [0.11, 1.06], [0.116, 1.14], [0.133, 1.24], [0.14, 1.32], [0.128, 1.39], [0.088, 1.43], [0.048, 1.46], [0.038, 1.49]], 26, 0.74), 'dress', ['Hips', 'Spine', 'Spine1', 'Spine2', 'Neck', 'LeftShoulder', 'RightShoulder']);
@@ -252,6 +261,8 @@ export function buildBody(M, style, look) {
   add(pleat(lathe([[0.122, 1.0], [0.163, 0.92], [0.24, 0.79], [0.305, 0.67], [0.33, 0.62]], 56), 14, 0.07, 0.98, 0.62), 'dress', null, skirtW);
   { const g = new THREE.TorusGeometry(0.33, 0.009, 6, 48); g.rotateX(Math.PI / 2); g.translate(0, 0.62, 0); add(g, 'gold', null, skirtW); }
   add(pleat(lathe([[0.13, 1.0], [0.2, 0.88], [0.32, 0.62], [0.44, 0.34], [0.53, 0.14]], 40, 1, Math.PI - 1.9, 3.8), 9, 0.12, 1.0, 0.2), 'sheer', null, (p) => [[BI('Hips'), 0.85], [BI(p.x >= 0 ? 'LeftUpLeg' : 'RightUpLeg'), 0.15]]);
+  }
+
   }
 
   // merge by material
@@ -727,10 +738,10 @@ export class SeraphActor {
     this.cloths = [];
     if (!this.opt.noCloth) {
       const s = this.scale;
-      this.hair = new Cloth(4, this.opt.style === 'warrior' ? 3 : 9, 0.2 * s, (this.opt.style === 'warrior' ? 0.16 : 0.85) * s, M.hair, { taper: 0.55, grav: -8 });
+      this.hair = this.opt.style === 'warrior' ? null : new Cloth(4, 9, 0.2 * s, 0.85 * s, M.hair, { taper: 0.55, grav: -8 });
       if (this.opt.style === 'warrior' && M.cape) {
         this.cape = new Cloth(6, 9, 0.5 * s, 0.86 * s, M.cape, { grav: -7, drag: 0.975, shadow: true });
-        for (const c of [this.hair, this.cape]) { this.scene.add(c.mesh); this.cloths.push(c); }
+        for (const c of [this.cape]) { this.scene.add(c.mesh); this.cloths.push(c); }
       } else {
         this.sashL = new Cloth(2, 12, 0.2 * s, 1.35 * s, M.sash, { taper: 0.1, grav: -6.5 });
         this.sashR = new Cloth(2, 12, 0.2 * s, 1.35 * s, M.sash, { taper: 0.1, grav: -6.5 });
@@ -761,7 +772,7 @@ export class SeraphActor {
     shape.moveTo(-0.11, 0); shape.lineTo(0.11, 0); shape.lineTo(0.09, 1.55); shape.lineTo(0, 1.8); shape.lineTo(-0.09, 1.55); shape.closePath();
     const bg = new THREE.ExtrudeGeometry(shape, { depth: 0.025, bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.012, bevelSegments: 1 });
     bg.translate(0, 0, -0.012); bg.rotateX(Math.PI / 2); bg.translate(0, 0, 0.23);
-    const blade = new THREE.Mesh(bg, M.skin); g.add(blade);
+    const blade = new THREE.Mesh(bg, M.steel || M.skin); g.add(blade); // (the cast's blade is steel, not skin)
     const edge = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.03, 1.5), M.goldGlow); edge.position.set(0, 0, 1.0); g.add(edge);
     g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     bakeStatic(g);
@@ -997,6 +1008,10 @@ export class SeraphActor {
   }
   updateCloth(dt, S) {
     if (!this.cloths.length) return;
+    // a teleport (warp, fast travel, a swap of bodies) would leave the cloth hanging where he was: lay it out afresh
+    const rp = this.root.position;
+    if (this._lastRoot && this._lastRoot.distanceToSquared(rp) > 6.25) this.resetCloth();
+    (this._lastRoot ||= new V3()).copy(rp);
     const s = this.scale;
     const head = new V3(), hq = new Q(), chest = new V3(), cq = new Q(), hips = new V3();
     this.rig.socket('Head', head, hq); this.rig.socket('Spine2', chest, cq);
@@ -1032,10 +1047,12 @@ export class SeraphActor {
     const L = Object.assign({}, LOOK_DEFAULT, look), M = this.M, O = Object.assign({}, OUTFITS[L.outfit] || OUTFITS.belldawn, L.cols || {});
     M.dress.color.set(O.dress); M.leather.color.set(O.leather); M.white.color.set(O.white); M.steel.color.set(O.steel);
     M.hair.color.set(L.hairCol); M.skin.color.set(L.skin); M.eye.color.set(L.eye);
+    const ft = faceTexture(L); if (M.face.map !== ft) { M.face.map = ft; M.face.needsUpdate = true; }
+    M.hood.color.set(L.hoodCol || (L.cape !== 'none' ? L.capeCol : '#57505c')); // the hood is cut from the cloak's cloth
     if (M.cape.map !== capeTexture(L.capeCol)) { M.cape.map = capeTexture(L.capeCol); M.cape.needsUpdate = true; }
-    const key = [L.outfit, L.hair, L.build.toFixed(2), L.height.toFixed(3), L.sex, L.belly, L.beard, L.noPendant].join('|');
+    const key = [L.outfit, L.hair, L.build.toFixed(2), L.height.toFixed(3), L.sex, L.belly, L.beard, L.noPendant, L.hood].join('|');
     this.opt.look = L;
-    if (key !== this.lookKey) { const first = this.lookKey === undefined; this.lookKey = key; this.useDefaultBody(); if (!first || L.hair !== 'short') this.remakeCloth('hair', L.hair); }
+    if (key !== this.lookKey) { const first = this.lookKey === undefined, hooded = L.hood === true || L.hood === 'up'; this.lookKey = key; this.useDefaultBody(); if (!first || L.hair !== 'short' || hooded) this.remakeCloth('hair', hooded ? 'none' : L.hair); }
     if (L.cape !== this.capeStyle) { this.capeStyle = L.cape; this.remakeCloth('cape', L.cape); }
   }
   remakeCloth(which, style) {

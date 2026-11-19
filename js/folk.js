@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { TEX } from './core.js';
+import { loft } from './figure.js';
 
 export const FOLK_PAL = {
   villager: ['#c9b79a', '#a8b3a0', '#b9a0a0', '#9fb0c2', '#c7bfae', '#b7a98a'],
@@ -20,12 +21,35 @@ export function createFolk(root, { ground, max = 96 }) {
     g.setAttribute('color', new THREE.BufferAttribute(c, 3)); g.setAttribute('aTint', new THREE.BufferAttribute(t, 1));
     return g;
   };
-  const cloak = new THREE.LatheGeometry([[0.001, 0], [0.36, 0.02], [0.39, 0.12], [0.35, 0.5], [0.28, 0.9], [0.21, 1.16], [0.15, 1.3], [0.001, 1.34]].map(([r, y]) => new THREE.Vector2(r, y)), 16);
-  const hood = new THREE.SphereGeometry(0.2, 14, 10); hood.scale(1, 1.08, 1.12); hood.translate(0, 1.47, -0.02);
-  const face = new THREE.SphereGeometry(0.14, 12, 8); face.scale(1, 1.1, 0.8); face.translate(0, 1.44, 0.1);
-  const scarf = new THREE.TorusGeometry(0.17, 0.055, 6, 16); scarf.rotateX(Math.PI / 2); scarf.translate(0, 1.3, 0);
-  const geo = mergeGeometries([tag(cloak, '#ffffff', 1), tag(hood, '#f2efe8', 1), tag(face, '#efe2cf', 0), tag(scarf, '#d8b463', 0)]);
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82 });
+  // a low-poly, flat-shaded hooded figure: a cloak falling in folds, a cowl over the shoulders, sleeves meeting
+  // at the front, a deep hood with a pale face in its shadow (the same hand as the cast in figure.js)
+  const parts = [];
+  const take = (geos, col, tint) => { for (const m in geos) if (m !== 'pts') parts.push(tag(geos[m], col, tint)); };
+  const cl = [[0, 0.275, 0.25, 0.28], [0.08, 0.285, 0.26, 0.29], [0.4, 0.27, 0.235, 0.258], [0.75, 0.245, 0.2, 0.225], [1.0, 0.215, 0.16, 0.175], [1.17, 0.205, 0.135, 0.15], [1.3, 0.11, 0.09, 0.1], [1.34, 0.06, 0.06, 0.06]];
+  take(loft(cl.map(([y, w, d, b]) => ({ c: [0, y, 0], w, d, b, s: 2.2 })), { n: 14, axis: 'y', cap0: 'c', cap1: 'c', mat: 'c',
+    mod: (p, a, k, i) => { const f = 1 + (i % 2 ? 0.035 : -0.02) * Math.max(0, 1 - k / 4); p.x *= f; p.z *= f; } }), '#ffffff', 1);
+  // cowl
+  take(loft([[1.08, 0.245, 0.17, 0.185], [1.2, 0.22, 0.15, 0.165], [1.3, 0.13, 0.11, 0.12]].map(([y, w, d, b]) => ({ c: [0, y, 0], w, d, b, s: 2.2 })), { n: 14, axis: 'y', mat: 'c',
+    mod: (p, a, k, i) => { if (k === 0) { const f = 1 + (i % 2 ? 0.05 : -0.02); p.x *= f; p.z *= f; p.y -= 0.02 * Math.max(0, Math.cos(a)); } } }), '#f2efe8', 1);
+  // sleeves to the front, hands folded
+  for (const [sx, hx, hy, hz] of [[1, 0.2, 0.96, 0.18], [-1, -0.08, 0.92, 0.2]]) {
+    take(loft([{ c: [sx * 0.19, 1.16, 0.0], w: 0.07, d: 0.07 }, { c: [sx * 0.2 * 0.6 + hx * 0.4, 1.03, 0.1], w: 0.07, d: 0.07 }, { c: [hx, hy + 0.01, hz - 0.035], w: 0.092, d: 0.086 }], { n: 6, axis: 'y', mat: 'c' }), '#ffffff', 1);
+    const h = new THREE.IcosahedronGeometry(0.036, 0); h.scale(1, 0.8, 1.1); h.translate(hx, hy - 0.02, hz + 0.01); parts.push(tag(h.toNonIndexed(), '#e9d6c0', 0));
+  }
+  // hood, open at the face, with a face in its shadow
+  const HD = [[1.25, 0.19, 0.14, 0.15, 0], [1.34, 0.135, 0.13, 0.135, 0.008], [1.43, 0.14, 0.142, 0.142, 0.006], [1.515, 0.134, 0.138, 0.15, -0.002], [1.585, 0.108, 0.114, 0.144, -0.014], [1.628, 0.062, 0.056, 0.122, -0.045], [1.65, 0.022, 0.022, 0.066, -0.09]];
+  take(loft(HD.map(([y, w, d, b, zc]) => ({ c: [0, y, zc], w, d, b, s: 2.1 })), { n: 14, axis: 'y', cap1: 'c', mat: (a, k) => (k >= 1 && k <= 3 && Math.abs(a) < 0.9 ? null : 'c'),
+    mod: (p, a, k) => { const f = Math.max(0, Math.cos(a)); if (k === 4) { p.z += 0.012 * f; p.y -= 0.03 * f * f; } if (k === 1) p.y -= 0.012 * f; } }), '#f2efe8', 1);
+  take(loft([[1.36, 0.035, 0.05, 0.05, 0.018], [1.39, 0.06, 0.08, 0.075, 0.012], [1.44, 0.074, 0.088, 0.09, 0.006], [1.5, 0.076, 0.084, 0.095, 0], [1.55, 0.062, 0.06, 0.08, -0.004], [1.575, 0.03, 0.03, 0.04, -0.006]]
+    .map(([y, w, d, b, zc]) => ({ c: [0, y, zc], w, d, b, s: 2.2 })), { n: 10, axis: 'y', cap0: 'c', cap1: 'c', mat: 'c', mod: (p, a, k, i) => { if (i === 0 && k === 2) p.z += 0.012; } }), '#efe2cf', 0);
+  for (const sx of [1, -1]) { // two dark eyes and a brow line: enough to meet their gaze
+    const e = new THREE.IcosahedronGeometry(0.011, 0); e.scale(1.3, 0.75, 0.5); e.translate(sx * 0.027, 1.466, 0.083); parts.push(tag(e.toNonIndexed(), '#3a2a22', 0));
+    const br = new THREE.BoxGeometry(0.03, 0.006, 0.006); br.rotateZ(sx * -0.12); br.translate(sx * 0.028, 1.486, 0.084); parts.push(tag(br.toNonIndexed(), '#8a7260', 0));
+  }
+  const scarf = new THREE.TorusGeometry(0.15, 0.04, 4, 14); scarf.rotateX(Math.PI / 2); scarf.scale(1, 1, 0.9); scarf.translate(0, 1.29, 0.0); parts.push(tag(scarf.toNonIndexed(), '#d8b463', 0));
+  for (const g of parts) { for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv', 'color', 'aTint'].includes(k)) g.deleteAttribute(k); }
+  const geo = mergeGeometries(parts.map((g) => (g.index ? g.toNonIndexed() : g)));
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, flatShading: true });
   mat.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float aTint;')
       .replace('#include <color_vertex>', `vColor = vec3(1.0);
@@ -34,7 +58,7 @@ export function createFolk(root, { ground, max = 96 }) {
           vColor.xyz *= mix(vec3(1.0), instanceColor.xyz, aTint);
         #endif`);
   };
-  mat.customProgramCacheKey = () => 'lumenfall-folk-1';
+  mat.customProgramCacheKey = () => 'lumenfall-folk-2';
   const bodies = new THREE.InstancedMesh(geo, mat, max);
   bodies.castShadow = true; bodies.receiveShadow = true; bodies.frustumCulled = false;
   const lgeo = new THREE.CylinderGeometry(0.09, 0.11, 0.24, 6);
