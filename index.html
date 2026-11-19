@@ -234,24 +234,28 @@ body.muted .ic .on{display:none} body.muted .ic .off{display:block}
 #bInteract.locked .dia{background:#9a948a}
 #bInteract.press{transform:scale(.95)}
 @keyframes glowp{0%,100%{box-shadow:inset 0 0 0 1px var(--gold),inset 0 0 0 4px rgba(255,255,255,.5),0 0 14px rgba(255,220,150,.5)}50%{box-shadow:inset 0 0 0 1px var(--gold),inset 0 0 0 4px rgba(255,255,255,.5),0 0 30px rgba(255,220,150,1)}}
-/* region card */
-#region{position:absolute;left:50%;top:21%;transform:translateX(-50%);text-align:center;opacity:0;pointer-events:none;white-space:nowrap}
-#region.on{animation:reg 3.6s ease forwards}
-#region .orn{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:8px}
-#region .orn i{width:64px;height:1px;background:linear-gradient(90deg,transparent,var(--gold))}
-#region .orn i:last-child{background:linear-gradient(90deg,var(--gold),transparent)}
-#region .orn b{width:6px;height:6px;transform:rotate(45deg);background:var(--gold)}
-#regCn{font:500 27px var(--serif);letter-spacing:.55em;padding-left:.55em;color:var(--ink);text-shadow:0 0 18px rgba(255,255,255,1),0 0 4px rgba(255,255,255,1)}
-#regEn{margin-top:7px;font:500 10px var(--cin);letter-spacing:.5em;padding-left:.5em;color:var(--gold-d);text-shadow:0 0 8px #fff}
-@keyframes reg{0%{opacity:0;letter-spacing:.3em;filter:blur(4px)}18%{opacity:1;filter:none}78%{opacity:1}100%{opacity:0}}
-/* toasts */
-#toasts{position:absolute;left:50%;top:calc(var(--st) + 14px);transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px}
-.toast{display:flex;align-items:center;gap:9px;padding:7px 18px;font:500 12.5px var(--serif);letter-spacing:.12em;color:var(--ink);white-space:nowrap;
-  background:linear-gradient(90deg,rgba(252,249,242,0),rgba(252,249,242,.9) 18%,rgba(252,249,242,.9) 82%,rgba(252,249,242,0));animation:tin .45s ease}
+/* left feed: region title, notices and pickups stack under the quest list (top set from the list's height) */
+#feed{position:absolute;left:calc(var(--sl) + 8px);top:var(--fy,36%);display:flex;flex-direction:column;align-items:flex-start;gap:6px;width:min(300px,40vw);pointer-events:none;z-index:4}
+#region{display:none;padding:5px 34px 6px 10px;white-space:nowrap;opacity:0;
+  background:linear-gradient(90deg,rgba(252,249,242,.88),rgba(252,249,242,.55) 70%,rgba(252,249,242,0))}
+#region.on{display:block;animation:reg 3.6s ease forwards}
+#regCn{font:600 15px var(--serif);letter-spacing:.42em;color:var(--ink);text-shadow:0 0 6px rgba(255,255,255,.9)}
+#region .en{display:flex;align-items:center;gap:6px;margin-top:3px}
+#region .en b{flex:none;width:4px;height:4px;transform:rotate(45deg);background:var(--gold)}
+#region .en i{flex:none;width:22px;height:1px;background:linear-gradient(90deg,var(--gold),rgba(198,162,90,.2))}
+#regEn{font:500 7.5px var(--cin);letter-spacing:.36em;color:var(--gold-d)}
+@keyframes reg{0%{opacity:0;transform:translateX(-12px);filter:blur(2px)}14%{opacity:1;transform:none;filter:none}80%{opacity:1}100%{opacity:0}}
+html.desk #regCn{font-size:17px}
+html.desk #regEn{font-size:8.5px}
+#toasts,#pickFeed{display:flex;flex-direction:column;align-items:flex-start;gap:4px;max-width:100%}
+.toast{display:flex;align-items:center;gap:7px;box-sizing:border-box;max-width:100%;padding:4px 20px 4px 9px;font:500 11px/1.45 var(--serif);letter-spacing:.1em;color:var(--ink);
+  background:linear-gradient(90deg,rgba(255,251,240,.92),rgba(255,251,240,.6) 72%,rgba(255,251,240,0));border-left:2px solid var(--gold);animation:tin .35s ease;transition:opacity .6s,transform .6s}
+.toast .dia{width:5px;height:5px;box-shadow:none}
 .toast b{font-family:var(--cin);color:var(--gold-d)}
-.toast.big{font-size:14px;padding:9px 30px;letter-spacing:.18em}
-.toast.out{opacity:0;transform:translateY(-6px);transition:all .7s ease}
-@keyframes tin{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+.toast.hot{font-size:12px;padding:5px 22px 5px 10px;border-left-color:#b8924a;background:linear-gradient(90deg,rgba(255,250,234,.96),rgba(255,248,228,.66) 72%,rgba(255,248,228,0))}
+.toast.out{opacity:0;transform:translateX(-8px)}
+@keyframes tin{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:none}}
+html.desk .toast{font-size:12px} html.desk .toast.hot{font-size:13px}
 #dmg{position:fixed;inset:0;z-index:11;pointer-events:none;opacity:0;box-shadow:inset 0 0 140px rgba(96,46,80,.6)}
 #dmg.on{animation:dmg .7s ease}
 @keyframes dmg{0%{opacity:1}100%{opacity:0}}
@@ -543,7 +547,6 @@ html.ja .act span{letter-spacing:.04em;padding-left:0;font-size:9px}
 #bossHp{background:linear-gradient(90deg,#8c5a8e,#c46b5a 40%,#e9b56a)}
 #bossBar .bar em{position:absolute;left:50%;top:-3px;bottom:-3px;width:2px;background:#fff2cf;box-shadow:0 0 4px #c69a4a}
 #bossBar.p2 #bossHp{background:linear-gradient(90deg,#5a2a6e,#a8425a 40%,#ffb15a)}
-body.boss #toasts{top:calc(var(--st) + 54px)}
 .glb{display:flex;gap:8px;align-items:center}
 .glb .lbtn{cursor:pointer}
 .mini{margin:6px 0 0;font:400 11px/1.7 var(--serif);color:var(--ink-s);letter-spacing:.05em}
@@ -635,11 +638,11 @@ html.desk .cols dl{grid-template-columns:96px 1fr;align-items:center}
 #siegeBar .nm{display:flex;align-items:baseline;justify-content:center;gap:10px;margin-bottom:5px;text-shadow:0 0 8px #fff,0 0 2px #fff}
 #siegeBar .nm span{font:600 12.5px var(--serif);letter-spacing:.26em;color:var(--ink);white-space:nowrap}
 #siegeBar .nm small{font:500 8px var(--cin);letter-spacing:.3em;color:var(--gold-d);white-space:nowrap}
-#siegeBar .nm b{font:600 10px var(--cin);color:var(--gold-d);letter-spacing:.1em}
+#siegeBar .nm b{flex:none;white-space:nowrap;font:600 10px var(--cin);color:var(--gold-d);letter-spacing:.1em}
+html.touch #siegeBar .nm small{display:none}
 #siegeBar .bar{position:relative;height:5px;background:rgba(40,30,24,.3);box-shadow:inset 0 0 0 1px rgba(255,236,190,.85)}
 #siegeBar .bar i{position:absolute;left:1px;top:1px;bottom:1px;right:1px;transform-origin:left;background:linear-gradient(90deg,#e0a24e,#ffe2a0);box-shadow:0 0 8px rgba(255,200,110,.9);transition:transform .25s}
 body.boss #siegeBar{top:calc(var(--st) + 58px)}
-body.siege #toasts{top:calc(var(--st) + 50px)} body.siege.boss #toasts{top:calc(var(--st) + 96px)}
 .toast .say{font-style:normal;letter-spacing:.14em;color:#4a3b22}
 html.desk #siegeBar{width:min(420px,calc(var(--vw)*34))}
 
@@ -780,6 +783,7 @@ html.desk #dbar .act .cap span{font-size:10px}
 /* objective marker */
 #qMark{position:absolute;left:0;top:0;width:0;height:0;opacity:0;transition:opacity .4s;pointer-events:none;z-index:1}
 #qMark.on{opacity:1}
+#qMark.on.dim{opacity:.18}
 #qMark .dm{position:absolute;left:-6px;top:-6px;width:12px;height:12px;transform:rotate(45deg);background:linear-gradient(135deg,#fff8de,#e0b45a);
   box-shadow:0 0 0 1.5px rgba(255,250,236,.95),0 0 10px rgba(255,214,140,.95),0 1px 4px rgba(60,40,10,.45)}
 #qMark .dm:after{content:'';position:absolute;inset:-5px;border:1px solid rgba(255,230,170,.9);animation:qmp 1.8s ease-out infinite}
@@ -895,9 +899,8 @@ html.touch .act svg.i{width:46%;height:46%}
 #proSkip small{font:500 8px var(--cin);letter-spacing:.3em;color:#c9a45a}
 
 /* ---- v1.8 · forage feed, meal blessing, the cooking pot */
-#pickFeed{position:absolute;left:calc(var(--sl) + 18px);top:46%;display:flex;flex-direction:column;gap:5px;pointer-events:none;z-index:4}
-#pickFeed .pf{align-self:flex-start;padding:5px 14px 5px 10px;font:500 12.5px var(--serif);letter-spacing:.12em;color:var(--ink);background:linear-gradient(90deg,rgba(255,251,240,.92),rgba(255,251,240,.55) 75%,rgba(255,251,240,0));border-left:2px solid var(--gold);animation:pfIn .35s ease;transition:opacity .5s,transform .5s}
-#pickFeed .pf b{color:var(--gold-d);font-weight:600}#pickFeed .pf small{margin-left:6px;font:500 10px var(--cin);color:var(--ink-s)}
+#pickFeed .pf{align-self:flex-start;padding:4px 16px 4px 9px;font:500 11px/1.45 var(--serif);letter-spacing:.12em;color:var(--ink);background:linear-gradient(90deg,rgba(255,251,240,.92),rgba(255,251,240,.55) 75%,rgba(255,251,240,0));border-left:2px solid var(--gold);animation:pfIn .35s ease;transition:opacity .5s,transform .5s}
+#pickFeed .pf b{color:var(--gold-d);font-weight:600}#pickFeed .pf small{margin-left:6px;font:500 9px var(--cin);color:var(--ink-s)}
 #pickFeed .pf.m{border-left-color:#b9ad95;color:var(--ink-s)}
 #pickFeed .pf.out{opacity:0;transform:translateX(-8px)}
 @keyframes pfIn{from{opacity:0;transform:translateX(-10px)}}
@@ -1065,7 +1068,6 @@ body.looking #hud,body.looking #pickFeed,body.looking #buffChip{opacity:0;pointe
   <div id="hpw" class="ctl"><span class="l">HP</span><div class="bar"><div id="hpd"></div><div id="hpf"></div></div><span id="hpn">100 / 100</span></div>
   <div id="stw" class="ctl"><i id="stf"></i></div>
   <div id="buffChip" class="hidden"></div>
-  <div id="pickFeed"></div>
   <div id="focusRet"><i class="r1"></i><i class="r2"></i><i class="c"></i><span id="focusLbl"></span></div>
   <div id="clash"><div class="t">力量對抗<small>POWER CLASH</small></div><div class="bar"><i id="clashF"></i></div><div class="h">連按攻擊</div></div>
   <div id="qMark" class="ctl"><i class="dm"></i><span id="qMarkA"><i></i></span><b id="qMarkD"></b></div>
@@ -1080,8 +1082,7 @@ body.looking #hud,body.looking #pickFeed,body.looking #buffChip{opacity:0;pointe
   <button class="act ctl" id="bJump"><svg class="i" viewBox="0 0 24 24"><path d="M12 20V8.5M8.5 11.5 12 8l3.5 3.5"/><path d="M12 4.5c-3-1.5-6.8-1-9 1.5 2.6-.4 4.5.4 5.6 1.6"/><path d="M12 4.5c3-1.5 6.8-1 9 1.5-2.6-.4-4.5.4-5.6 1.6"/></svg><span class="cap"><i class="key wide">SPACE</i><span id="jumpLbl">跳躍</span></span></button>
   </div>
   <button id="bInteract" class="ctl hidden"><i class="dia"></i><i class="key d-only">E</i><span class="t"><b id="intLbl">點亮聖壇</b><small id="intSub">KINDLE THE SHRINE</small></span></button>
-  <div id="region"><div class="orn"><i></i><b></b><i></i></div><div id="regCn"></div><div id="regEn"></div></div>
-  <div id="toasts"></div>
+  <div id="feed"><div id="region"><div id="regCn"></div><div class="en"><b></b><i></i><span id="regEn"></span></div></div><div id="toasts"></div><div id="pickFeed"></div></div>
   <div id="plHint" class="d-only hidden"><i class="key m"><svg class="ms" viewBox="0 0 12 16"><path class="fb" d="M6 1.2A4.8 4.8 0 0 0 1.2 6v.6H6z"/><rect x="1.2" y="1.2" width="9.6" height="13.6" rx="4.8"/><path d="M6 1.2v5.4M1.2 6.6h9.6"/></svg></i><span>點擊畫面 · 用滑鼠控制視角</span></div>
   <div id="lockRet"><i></i><div class="hpm"><b id="lockHp"></b></div></div>
   <div id="dnums"></div>
@@ -1117,7 +1118,7 @@ body.looking #hud,body.looking #pickFeed,body.looking #buffChip{opacity:0;pointe
     </nav>
   </div>
   <div id="tapHint"><span class="c t-only">觸碰開始</span><span class="e t-only">TAP TO BEGIN</span><span class="c d-only">點擊或按任意鍵開始</span><span class="e d-only">PRESS ANY KEY</span></div>
-  <div class="corner bl">PROTOTYPE · v2.0 · 黎恩</div>
+  <div class="corner bl">PROTOTYPE · v2.0.1 · 黎恩</div>
   <div class="corner br t-only">MOBILE · LANDSCAPE</div><div class="corner br d-only">DESKTOP · KEYBOARD &amp; MOUSE</div>
 </div>
 

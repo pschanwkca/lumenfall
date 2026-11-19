@@ -1612,7 +1612,7 @@ function buildAmbient(scene) {
   W.drift = { im, data };
 }
 const _m4 = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s = new THREE.Vector3(), _p = new THREE.Vector3();
-export function updateAmbient(t, dt, center) {
+export function updateAmbient(t, dt, center, cam) {
   W.skyMat.uniforms.uTime.value = t;
   W.cloudMat.uniforms.uTime.value = t;
   W.motes.uniforms.uTime.value = t;
@@ -1631,7 +1631,10 @@ export function updateAmbient(t, dt, center) {
     const sw = Math.sin(t * 1.3 + d.ph);
     _e.set(sw * 0.9, t * 0.6 + d.ph, Math.cos(t * 1.1 + d.ph) * 0.7);
     _q.setFromEuler(_e);
-    _m4.compose(_p.set(center.x + rx + sw * 0.8, center.y + d.y, center.z + rz), _q, _s.setScalar(d.s));
+    _p.set(center.x + rx + sw * 0.8, center.y + d.y, center.z + rz);
+    // a feather passing right by the lens would fill half the screen: it shrinks away inside ~3 m of the camera
+    let k = 1; if (cam) { const dc = _p.distanceTo(cam); k = dc < 1.2 ? 0 : dc < 3.4 ? (dc - 1.2) / 2.2 : 1; k = k * k * (3 - 2 * k); }
+    _m4.compose(_p, _q, _s.setScalar(d.s * k + 1e-4));
     im.setMatrixAt(i, _m4);
   }
   im.instanceMatrix.needsUpdate = true;

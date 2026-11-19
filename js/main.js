@@ -2397,7 +2397,7 @@ function updateForage(dt) {
 function pickFeed(html, muted) {
   const box = $('pickFeed'); if (!box) return;
   const el = document.createElement('div'); el.className = 'pf' + (muted ? ' m' : ''); el.innerHTML = html; box.appendChild(el);
-  while (box.children.length > 4) box.firstChild.remove();
+  while (box.children.length > 3) box.firstChild.remove();
   setTimeout(() => el.classList.add('out'), 2200); setTimeout(() => el.remove(), 2800);
 }
 function cook() {
@@ -3099,10 +3099,25 @@ function updateCamera(dt) {
 
 // ------------------------------------------------------------------ HUD
 const hud = {};
+// the left feed (region title, notices, pickups) hangs just under the quest list, however tall that is right now
+function placeFeed() {
+  const q = $('quest'), f = $('feed'); if (!q || !f) return;
+  const r = q.getBoundingClientRect(), y = Math.round((r.height > 4 ? r.bottom : r.top) + 8);
+  if (y !== hud.feedY) { hud.feedY = y; f.style.setProperty('--fy', y + 'px'); }
+}
+// HUD panels with text on them: the objective marker fades when it drifts over one
+function hudAvoid() {
+  const R = hud.avoidR || (hud.avoidR = []); R.length = 0;
+  const els = hud.avoidEls || (hud.avoidEls = ['quest', 'mm', 'topr', 'hpw', 'lvw', 'buffChip', 'bInteract', 'testChip'].map($).filter(Boolean));
+  const add = (el) => { const r = el.getBoundingClientRect(); if (r.width > 2 && r.height > 2) R.push(r); };
+  for (const el of els) add(el);
+  const f = $('feed'); if (f) for (const el of f.querySelectorAll('#region.on,.toast,.pf')) add(el);
+}
 function toast(html, big) {
+  placeFeed();
   const box = $('toasts');
   const el = document.createElement('div');
-  el.className = 'toast' + (big ? ' big' : '');
+  el.className = 'toast' + (big ? ' hot' : ''); // not '.big': that class is the full-screen moment card
   el.innerHTML = html;
   box.appendChild(el);
   while (box.children.length > 3) box.firstChild.remove();
@@ -3111,7 +3126,7 @@ function toast(html, big) {
 }
 let regionTimer = 0, currentRegion = '';
 function regionCard(cn, en) {
-  const el = $('region');
+  const el = $('region'); placeFeed();
   $('regCn').textContent = cn; $('regEn').textContent = en;
   el.classList.remove('on'); void el.offsetWidth; el.classList.add('on');
   clearTimeout(regionTimer);
@@ -3351,6 +3366,10 @@ function updateQuestMark() {
   }
   const px = (x * 0.5 + 0.5) * VIEW.w, py = (-y * 0.5 + 0.5) * VIEW.h;
   el.style.transform = `translate(${px.toFixed(1)}px, ${py.toFixed(1)}px)`;
+  // never sit on top of HUD text: the diamond and its distance label fade back while they overlap a panel
+  let dim = false;
+  if (hud.avoidR) for (const r of hud.avoidR) if (px + 22 > r.left && px - 22 < r.right && py + 24 > r.top && py - 10 < r.bottom) { dim = true; break; }
+  if (dim !== hud.qmDim) { hud.qmDim = dim; el.classList.toggle('dim', dim); }
   el.classList.toggle('edge', edge);
   if (edge) hud.qmArrow.style.transform = `rotate(${Math.atan2(-ay, ax) + Math.PI / 2}rad)`;
   const s = d < 1000 ? `${Math.round(d / 5) * 5}m` : `${(d / 1000).toFixed(1)}km`;
@@ -3359,6 +3378,7 @@ function updateQuestMark() {
 let qTick = 0;
 function updateQuestDist(dt) {
   if ((qDistT -= dt) > 0) return; qDistT = 0.25;
+  placeFeed(); hudAvoid();
   if (++qTick % 4 === 0) updateQuest(); // picks up layer changes and counts without every caller remembering to
   const el = $('qDist'); if (!el) return;
   const t = questTarget(); if (!t) { if (qDistS) { el.textContent = ''; qDistS = ''; } return; }
@@ -4711,7 +4731,7 @@ function frame() {
     rays.enabled = amt > 0.01;
     if (rays.enabled) { _v.copy(camera.position).addScaledVector(sunDir, 800).project(camera); rays.uniforms.uSun.value.set(_v.x * 0.5 + 0.5, _v.y * 0.5 + 0.5); rays.uniforms.uAmt.value = amt; }
   }
-  updateAmbient(time, dt, _p.set(P.pos.x, P.pos.y, P.pos.z));
+  updateAmbient(time, dt, _p.set(P.pos.x, P.pos.y, P.pos.z), camera.position);
   for (const gm of W.grassMats) { gm.uniforms.uCenter.value.copy(P.pos); gm.uniforms.uPlayer.value.copy(P.pos); }
   updateAtmos(dt, false);
   if (C.LAYER.cur === 2 && HELL.sky) HELL.sky.position.copy(camera.position);
@@ -4759,7 +4779,7 @@ async function init() {
   hookCloudClock(scene);
   placeAtStart();
   hud.hpf = $('hpf'); hud.hpd = $('hpd'); hud.hpn = $('hpn'); hud.hpw = $('hpw');
-  hud.stw = $('stw'); hud.stf = $('stf'); hud.ret = $('focusRet'); hud.retL = $('focusLbl'); hud.clash = $('clash'); hud.clashF = $('clashF'); hud.qMark = $('qMark'); hud.qmD = $('qMarkD'); hud.qmArrow = $('qMarkA'); hud.skCd = $('skCd'); hud.bSkill = $('bSkill'); hud.skNum = $('skNum');
+  hud.stw = $('stw'); hud.stf = $('stf'); hud.ret = $('focusRet'); hud.retL = $('focusLbl'); hud.clash = $('clash'); hud.clashF = $('clashF'); hud.qMark = $('qMark'); if (window.ResizeObserver) new ResizeObserver(placeFeed).observe($('quest')); hud.qmD = $('qMarkD'); hud.qmArrow = $('qMarkA'); hud.skCd = $('skCd'); hud.bSkill = $('bSkill'); hud.skNum = $('skNum');
   hud.jumpLbl = $('jumpLbl'); hud.bJump = $('bJump');
   hud.lockRet = $('lockRet'); hud.lockHp = $('lockHp'); hud.bLock = $('bLock'); hud.healN = $('healN'); hud.bHeal = $('bHeal'); hud.bAtk = $('bAtk'); hud.atkLbl = $('atkLbl');
   hud.mmg = $('mmc').getContext('2d');

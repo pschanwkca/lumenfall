@@ -79,6 +79,8 @@ Sized after Monster Hunter's hunt HUD so the scene stays the subject:
 - Tap the quest (or press O) for the quest detail, like a hunt's quest info: place and direction, who asked, the story
   so far, how to do it, the steps, side quests, and 「顯示指引」
 - An objective marker floats over the target with its distance and pins to the screen side when it is off-screen
+  (it fades back while it sits over a HUD panel, so it never covers text)
+- Region titles, notices and pickups share one small left-hand feed under the quest list (v2.0.1)
 - The guiding light (G, or automatically for a while when the objective changes) is a wisp that flies ahead toward it
 - The crater's pillar sleeps (a faint thread of light) until Camael's echo has spoken, so the sky cannot be reached early;
   arriving in the sky early (old saves) points you back down
