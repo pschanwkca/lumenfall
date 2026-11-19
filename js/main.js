@@ -2527,16 +2527,10 @@ function updateHUD(dt) {
   const hpTxt = `${Math.ceil(P.hp)} / ${P.maxHp}`;
   if (hud.hpTxt !== hpTxt) { hud.hpn.textContent = hpTxt; hud.hpTxt = hpTxt; }
   hud.hpw.classList.toggle('low', hpPct < 0.3);
-  // stamina wheel near the seraph
-  const showSt = P.stamina < 99.5 || P.glide;
-  hud.stam.classList.toggle('on', showSt);
-  if (showSt) {
-    _v.set(P.pos.x, P.pos.y + 1.3, P.pos.z).project(camera);
-    const x = (_v.x * 0.5 + 0.5) * VIEW.w + 46, y = (-_v.y * 0.5 + 0.5) * VIEW.h - 18;
-    hud.stam.style.transform = `translate(${x}px, ${y}px)`;
-    hud.stArc.style.strokeDashoffset = (1 - P.stamina / 100) * 113.1;
-    hud.stam.classList.toggle('low', P.stamina < 25);
-  }
+  // stamina bar under the hp bar; both bars lengthen as max hp grows
+  hud.stf.style.transform = `scaleX(${clamp(P.stamina / 100, 0, 1)})`;
+  hud.stw.classList.toggle('low', P.stamina < 25);
+  if (hud.hpMax !== P.maxHp) { hud.hpMax = P.maxHp; document.documentElement.style.setProperty('--hpx', Math.max(0, (P.maxHp - 100) * 0.6).toFixed(1)); }
   // skill cooldown
   const cd = clamp(P.skillCd / 7, 0, 1);
   hud.skCd.style.strokeDashoffset = (1 - cd) * 100.53;
@@ -2638,7 +2632,7 @@ function camTurn(dx, dy, k) {
 function setupInput() {
   const layer = $('touch');
   const joyBase = $('joyBase'), knob = $('joyKnob');
-  const R = 54;
+  const R = 44;
   const placeBase = (x, y) => { joyBase.style.transform = `translate(${x}px, ${y}px)`; };
   const restJoy = () => { const r = $('joy').getBoundingClientRect(); input.base.x = r.left + r.width / 2; input.base.y = r.top + r.height / 2; joyBase.style.transform = ''; knob.style.transform = ''; joyBase.classList.remove('active'); };
   layer.addEventListener('pointerdown', (e) => {
@@ -3513,7 +3507,7 @@ async function init() {
   hookCloudClock(scene);
   placeAtStart();
   hud.hpf = $('hpf'); hud.hpd = $('hpd'); hud.hpn = $('hpn'); hud.hpw = $('hpw');
-  hud.stam = $('stam'); hud.stArc = $('stArc'); hud.skCd = $('skCd'); hud.bSkill = $('bSkill'); hud.skNum = $('skNum');
+  hud.stw = $('stw'); hud.stf = $('stf'); hud.skCd = $('skCd'); hud.bSkill = $('bSkill'); hud.skNum = $('skNum');
   hud.jumpLbl = $('jumpLbl'); hud.bJump = $('bJump');
   hud.lockRet = $('lockRet'); hud.lockHp = $('lockHp'); hud.bLock = $('bLock'); hud.healN = $('healN'); hud.bHeal = $('bHeal'); hud.bAtk = $('bAtk'); hud.atkLbl = $('atkLbl');
   hud.mmg = $('mmc').getContext('2d');

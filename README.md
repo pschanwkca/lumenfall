@@ -67,6 +67,15 @@ with the story: weakest by Belldawn's gate, stronger the farther out, then the i
 - Feather levels, 墮天錄 codex (19 entries in four groups, with lore, weak points and moves), 繁中 / 日本語
 - Cloud shadows, god rays, height fog, colour grade, lake reflections
 
+## HUD
+
+Sized after Monster Hunter's hunt HUD so the scene stays the subject:
+- Top-left: level disc (its ring is feather progress), a thin HP bar that lengthens as max HP grows, stamina bar under it
+- Under that, the quest list on a light wash instead of a card; top-right, menu icons with the minimap below them
+- Phone: a compact thumb cluster (attack 64 px, dodge / jump 46, holy ring 44, flask 36, lock 34); the joystick rests
+  as a faint ring and the full pad appears under the thumb
+- Desktop keeps the same layout one size up, with the key hotbar alone at the bottom
+
 ## Story and guidance
 
 The full story (two parts, the turning point, both endings) lives in a separate doc. In game, the system only says where to go;

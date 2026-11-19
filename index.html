@@ -649,6 +649,120 @@ html.desk #codexList{max-height:calc(var(--vh)*62)}
 #codexList li.grp:first-child{padding-top:2px}
 .dn.resist{font-size:11px;color:#b9b0a6;text-shadow:0 0 4px rgba(40,20,20,.9)}
 .dn.block{font-size:12px;color:#c9c2ff;text-shadow:0 0 6px rgba(80,60,160,.9)}
+
+/* ================= HUD at Monster Hunter scale (v1.3) =================
+   status top-left (level, a thin HP bar that grows with max HP, stamina under it), a light quest list under that,
+   map + menu top-right, a compact thumb cluster bottom-right, and a joystick that only shows where the thumb lands */
+html{--hpx:0}
+html.touch{--hpbase:118px;--hpmax:210px}
+html.desk{--hpbase:176px;--hpmax:320px}
+#stam{display:none!important}
+/* level disc */
+#lvw{left:calc(var(--sl) + 14px)!important;top:calc(var(--st) + 10px)!important;gap:0!important}
+#lvw .lv{width:34px!important;height:34px!important;font-size:6.5px!important;box-shadow:inset 0 0 0 1px var(--gold),0 1px 6px rgba(70,52,20,.22)!important}
+#lvw .lv:before{inset:-3px!important}
+#lvw .lv b{font-size:14.5px!important}
+#lvw .n{position:absolute;left:44px;top:27px;margin:0!important;padding:0 8px 0 0!important;white-space:nowrap;font:600 8.5px var(--cin)!important;letter-spacing:.1em;
+  color:#fffaf0!important;text-shadow:0 1px 2px rgba(40,28,10,.9),0 0 1px rgba(40,28,10,.95),0 0 5px rgba(40,28,10,.35)!important;background:none!important}
+#lvw .n:before{font:600 8.5px var(--serif)!important}
+/* hp + stamina */
+#hpw{left:calc(var(--sl) + 56px)!important;top:calc(var(--st) + 12px)!important;bottom:auto!important;transform:none!important;
+  width:min(var(--hpmax),calc(var(--hpbase) + var(--hpx) * 1px))!important;gap:6px!important;overflow:visible}
+#hpw .l{display:none}
+#hpw .bar{height:7px;background:rgba(48,36,18,.38);box-shadow:inset 0 0 0 1px rgba(255,244,214,.85),0 1px 4px rgba(40,28,10,.25)}
+#hpw .bar:before,#hpw .bar:after{width:4px;height:4px}
+#hpf{background:linear-gradient(90deg,#d6a94f,#f0d68f 55%,#fff4d6);box-shadow:0 0 6px rgba(255,220,150,.75)}
+#hpn{position:absolute;left:calc(100% + 7px);top:50%;transform:translateY(-50%);min-width:0!important;white-space:nowrap;font:600 9px var(--cin)!important;
+  color:#fffaf0!important;text-shadow:0 1px 2px rgba(40,28,10,.9),0 0 1px rgba(40,28,10,.95),0 0 5px rgba(40,28,10,.35)!important}
+#stw{position:absolute;left:calc(var(--sl) + 56px);top:calc(var(--st) + 23px);width:min(var(--hpmax),calc(var(--hpbase) + var(--hpx) * 1px));height:4px;
+  background:rgba(48,36,18,.32);box-shadow:inset 0 0 0 1px rgba(255,244,214,.75)}
+#stw i{position:absolute;left:1px;top:1px;bottom:1px;right:1px;transform-origin:left;background:linear-gradient(90deg,#f3e3b0,#fffaf0);box-shadow:0 0 5px rgba(255,236,190,.7);transition:background .3s}
+#stw.low i{background:linear-gradient(90deg,#d98b67,#f2c3a2);animation:breathe .6s infinite}
+#stw.out{opacity:.85}
+/* quest list: no card, just a soft wash so it reads on bright ground */
+#quest{left:calc(var(--sl) + 8px)!important;top:calc(var(--st) + 50px)!important;width:min(212px,30vw)!important;padding:5px 22px 6px 9px!important;
+  background:linear-gradient(90deg,rgba(252,249,242,.72) 0%,rgba(252,249,242,.56) 88%,rgba(252,249,242,0) 100%)!important;border-left-width:1.5px}
+.qmain b,.qrow b{color:#7d5a1a!important;text-shadow:0 0 3px rgba(255,255,255,.95),0 0 1px #fff}
+.qmain .qd{color:#7a5a22!important}
+#quest .qt{gap:6px}
+#quest .qt span{font-size:11.5px!important;letter-spacing:.1em!important}
+#quest .qt small{font-size:6.5px!important;letter-spacing:.24em!important}
+#qObj{margin-top:3px}
+.qmain{column-gap:6px!important}
+.qmain .t{font-size:11px!important;line-height:1.4!important}
+.qmain b{font-size:9.5px!important}
+.qmain .qd{font-size:8px!important}
+.qmain .qtag{font-size:8.5px!important}
+.qlist{margin-top:4px!important;padding-top:4px!important;gap:2px!important}
+.qrow{font-size:10px!important;column-gap:6px!important}
+.qrow b{font-size:9px!important}
+.qrow.hint{font-size:9.5px!important}
+.qmain .t,.qrow span{text-shadow:0 0 3px rgba(255,255,255,.9)}
+/* map + menu, top-right */
+#topr{right:calc(var(--sr) + 12px)!important;top:calc(var(--st) + 8px)!important;gap:6px!important}
+#topr .ic{width:30px;height:30px}
+#topr .ic svg{width:15px;height:15px}
+#mm{left:auto!important;right:calc(var(--sr) + 14px)!important;top:calc(var(--st) + 46px)!important;width:84px!important;height:84px!important}
+#mm svg{left:-8px!important;top:-8px!important;width:100px!important;height:100px!important}
+#testChip{top:calc(var(--st) + 140px)!important;right:calc(var(--sr) + 12px)!important;padding:4px 8px!important;font-size:8px!important}
+/* boss and siege bars: slim, like a hunt */
+#bossBar{top:calc(var(--st) + 10px)!important;width:min(360px,42vw)!important}
+#bossBar .nm{margin-bottom:3px!important;gap:8px!important}
+#bossBar .nm span{font-size:11.5px!important;letter-spacing:.22em!important}
+#bossBar .nm small{font-size:7px!important}
+#bossBar .bar{height:6px!important}
+#siegeBar{width:min(300px,34vw)!important}
+/* the thumb cluster */
+html.touch .act span{font-size:8px;letter-spacing:.12em;padding-left:.12em}
+html.touch #bAtk{right:calc(var(--sr) + 80px)!important;bottom:calc(var(--sb) + 40px)!important;width:64px!important;height:64px!important}
+html.touch #bAtk svg.i{width:40%;height:40%}
+html.touch #bAtk span{font-size:9px}
+html.touch #bAtk:after{inset:-4px}
+html.touch #bDodge{right:calc(var(--sr) + 19px)!important;bottom:calc(var(--sb) + 29px)!important;width:46px!important;height:46px!important}
+html.touch #bJump{right:calc(var(--sr) + 29px)!important;bottom:calc(var(--sb) + 105px)!important;width:46px!important;height:46px!important}
+html.touch #bSkill{right:calc(var(--sr) + 96px)!important;bottom:calc(var(--sb) + 130px)!important;width:44px!important;height:44px!important}
+html.touch #bHeal{right:calc(var(--sr) + 168px)!important;bottom:calc(var(--sb) + 26px)!important;width:36px!important;height:36px!important}
+html.touch #bLock{right:calc(var(--sr) + 165px)!important;bottom:calc(var(--sb) + 101px)!important;width:34px!important;height:34px!important}
+html.touch .act svg.i{width:44%;height:44%}
+html.touch #bDodge svg.i,html.touch #bJump svg.i,html.touch #bSkill svg.i{width:42%;height:42%}
+html.touch #bHeal svg.i,html.touch #bLock svg.i{width:50%;height:50%}
+html.touch #bHeal b{min-width:15px;height:15px;border-radius:8px;padding:0 4px;font-size:9px;line-height:15px;right:-4px;bottom:-3px}
+html.touch #bInteract{right:calc(var(--sr) + 16px)!important;bottom:calc(var(--sb) + 188px)!important;padding:5px 12px 5px 10px;gap:7px}
+html.touch #intLbl{font-size:11px;letter-spacing:.14em}
+html.touch #intSub{font-size:6.5px;letter-spacing:.22em}
+/* joystick: a faint ring at rest; the full pad appears under the thumb */
+html.touch #joy{left:calc(var(--sl) + 70px)!important;bottom:calc(var(--sb) + 40px)!important;width:104px!important;height:104px!important}
+html.touch #joyBase{opacity:.3}
+html.touch #joyBase:not(.active){transform:scale(.5)}
+html.touch #joyBase:not(.active) #joyKnob{opacity:.55}
+html.touch #joyBase.active{opacity:.95}
+html.touch #joyBase:before{inset:12px}
+html.touch #joyKnob{width:42px;height:42px}
+/* desktop: same layout, a size up; the hotbar stays bottom-centre on its own */
+html.desk #lvw{left:calc(var(--sl) + 18px)!important;top:calc(var(--st) + 14px)!important}
+html.desk #lvw .lv{width:40px!important;height:40px!important}
+html.desk #lvw .lv b{font-size:16.5px!important}
+html.desk #lvw .n{left:52px;top:31px;font-size:9.5px!important}
+html.desk #hpw{left:calc(var(--sl) + 68px)!important;top:calc(var(--st) + 16px)!important}
+html.desk #hpw .bar{height:8px}
+html.desk #hpn{font-size:10px!important}
+html.desk #stw{left:calc(var(--sl) + 68px);top:calc(var(--st) + 29px);height:5px}
+html.desk #quest{left:calc(var(--sl) + 12px)!important;top:calc(var(--st) + 64px)!important;width:min(268px,calc(var(--vw)*26))!important}
+html.desk #quest .qt span{font-size:12.5px!important}
+html.desk .qmain .t{font-size:12px!important}
+html.desk .qrow{font-size:11px!important}
+html.desk #topr{right:calc(var(--sr) + 16px)!important;top:calc(var(--st) + 12px)!important;gap:9px!important}
+html.desk #topr .ic{width:34px;height:34px}
+html.desk #topr .ic svg{width:16px;height:16px}
+html.desk #mm{right:calc(var(--sr) + 18px)!important;top:calc(var(--st) + 72px)!important;width:108px!important;height:108px!important}
+html.desk #mm svg{left:-10.5px!important;top:-10.5px!important;width:129px!important;height:129px!important}
+html.desk #testChip{top:calc(var(--st) + 190px)!important}
+html.desk #bossBar{width:min(460px,calc(var(--vw)*38))!important}
+html.desk #bossBar .nm span{font-size:13px!important}
+html.desk #dbar{bottom:calc(var(--sb) + 30px);gap:20px}
+html.desk #dbar .act{width:46px;height:46px}
+html.desk #dbar #bAtk{width:58px;height:58px}
+html.desk #dbar .act .cap span{font-size:10px}
 </style>
 <script>
 (() => {
@@ -736,6 +850,7 @@ html.desk #codexList{max-height:calc(var(--vh)*62)}
   <div id="lvw" class="ctl"><span class="lv"><span>LV</span><b id="lvB">1</b></span><div class="xp"><i id="xpF"></i></div><span class="n" id="xpN">0 / 3</span></div>
   <div id="lvUp" class="hidden"><div class="emb"><svg viewBox="0 0 132 132"><g class="fx"><path transform="rotate(0 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(30 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(60 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(90 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(120 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(150 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(180 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(210 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(240 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(270 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(300 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(330 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/></g><circle class="r1" cx="66" cy="66" r="44"/><g class="r1"><path transform="rotate(0 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(15 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(30 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(45 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(60 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(75 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(90 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(105 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(120 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(135 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(150 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(165 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(180 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(195 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(210 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(225 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(240 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(255 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(270 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(285 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(300 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(315 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(330 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(345 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/></g><circle class="r2" cx="66" cy="66" r="52"/><circle class="r1" cx="66" cy="66" r="36" opacity=".5"/></svg><div class="num"><small id="lvSmall">LEVEL</small><b id="lvNum">2</b><em id="lvFromRow">Lv <span id="lvFrom">1</span> →</em></div></div><div class="k" id="lvK">LEVEL UP</div><div class="t" id="lvT">光羽之力 · 增強</div><ul id="lvStats"></ul><div class="perk" id="lvPerk"></div></div>
   <div id="hpw" class="ctl"><span class="l">HP</span><div class="bar"><div id="hpd"></div><div id="hpf"></div></div><span id="hpn">100 / 100</span></div>
+  <div id="stw" class="ctl"><i id="stf"></i></div>
   <svg id="stam" viewBox="0 0 44 44"><defs><linearGradient id="stg" x1="0" x2="1"><stop offset="0" stop-color="#e6c57a"/><stop offset="1" stop-color="#fff6dc"/></linearGradient></defs><circle class="tr" cx="22" cy="22" r="18"/><circle id="stArc" class="ar" cx="22" cy="22" r="18"/></svg>
   <div id="joy" class="ctl"><div id="joyBase"><div id="joyKnob"></div></div></div>
   <div id="dbar">
@@ -784,7 +899,7 @@ html.desk #codexList{max-height:calc(var(--vh)*62)}
     </nav>
   </div>
   <div id="tapHint"><span class="c t-only">觸碰開始</span><span class="e t-only">TAP TO BEGIN</span><span class="c d-only">點擊或按任意鍵開始</span><span class="e d-only">PRESS ANY KEY</span></div>
-  <div class="corner bl">PROTOTYPE · v1.2 · 黎恩</div>
+  <div class="corner bl">PROTOTYPE · v1.3 · 黎恩</div>
   <div class="corner br t-only">MOBILE · LANDSCAPE</div><div class="corner br d-only">DESKTOP · KEYBOARD &amp; MOUSE</div>
 </div>
 
