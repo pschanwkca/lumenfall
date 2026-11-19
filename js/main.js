@@ -1295,6 +1295,7 @@ function rollDust(n, sp) {
   const c = C.LAYER.cur === 2 ? [0.42, 0.26, 0.22] : C.LAYER.cur === 1 ? [0.8, 0.72, 0.6] : [0.95, 0.92, 0.86];
   burst(FX.smoke, P.pos.x, P.pos.y + 0.15, P.pos.z, n, { speed: sp, up: 0.6, life: 0.75, size: 1.3, g: 0.4, c, drag: 3.5 });
 }
+function dodgeHeld() { return input.keys.has('ShiftLeft') || input.keys.has('ShiftRight') || input.rmb || input.dodgeTouch; }
 function threatNear() {
   for (const s of shades) {
     if (s.dead) continue;
@@ -1571,6 +1572,7 @@ function updatePlayer(dt) {
   if (mag > 0.01) wish.divideScalar(Math.max(1, wish.length()));
   P.flapCd = (P.flapCd || 0) - dt; P.flapT = (P.flapT || 0) - dt; P.guardT = (P.guardT || 0) - dt; P.airDashCd = (P.airDashCd || 0) - dt;
   P.dashCd -= dt; P.inv -= dt; P.hurtT -= dt; P.skillCd -= dt; P.staminaDelay -= dt;
+  if ((P.calmT = (P.calmT || 0) - dt) <= 0) { P.calmT = 0.5; P.calm = !(boss && boss.engaged) && !beacons.some((b) => b.st === 'siege') && !shades.some((sh) => !sh.dead && !sh.dormant && sh.pos.distanceToSquared(P.pos) < 400); }
 
   P.counterT -= dt; P.perfectCd -= dt;
   // attack timeline
@@ -1648,7 +1650,16 @@ function updatePlayer(dt) {
     if (P.stamina <= 0) { P.stamina = 0; P.glide = false; }
   } else {
     const sprint = mag > 0.88;
-    const run = sprint ? 7.2 : lerp(1.6, 5.4, mag / 0.88);
+    // hold dodge to sprint (after the roll, keep holding): costs stamina, half as much out of a fight
+    const held = dodgeHeld();
+    if (!held) P.sprintSpent = false;
+    P.sprinting = held && !P.sprintSpent && mag > 0.3 && P.grounded && P.rollT < 0 && !P.lock && P.castT < 0 && !P.atk.kind && P.healT < 0 && P.stamina > 0;
+    if (P.sprinting) {
+      P.stamina -= (P.calm ? 5 : 11) * dt; P.staminaDelay = 0.5;
+      if (P.stamina <= 0) { P.stamina = 0; P.sprintSpent = true; }
+      if (Math.random() < dt * 9) emit(FX.smoke, { x: P.pos.x - wish.x * 0.6, y: P.pos.y + 0.1, z: P.pos.z - wish.z * 0.6, vy: 0.4, life: 0.5, s: 0.7, g: 0.2, c: C.LAYER.cur === 2 ? [0.42, 0.26, 0.22] : [0.92, 0.88, 0.8], drag: 3 });
+    }
+    const run = P.sprinting ? 10.8 : sprint ? 7.2 : lerp(1.6, 5.4, mag / 0.88);
     const strafe = P.lock && !sprint && P.grounded;
     P.vel.x = damp(P.vel.x, wish.x * (strafe ? Math.min(run, 4.2) : run), accelG, dt); P.vel.z = damp(P.vel.z, wish.z * (strafe ? Math.min(run, 4.2) : run), accelG, dt);
     if (strafe) P.yaw = dampAngle(P.yaw, Math.atan2(P.lock.pos.x - P.pos.x, P.lock.pos.z - P.pos.z), 10, dt);
@@ -1913,7 +1924,8 @@ function kindle(b) {
   burst(FX.sparks, b.x, b.y + 2.4, b.z, 80, { speed: 7, up: 5, life: 1.4, size: 1.3, c: [2.2, 1.5, 0.7] });
   flashScreen(0.4); Audio.sfx('perfect');
   bigText('燈火重燃', 'THE LIGHT HOLDS');
-  setTimeout(() => toast(`<i class="dia"></i>${b.name} 成為據點 · 生命上限 +10`, true), 1200);
+  setTimeout(() => toast(`<i class="dia"></i>${b.name} 成為據點 · 生命上限 +10 · 可從地圖傳送`, true), 1200);
+  if (b.next) setTimeout(() => say(b.next), 3600);
   EARTH.lamps.set(lampsLit()); updateQuest();
 }
 function rescue(c) {
@@ -1924,7 +1936,7 @@ function rescue(c) {
   flashScreen(0.35); CAM.shake = Math.max(CAM.shake, 0.25); Audio.sfx('perfect');
   const p = c.person, T = EARTH.town;
   p.lit = true; p.yaw = Math.atan2(P.pos.x - p.x, P.pos.z - p.z);
-  p.set('bow', () => { say(c.line); setTimeout(() => { const a = Math.atan2(T.x - p.x, T.z - p.z); p.dest = { x: p.x + Math.sin(a) * 30, z: p.z + Math.cos(a) * 30 }; p.set('leave'); }, 1800); });
+  p.set('bow', () => { say(c.line); if (c.next) setTimeout(() => say(c.next), 2600); setTimeout(() => { const a = Math.atan2(T.x - p.x, T.z - p.z); p.dest = { x: p.x + Math.sin(a) * 30, z: p.z + Math.cos(a) * 30 }; p.set('leave'); }, c.next ? 4400 : 1800); });
   const before = P.maxFlasks;
   applyStats(false); P.flasks = Math.min(P.maxFlasks, P.flasks + 1);
   const n = nRescued();
@@ -2230,7 +2242,7 @@ function updateCamera(dt) {
     CAM.fov = lerp(VIEW.h > VIEW.w ? 62 : 46, 58, k);
     if (transT > 2.4) { state = 'play'; onEnterPlay(); }
   } else if (state === 'ending') { cameraEnding(out, look); CAM.fov = damp(CAM.fov, 52, 2, dt); }
-  else { playCamera(dt, out, look, false); CAM.fov = damp(CAM.fov, P.glide ? 64 : P.dashT > 0 ? 63 : 58, 4, dt); }
+  else { playCamera(dt, out, look, false); CAM.fov = damp(CAM.fov, P.glide ? 64 : P.dashT > 0 ? 63 : P.sprinting ? 62 : 58, 4, dt); }
   if (CAM.shake > 0) { out.x += (Math.random() - 0.5) * CAM.shake; out.y += (Math.random() - 0.5) * CAM.shake; CAM.shake = Math.max(0, CAM.shake - dt * 1.4); }
   if (window.__camOv) { out.copy(window.__camOv.pos); look.copy(window.__camOv.look); }
   camera.position.copy(out);
@@ -2274,6 +2286,8 @@ function regionAt(x, z, y) {
 // ---------- quest tracker: one clear story objective (with distance), then this world's tasks, then its feathers
 let QS = null, qHtml = '', qDistT = 0, qDistS = '';
 const qT = (x, z, kind = 'core') => ({ x, z, kind });
+const MAIN_SITES = new Set(['cField', 'bWatch', 'cRuins']);
+const siteC = (id) => captives.find((c) => c.id === id), siteB = (id) => beacons.find((b) => b.id === id);
 function nearestOpen() {
   let best = null, bd = 1e9;
   for (const c of captives) if (!c.done) { const d = Math.hypot(c.x - P.pos.x, c.z - P.pos.z); if (d < bd) { bd = d; best = qT(c.x, c.z, 'shrine'); } }
@@ -2287,6 +2301,7 @@ function nearestShrine() {
 }
 function questState() {
   const task = (t, done, n = '') => ({ k: 'task', t, done: !!done, n: done ? '' : n });
+  const step = (t, done, n = '') => ({ ...task(t, done, n), step: true }); // a step of the main quest: shown in the detail, not the tracker
   const feathersRow = (L) => { const c = fCount(L); return c.all ? { k: 'col', t: '收集光羽', n: `${c.got}/${c.all}`, done: c.got >= c.all } : null; };
   const at = (v, kind = 'core') => () => qT(v.x, v.z, kind);
   const colossusStep = () => {
@@ -2296,15 +2311,15 @@ function questState() {
     if (!prog.hellBlade) return { id: 'colossusBack', t: '回到墮天巨像', tgt: at(EARTH.riftRim) };
     return { id: 'rift', t: prog.hell ? '再次墜入墮天裂谷' : '墜入墮天裂谷的深處', tgt: at(EARTH.colossus) };
   };
-  const sealRows = () => [task('誓 · 傾城遺跡的騎士', prog.boss3), task('盾 · 墮翼之丘的守衛', prog.boss), task('翼 · 審判之環的審判者', prog.boss2)];
+  const sealRows = () => [step('誓 · 傾城遺跡的騎士', prog.boss3), step('盾 · 墮翼之丘的守衛', prog.boss), step('翼 · 審判之環的審判者', prog.boss2)];
   let ch, en, main, rows = [];
   const hints = [];
   if (P.inHell) {
     ch = '第四章 · 地獄前庭'; en = 'CHAPTER IV';
     if (!prog.boss4) {
       main = { id: 'abaddon', t: '擊倒冥門守衛 · 亞巴頓', tag: holyBlade() ? '' : '極度危險', tgt: at(HELL.bossHome, 'boss') };
-      rows.push(task('取得神域之主的武器', prog.hellBlade, '未取得'));
-      if (prog.hellBlade) rows.push(task('在聖匣裡換上天樞之劍', prog.weapon === 'tianshu'));
+      rows.push(step('取得神域之主的武器', prog.hellBlade, '未取得'));
+      if (prog.hellBlade) rows.push(step('在聖匣裡換上天樞之劍', prog.weapon === 'tianshu'));
     } else if (!prog.talk.abaddon) main = { id: 'abaddonEcho', t: '聆聽亞巴頓的殘響', tgt: at(HELL.bossHome) };
     else if (!prog.talk.gate) main = { id: 'gate', t: '前往冥門', tgt: at(HELL.gate) };
     else main = { id: 'gateWait', t: '冥門依然緊閉 · 待續' };
@@ -2320,14 +2335,21 @@ function questState() {
     rows.push(feathersRow('earth'));
   } else if (P.inEarth) {
     ch = '第一章 · 人間'; en = 'CHAPTER I';
-    const r = nRescued(), b = nBeacons(), R = captives.length, B = beacons.length, left = r < R || b < B;
-    if (left) main = { id: 'rescue', t: '解救受困的人 · 守住燈火', n: `${r + b}/${R + B}`, tgt: nearestOpen };
-    else if (!prog.boss3) main = { id: 'knight', t: '挑戰傾城遺跡的墮天騎士', tgt: at(EARTH.bossHome, 'boss') };
+    // the main road is three people on the way to the knight, each pointing to the next; the rest are side quests
+    const s1 = siteC('cField'), s2 = siteB('bWatch'), s3 = siteC('cRuins'), pt = (o) => () => qT(o.x, o.z, 'shrine');
+    if (!prog.boss3 && s1 && !s1.done) main = { id: 'c1', t: '救出麥原邊被困的人', tgt: pt(s1) };
+    else if (!prog.boss3 && s2 && s2.st !== 'lit') main = { id: 'b1', t: s2.st === 'won' ? '點亮麥原守望塔的燈火' : '守住麥原守望塔的燈火', tgt: pt(s2) };
+    else if (!prog.boss3 && s3 && !s3.done) main = { id: 'c2', t: '救出傾城外被困的人', tgt: pt(s3) };
+    else if (!prog.boss3) main = { id: 'knight', t: '讓傾城的騎士長安息', tgt: at(EARTH.bossHome, 'boss') };
     else if (!prog.talk.camael) main = { id: 'knightEcho', t: '聆聽墮天騎士的殘響', tgt: at(EARTH.bossHome) };
     else main = { id: 'pillar', t: '乘墜光坑的光柱，前往雲上', tgt: at(EARTH.pillar) };
     if (!pillarAwake()) hints.push('墜光坑的光柱還在沉睡，要等傾城的騎士長安息之後才會醒來');
-    rows.push(task('解救被蝕晶封住的人', r >= R, `${r}/${R}`), task('守住人們的燈火', b >= B, `${b}/${B}`));
-    if (left) rows.push(task('挑戰墮天騎士', prog.boss3, '未挑戰'));
+    rows.push(step('救出麥原邊被困的人', s1 && s1.done), step('守住麥原守望塔的燈火', s2 && s2.st === 'lit'), step('救出傾城外被困的人', s3 && s3.done),
+      step('讓傾城的騎士長安息', prog.boss3), step('聆聽騎士長的殘響', prog.talk.camael));
+    const oc = captives.filter((c) => !MAIN_SITES.has(c.id)), ob = beacons.filter((b) => !MAIN_SITES.has(b.id));
+    const ocd = oc.filter((c) => c.done).length, obd = ob.filter((b) => b.st === 'lit').length;
+    rows.push({ ...task('支線 · 救出其餘被困的人', ocd >= oc.length, `${ocd}/${oc.length}`), side: true });
+    rows.push({ ...task('支線 · 守住其餘燈火', obd >= ob.length, `${obd}/${ob.length}`), side: true });
     rows.push(feathersRow('earth'));
   } else if (!pillarAwake() && !prog.boss2) {
     // up in the sky before the mortal world's part is done (an old save, or a fall upward): send them home
@@ -2361,9 +2383,9 @@ function updateQuest() {
   const { ch, en, main, rows } = QS;
   EARTH.pillarOn = pillarAwake();
   const meta = main.tag || main.tgt ? `<div class="meta">${main.tag ? `<em class="qtag">${main.tag}</em>` : ''}${main.tgt ? '<em class="qd" id="qDist"></em>' : ''}</div>` : '';
-  const open = rows.filter((r) => !r.done).length;
+  const others = rows.filter((r) => !r.step), open = others.filter((r) => !r.done).length;
   const html = `<button class="qmain" id="qMain"><i class="qm"></i><span class="t">${main.t}</span>${main.n ? `<b>${main.n}</b>` : ''}${meta}</button>` +
-    (rows.length ? `<button class="qmore" id="qMore"><span>其他任務</span><b>${open || '✓'}</b><i class="chev"></i></button><div class="qlist">${rows.map(qRow).join('')}</div>` : '');
+    (others.length ? `<button class="qmore" id="qMore"><span>其他任務</span><b>${open || '✓'}</b><i class="chev"></i></button><div class="qlist">${others.map(qRow).join('')}</div>` : '');
   $('qTitle').textContent = ch; $('qEn').textContent = en;
   if (html !== qHtml) { qHtml = html; qDistS = ''; $('qObj').innerHTML = html; }
   // a new objective: the guiding light shows the way for a little while
@@ -2374,8 +2396,10 @@ function updateQuest() {
 // ---- quest detail: what to do, where, who asked, how — opened from the tracker (or O)
 const QINFO = {
   father: { who: '父親 · 薩奇爾', desc: '今天是你出發的日子。父親在村口等你，說有東西要交給你。', how: '走到父親身邊按「對話」。母親在燈旁，也可以先和她說幾句。' },
-  rescue: { who: '父親 · 薩奇爾', desc: '墮落的靈魂在村外作亂：有人被蝕晶封住，各處的燈火也快要熄滅。先把人救出來，把燈守住。', how: '蝕晶旁有瘴獸看守，全部擊退後按「淨化蝕晶」救人。走近燈火會引來一波怪物，守到牠們退去，再按「點亮燈火」。每點亮一盞，生命上限 +10。' },
-  knight: { who: '父親 · 薩奇爾', desc: '父親說，傾城的方向以前有一位騎士長。城已經倒了，騎士卻沒有安息。', how: '看準他出手的時機翻滾避開，趁收招時反擊。出發前先帶足光露。' },
+  c1: { who: '父親 · 薩奇爾', desc: '父親說，村子東北面的麥原有人被蝕晶封住了，就在不遠處。這是你出門的第一件事。', how: '蝕晶旁有瘴獸看守，全部擊退後按「淨化蝕晶」。救出的人會回到晨鐘堡，光露 +1。' },
+  b1: { who: '麥原邊獲救的人', desc: '「守望塔那邊的燈火快熄了……塔上的人還在撐著！」燈一熄，整片麥原都會被瘴氣吞掉。', how: '走近燈火會引來一波波瘴獸，守住燈火直到牠們退去，再按「點亮燈火」。點亮後這裡會成為據點：生命上限 +10，之後可以從地圖傳送回來。' },
+  c2: { who: '守望塔的守燈人', desc: '「傾城外的廢墟還有人被困。騎士長的影子，每晚都在城牆上走。」', how: '向西北走，路上會經過墜光坑的光柱。救出廢墟裡的人，傾城就在前面。' },
+  knight: { who: '傾城外獲救的人', desc: '「騎士長倒下那天，我們就再沒見過光。他就在城裡……求你，讓他安息。」', how: '看準他出手的時機翻滾避開，趁收招時反擊。出發前先帶足光露。' },
   knightEcho: { who: '卡麥爾的殘響', desc: '騎士倒下的地方留下了一道殘響。他好像認得你身上的光。', how: '回到騎士倒下的地方，按「聆聽殘響」。' },
   pillar: { who: '卡麥爾的殘響', desc: '騎士長說，墜光坑的光柱是他當年降下來的路。現在，它為你醒來了。', how: '走進墜光坑中央的光柱，按「乘光柱前往雲上」。' },
   back: { who: '墜光坑 · 光柱', desc: '你提早來到了雲上，但人間的事還沒有完成。墜光坑的光柱，還沒有真正為你醒來。', how: '從島嶼的邊緣（天緣）躍下，就會回到人間。' },
@@ -2416,7 +2440,7 @@ function renderQuestDetail() {
   $('qdWho').textContent = I.who || '—';
   $('qdDesc').textContent = I.desc || '';
   $('qdHow').innerHTML = (I.how ? `<p><i class="dia"></i>${I.how}</p>` : '') + hints.map((h) => `<p class="hint"><i class="up"></i>${h}</p>`).join('');
-  const steps = rows.filter((r) => !r.side && r.k === 'task'), side = rows.filter((r) => r.side || r.k !== 'task');
+  const steps = rows.filter((r) => r.step), side = rows.filter((r) => !r.step);
   $('qdSteps').innerHTML = steps.length ? steps.map(qRow).join('') : '<div class="qnone">—</div>';
   $('qdSide').innerHTML = side.length ? side.map(qRow).join('') : '<div class="qnone">—</div>';
   $('qdGuide').disabled = !t;
@@ -2716,18 +2740,33 @@ function openMap() {
     (prog.earth ? `<li class="${prog.boss3 ? 'lit' : ''}"><i class="dia"></i><span>墮天騎士</span><em>${prog.boss3 ? '已淨化' : '未挑戰'}</em></li>` : '') +
     (prog.realm ? `<li class="${prog.boss2 ? 'lit' : ''}"><i class="dia"></i><span>審判者</span><em>${prog.boss2 ? '已淨化' : '未挑戰'}</em></li>` : '');
   if (P.inEarth) {
-    const lit = beacons.filter((b) => b.st === 'lit').length;
+    // camps you can travel to, like a hunt's camps: home, and every beacon whose light you have kindled
+    const camps = [{ id: 'home', name: '晨鐘堡', here: Math.hypot(P.pos.x - START.x, P.pos.z - START.z) < 30 }]
+      .concat(beacons.filter((b) => b.st === 'lit').map((b) => ({ id: b.id, name: b.name, here: Math.hypot(P.pos.x - b.x, P.pos.z - b.z) < 30 })));
     $('mapList').innerHTML = `<li class="${nRescued() === captives.length ? 'lit' : ''}"><i class="dia"></i><span>被困的人</span><em>${nRescued()}/${captives.length} 已救出</em></li>` +
       beacons.map((b) => `<li class="${b.st === 'lit' ? 'lit' : ''}"><i class="dia"></i><span>${b.name}</span><em>${b.st === 'lit' ? '燈火長明' : b.st === 'won' ? '可點燈' : '待守護'}</em></li>`).join('') +
       `<li class="${prog.boss3 ? 'lit' : ''}"><i class="dia"></i><span>墮天騎士</span><em>${prog.boss3 ? '已淨化' : '未挑戰'}</em></li>` +
-      `<li><i class="star">✦</i><span>墮天巨像</span><em>封印中</em></li>` +
-      `<li><i class="dot"></i><span>晨鐘堡居民</span><em>${4 + nRescued()} 人 · 燈 ${Math.min(EARTH.lamps.n, lampsLit())}</em></li>`;
-    void lit;
+      `<li class="mhd"><span>據點 · 傳送</span><small>${P.calm ? '' : '附近有敵人'}</small></li>` +
+      camps.map((c) => `<li class="lit camp"><i class="star">✦</i><span>${c.name}</span>${c.here ? '<em>你在這裡</em>' : `<button class="tp" data-tp="${c.id}"${P.calm ? '' : ' disabled'}>傳送</button>`}</li>`).join('');
   }
   if (P.inHell) $('mapList').innerHTML = `<li class="${prog.boss4 ? 'lit' : ''}"><i class="dia"></i><span>冥門守衛</span><em>${prog.boss4 ? '已淨化' : '極度危險'}</em></li><li><i class="star">✦</i><span>冥門</span><em>封印中</em></li><li><i class="dot"></i><span>墜落之地</span><em>光柱 · 返回人間</em></li>`;
   $('mapTitle').innerHTML = P.inHell ? '地獄<small>THE ABYSS</small>' : P.inEarth ? '人間地圖<small>THE MORTAL WORLD</small>' : P.inRealm ? '天上神域<small>THE EMPYREAN</small>' : '聖域地圖<small>THE REALM</small>';
   $('mapHint').textContent = `已發現的光羽會標示在地圖上 · ${feathers.filter((f) => f.seen && !f.taken).length} 根待拾取`;
   Audio.sfx('ui');
+}
+function travelTo(id) {
+  if (state !== 'play' || !P.inEarth || !P.calm) return;
+  const b = id === 'home' ? null : beacons.find((x) => x.id === id && x.st === 'lit');
+  if (id !== 'home' && !b) return;
+  const x = b ? b.x : START.x, z = b ? b.z + 6 : START.z;
+  closeOverlays();
+  const y0 = C.groundAtL(x, z, 1) + 1.5; P.pos.set(x, y0, z);
+  const h = support(x, z, y0 + 1).h; if (h > -1e8) P.pos.y = h + 0.3;
+  P.yaw = b ? Math.PI : START_YAW; CAM.yaw = P.yaw + Math.PI; CAM.pitch = 0.22;
+  P.vel.set(0, 0, 0); P.safe.copy(P.pos); P.checkpoint.copy(P.pos); P.glide = false; P.lock = null; P.rollT = -1; P.dashT = 0; P.atk.kind = null;
+  flashScreen(0.8); regionCard(b ? b.name : '晨鐘堡', b ? b.en : 'BELLDAWN HOLD'); Audio.sfx('purify');
+  featherBurst(P.pos.x, P.pos.y + 1.2, P.pos.z, 10, 2.4);
+  updateQuest();
 }
 function closeOverlays() {
   for (const id of ['mapOv', 'setOv', 'howOv', 'codexOv', 'testOv', 'bagOv', 'questOv']) $(id).classList.add('hidden');
@@ -2801,6 +2840,7 @@ function setupInput() {
     layer.addEventListener('mousedown', (e) => {
       if (state !== 'play' || paused) return;
       e.preventDefault();
+      if (e.button === 2) input.rmb = true;
       if (mouseLocked()) { if (e.button === 0) attackDown(); else if (e.button === 2) doDodge(); else if (e.button === 1) doLock(); return; }
       if (ML.can && !ML.failed) { lockMouse(); return; } // this click only grabs the mouse
       ML.drag = { b: e.button, x: e.clientX, y: e.clientY, moved: 0 };
@@ -2818,6 +2858,7 @@ function setupInput() {
       camTurn(dx, dy, k * 1.6);
     });
     addEventListener('mouseup', (e) => {
+      if (e.button === 2) input.rmb = false;
       if (mouseLocked()) { if (e.button === 0) attackUp(); return; }
       const d = ML.drag; if (!d || e.button !== d.b) return;
       if (d.b === 0) attackUp(); else if (d.b === 2 && d.moved < 6) doDodge();
@@ -2857,7 +2898,13 @@ function setupInput() {
     el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
   }
   bind('bLock', doLock); bind('bHeal', doHeal);
-  bind('bSkill', doSkill); bind('bDodge', doDodge); bind('bJump', doJump); bind('bInteract', doInteract);
+  bind('bSkill', doSkill); bind('bJump', doJump); bind('bInteract', doInteract);
+  { // dodge: tap to roll, keep holding to sprint
+    const el = $('bDodge');
+    el.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); el.classList.add('press'); try { el.setPointerCapture(e.pointerId); } catch (_) {} input.dodgeTouch = true; doDodge(); });
+    const up = () => { el.classList.remove('press'); input.dodgeTouch = false; };
+    el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+  }
   bind('bMap', openMap);
   bind('bSet', () => openSettings());
   bind('bSnd', () => toggleSound());
@@ -2891,7 +2938,7 @@ function setupInput() {
     else if (k === 'KeyB' || k === 'KeyC') openCodex();
   });
   addEventListener('keyup', (e) => { input.keys.delete(e.code); if (e.code === 'KeyJ') attackUp(); });
-  addEventListener('blur', () => input.keys.clear());
+  addEventListener('blur', () => { input.keys.clear(); input.rmb = false; input.dodgeTouch = false; });
 }
 function readMove() {
   if (input.joyId !== null) {
@@ -2969,6 +3016,7 @@ function setupMenus() {
   });
   $('qdGuide').addEventListener('click', () => { closeOverlays(); guideOn(18); Audio.sfx('ui'); });
   $('qdMap').addEventListener('click', () => { closeOverlays(); openMap(); });
+  $('mapList').addEventListener('click', (e) => { const t = e.target.closest('[data-tp]'); if (t && !t.disabled) travelTo(t.dataset.tp); });
   initTestMode();
   initBag();
   document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => { closeOverlays(); Audio.sfx('ui'); }));
@@ -3005,8 +3053,8 @@ function beginJourney() {
 // The marker says where to go; when you get there, a voice, an echo or an inscription tells you what to do.
 const STORY = {
   intro: { who: ['父親 · 薩奇爾', 'SACHIEL, YOUR FATHER'], lines: ['……'] },
-  father: { who: ['父親 · 薩奇爾', 'SACHIEL, YOUR FATHER'], lines: ['黎恩，要出發了？', '……我知道攔不住你。你從小就是這樣。', '這把劍還沒打磨。等你遇到值得守護的東西，它自己會亮。', '還有這個匣子。它跟了我很多年——路上拿到的東西，都放進去。', '別走太遠。……算了。你走多遠都可以，記得回來。'], clue: ['父親的禮物', '一把未打磨的聖劍，和一個跟了父親很多年的聖匣。匣子裡躺著一根不會熄的白羽。'] },
-  fatherAfter: { who: ['父親 · 薩奇爾', 'SACHIEL, YOUR FATHER'], lines: ['城外的怪一天比一天兇。離村子越遠，越要小心。', '……傾城的方向，以前有一位騎士長。'] },
+  father: { who: ['父親 · 薩奇爾', 'SACHIEL, YOUR FATHER'], lines: ['黎恩，要出發了？', '……我知道攔不住你。你從小就是這樣。', '這把劍還沒打磨。等你遇到值得守護的東西，它自己會亮。', '還有這個匣子。它跟了我很多年——路上拿到的東西，都放進去。', '東北面的麥原，有人被蝕晶封住了。先去把他救出來。', '別走太遠。……算了。你走多遠都可以，記得回來。'], clue: ['父親的禮物', '一把未打磨的聖劍，和一個跟了父親很多年的聖匣。匣子裡躺著一根不會熄的白羽。'] },
+  fatherAfter: { who: ['父親 · 薩奇爾', 'SACHIEL, YOUR FATHER'], lines: ['城外的怪一天比一天兇。離村子越遠，越要小心。', '麥原、守望塔、傾城……一路救下去，你就會走到騎士長那裡。'] },
   mother: { who: ['母親 · 艾琳', 'ELIN, YOUR MOTHER'], lines: ['黎恩，燈不會熄。', '你想回家的時候，就跟著燈火走。', '……你爸爸年輕的時候，也是這樣說走就走。'] },
   mem0: { who: ['光的記憶', 'A MEMORY OF LIGHT'], lines: ['……一位手持大劍的守衛，擋在聖所的門前。', '他身後的光，一天比一天微弱。'], clue: ['光的記憶 · 一', '一位手持大劍的守衛，擋在聖所的門前。他身後的光，一天比一天微弱。'] },
   mem1: { who: ['光的記憶', 'A MEMORY OF LIGHT'], lines: ['影子從四面八方湧來。', '守衛一步也沒有退。'], clue: ['光的記憶 · 二', '影子從四面八方湧來，守衛一步也沒有退。'] },

@@ -628,13 +628,13 @@ export function buildEarth(scene) {
     { id: 'cSwampA', x: -420, z: 92, guards: [[6, 4, 'bomber'], [-5, 6], [2, -8, 'archer']], line: '……光？是天上的光嗎？' },
     { id: 'cSwampB', x: -352, z: 192, guards: [[6, -3], [-6, -4]], line: '我的燈……我以為再也點不著了。' },
     { id: 'cWood', x: -262, z: 214, guards: [[5, 5], [-6, 2, 'archer']], line: '森林一直在低語，叫我不要睡著。' },
-    { id: 'cField', x: 128, z: 236, guards: [[6, 2], [-4, -6]], line: '你的眼睛……和你父親一樣，會發光。' },
-    { id: 'cRuins', x: -214, z: -168, guards: [[6, 4, 'charger'], [-6, 3], [0, -8, 'archer']], line: '騎士長倒下那天，我們就再沒見過光。' },
+    { id: 'cField', x: 128, z: 236, guards: [[6, 2], [-4, -6]], line: '你的眼睛……和你父親一樣，會發光。', next: '守望塔那邊的燈火快熄了……塔上的人還在撐著！' },
+    { id: 'cRuins', x: -214, z: -168, guards: [[6, 4, 'charger'], [-6, 3], [0, -8, 'archer']], line: '騎士長倒下那天，我們就再沒見過光。', next: '他就在城裡……求你，讓他安息。' },
     { id: 'cRift', x: 74, z: -396, guards: [[6, 5, 'charger'], [-6, 4, 'bomber'], [3, -7, 'archer']], line: '裂谷裡……有東西在叫我的名字。' },
   ];
   for (const cp of EARTH.captives) cp.y = gA(cp.x, cp.z);
   EARTH.beacons = [
-    { id: 'bWatch', name: '麥原守望塔', en: 'THE FIELD WATCH', x: EP.watch.x, z: EP.watch.z, waves: [2, 3], folk: 3, line: '守住了……我們還守得住！' },
+    { id: 'bWatch', name: '麥原守望塔', en: 'THE FIELD WATCH', x: EP.watch.x, z: EP.watch.z, waves: [2, 3], folk: 3, line: '守住了……我們還守得住！', next: '傾城外的廢墟還有人被困。騎士長的影子，每晚都在城牆上走。' },
     { id: 'bHarbor', name: '燈塔港', en: 'LIGHTHOUSE HARBOR', x: EP.harbor.x - 2, z: EP.harbor.z - 2, waves: [3, 3], folk: 4, line: '燈塔從來沒熄過，今晚也不會。' },
     { id: 'bAbbey', name: '霜脊修道院', en: 'FROSTRIDGE ABBEY', x: EP.monastery.x, z: EP.monastery.z + 14, waves: [3, 4], folk: 4, monks: true, line: '我們祈禱了很多年。原來天上有回應。' },
   ];

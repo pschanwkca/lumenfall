@@ -829,6 +829,16 @@ html.desk #qMark b{font-size:10px;top:12px}
   #questOv .lbtn{padding:7px 14px}
 }
 @media (orientation:portrait){ #questOv .qdbody{grid-template-columns:1fr} #questOv .qdside{padding-left:0;border-left:0} }
+
+/* ---- camps on the earth map (v1.5) */
+#mapList li.mhd{margin-top:10px;padding:4px 0;border-bottom:1px solid rgba(198,162,90,.35);font:600 10.5px var(--serif);letter-spacing:.3em;color:var(--gold-d)}
+#mapList li.mhd small{margin-left:auto;font:500 10px var(--serif);letter-spacing:.12em;color:#a8432c}
+#mapList li.camp .tp{margin-left:auto;cursor:pointer;padding:3px 12px;border:0;font:600 11px var(--serif);letter-spacing:.2em;color:#4a3714;
+  background:linear-gradient(180deg,#fff6dc,#ecd39a);box-shadow:inset 0 0 0 1px rgba(168,128,60,.7),0 1px 4px rgba(90,64,20,.2)}
+#mapList li.camp .tp:active{transform:translateY(1px)}
+#mapList li.camp .tp:disabled{opacity:.4;cursor:default}
+/* side quests carry 支線 in their name now: their counts read like any other */
+.qrow.side b{font-family:var(--cin)!important;letter-spacing:.06em!important;padding:0!important;box-shadow:none!important}
 </style>
 <script>
 (() => {
@@ -966,7 +976,7 @@ html.desk #qMark b{font-size:10px;top:12px}
     </nav>
   </div>
   <div id="tapHint"><span class="c t-only">觸碰開始</span><span class="e t-only">TAP TO BEGIN</span><span class="c d-only">點擊或按任意鍵開始</span><span class="e d-only">PRESS ANY KEY</span></div>
-  <div class="corner bl">PROTOTYPE · v1.4 · 黎恩</div>
+  <div class="corner bl">PROTOTYPE · v1.5 · 黎恩</div>
   <div class="corner br t-only">MOBILE · LANDSCAPE</div><div class="corner br d-only">DESKTOP · KEYBOARD &amp; MOUSE</div>
 </div>
 
@@ -1073,7 +1083,7 @@ html.desk #qMark b{font-size:10px;top:12px}
         <dt>互動</dt><dd>靠近聖壇、聖核時出現</dd></dl></div>
       <div><h3>COMBAT</h3><dl>
         <dt>攻擊</dt><dd>連按四段連擊・長按蓄力重擊</dd>
-        <dt>閃避</dt><dd>翻滾閃避・剛好避開 → 聖時慢動作</dd>
+        <dt>閃避</dt><dd>翻滾閃避・剛好避開 → 聖時慢動作・按住衝刺</dd>
         <dt>聖裁</dt><dd>聖時內按攻擊，發動反擊</dd>
         <dt>鎖定</dt><dd>鎖定最近敵人／大型 Boss</dd>
         <dt>聖環　聖瓶</dt><dd>範圍淨化　回復生命</dd></dl></div>
@@ -1090,7 +1100,7 @@ html.desk #qMark b{font-size:10px;top:12px}
         <dt><i class="key">ESC</i></dt><dd>暫停・設定・釋放滑鼠</dd></dl></div>
       <div><h3>COMBAT</h3><dl>
         <dt>左鍵</dt><dd>連按四段連擊・長按蓄力重擊</dd>
-        <dt>右鍵 <i class="key">SHIFT</i></dt><dd>翻滾閃避・剛好避開觸發聖時</dd>
+        <dt>右鍵 <i class="key">SHIFT</i></dt><dd>翻滾閃避・剛好避開觸發聖時・按住衝刺</dd>
         <dt>聖時＋左鍵</dt><dd>聖裁反擊</dd>
         <dt><i class="key">Q</i></dt><dd>聖環・範圍淨化</dd>
         <dt><i class="key">R</i></dt><dd>光露・回復生命</dd>

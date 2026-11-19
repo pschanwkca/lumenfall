@@ -83,6 +83,14 @@ Sized after Monster Hunter's hunt HUD so the scene stays the subject:
 - The crater's pillar sleeps (a faint thread of light) until Camael's echo has spoken, so the sky cannot be reached early;
   arriving in the sky early (old saves) points you back down
 
+## Chapter I pacing (v1.5)
+
+The mortal world's main road is three people on the way to the knight, each pointing to the next:
+麥原邊的人 (≈180 m from Belldawn) → 麥原守望塔 (siege, ≈170 m on) → 傾城外的人 (≈460 m, past the sleeping pillar) →
+the knight (≈150 m). About 1 km of road in all, one of each kind of task, then the boss. The other four captives and two
+beacons are side quests (still worth flasks and max HP). Kindled beacons become camps: travel to them, or home, from the
+map when no enemy is near. Hold dodge to sprint (10.8 m/s; stamina 5/s out of a fight, 11/s in one).
+
 ## Story and guidance
 
 The full story (two parts, the turning point, both endings) lives in a separate doc. In game, the system only says where to go;
