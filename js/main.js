@@ -135,40 +135,48 @@ applyStats(true);
 P.atk = { kind: null, t: 0, dur: 0, hitsDone: 0, queued: false, mult: 1, combo: -1 };
 let enemyScale = 1, slowT = 0, boss = null;
 // light combo (4 hits), charged heavy, perfect-dodge counter
+// Monster Hunter-style weight: every swing has a wind-up you can read, a fast strike on `hits`, and a recovery you
+// commit to (rolling out is only possible once the blow has landed). Damage per hit is higher to keep fights as long.
 const ATK = {
-  // the holy lance pierces: two quick thrusts with long reach, a sweeping spin, then a lunging drive
-  l0: { dur: 0.4, hits: [0.09], dmg: [28, 34], reach: 3.8, cone: 0.35, lunge: 4.4, poise: 6, thrust: true, lanceS: 0.72, sfx: 'thrust' },
-  l1: { dur: 0.42, hits: [0.1], dmg: [28, 34], reach: 3.8, cone: 0.35, lunge: 4.4, poise: 6, thrust: true, lanceS: 0.72, sfx: 'thrust' },
-  l2: { dur: 0.62, hits: [0.13, 0.27], dmg: [22, 27], reach: 3.5, cone: -2, lunge: 1.8, poise: 7, spin: true, arc: { t0: 0, len: 6.2, rev: 0, tilt: [0, 0, 0] }, sfx: 'swing' },
-  l3: { dur: 0.66, hits: [0.13], dmg: [52, 60], reach: 4.1, cone: 0.5, lunge: 9, poise: 14, thrust: true, sfx: 'thrust' },
-  heavy: { dur: 0.72, hits: [0.1, 0.2], dmg: [70, 82], reach: 4.8, cone: 0.45, lunge: 16, poise: 25, thrust: true, sfx: 'thrust' },
-  counter: { dur: 0.78, hits: [0.3], dmg: [125, 145], reach: 4.8, cone: -0.45, lunge: 5, poise: 40, arc: { t0: 2.0, len: 3.9, rev: 0, tilt: [-1.0, 0, 0.25] }, sfx: 'skill' },
+  // the holy lance pierces: two drawn-back thrusts with long reach, a sweeping spin, then a lunging drive
+  l0: { dur: 0.6, hits: [0.22], dmg: [40, 49], reach: 3.8, cone: 0.35, lunge: 4.4, poise: 8, thrust: true, lanceS: 0.72, sfx: 'thrust' },
+  l1: { dur: 0.62, hits: [0.22], dmg: [40, 49], reach: 3.8, cone: 0.35, lunge: 4.4, poise: 8, thrust: true, lanceS: 0.72, sfx: 'thrust' },
+  l2: { dur: 0.9, hits: [0.34, 0.5], dmg: [32, 39], reach: 3.5, cone: -2, lunge: 1.8, poise: 9, spin: true, arc: { t0: 0, len: 6.2, rev: 0, tilt: [0, 0, 0] }, sfx: 'swing' },
+  l3: { dur: 0.92, hits: [0.36], dmg: [75, 87], reach: 4.1, cone: 0.5, lunge: 9, poise: 18, thrust: true, sfx: 'thrust' },
+  heavy: { dur: 0.95, hits: [0.1, 0.2], dmg: [80, 94], reach: 4.8, cone: 0.45, lunge: 16, poise: 30, thrust: true, sfx: 'thrust' },
+  counter: { dur: 0.95, hits: [0.3], dmg: [135, 155], reach: 4.8, cone: -0.45, lunge: 5, poise: 45, arc: { t0: 2.0, len: 3.9, rev: 0, tilt: [-1.0, 0, 0.25] }, sfx: 'skill' },
+  // focus strike: from focus mode, a leaping cut aimed at a wound
+  focus: { dur: 0.95, hits: [0.36], dmg: [60, 70], reach: 6.5, cone: -2, lunge: 14, poise: 30, heavyHit: true, arc: { t0: 2.0, len: 3.9, rev: 0, tilt: [-1.0, 0, 0.25] }, sfx: 'skill' },
 };
-// the Warden's greatsword: wide two-handed cleaves, a slow spin, and an overhead slam that cracks the ground
+// the Warden's greatsword: slow two-handed cleaves you must commit to, a heavy spin, and an overhead slam
 const ATK_GS = {
-  l0: { dur: 0.7, hits: [0.27], dmg: [52, 60], reach: 4.3, cone: -0.35, lunge: 2.6, poise: 16, heavyHit: true, arc: { t0: 2.5, len: 4.1, rev: 0, tilt: [-0.55, 0, -0.75] }, sfx: 'cleave' },
-  l1: { dur: 0.68, hits: [0.26], dmg: [52, 60], reach: 4.3, cone: -0.35, lunge: 2.6, poise: 16, heavyHit: true, arc: { t0: 2.5, len: 4.1, rev: 1, tilt: [-0.45, 0, 0.7] }, sfx: 'cleave' },
-  l2: { dur: 0.95, hits: [0.25, 0.47], dmg: [38, 44], reach: 4.7, cone: -2, lunge: 1.2, poise: 14, heavyHit: true, spin: true, arc: { t0: 0, len: 6.2, rev: 0, tilt: [0, 0, 0] }, sfx: 'cleave' },
-  l3: { dur: 1.0, hits: [0.42], dmg: [96, 110], reach: 2.2, cone: -2, lunge: 3.5, poise: 42, slam: 4.6, sfx: 'cleave' },
-  heavy: { dur: 1.05, hits: [0.38], dmg: [130, 150], reach: 2.4, cone: -2, lunge: 12, poise: 60, slam: 6.2, sfx: 'cleave' },
-  counter: { dur: 0.95, hits: [0.38], dmg: [190, 215], reach: 5.4, cone: -0.45, lunge: 5, poise: 60, heavyHit: true, arc: { t0: 2.0, len: 3.9, rev: 0, tilt: [-1.0, 0, 0.25] }, sfx: 'skill' },
+  l0: { dur: 1.1, hits: [0.52], dmg: [80, 92], reach: 4.3, cone: -0.35, lunge: 2.6, poise: 20, heavyHit: true, arc: { t0: 2.5, len: 4.1, rev: 0, tilt: [-0.55, 0, -0.75] }, sfx: 'cleave' },
+  l1: { dur: 1.05, hits: [0.5], dmg: [80, 92], reach: 4.3, cone: -0.35, lunge: 2.6, poise: 20, heavyHit: true, arc: { t0: 2.5, len: 4.1, rev: 1, tilt: [-0.45, 0, 0.7] }, sfx: 'cleave' },
+  l2: { dur: 1.35, hits: [0.55, 0.78], dmg: [58, 66], reach: 4.7, cone: -2, lunge: 1.2, poise: 18, heavyHit: true, spin: true, arc: { t0: 0, len: 6.2, rev: 0, tilt: [0, 0, 0] }, sfx: 'cleave' },
+  l3: { dur: 1.5, hits: [0.78], dmg: [150, 170], reach: 2.2, cone: -2, lunge: 3.5, poise: 50, slam: 4.6, sfx: 'cleave' },
+  heavy: { dur: 1.4, hits: [0.5], dmg: [175, 200], reach: 2.4, cone: -2, lunge: 12, poise: 70, slam: 6.2, sfx: 'cleave' },
+  counter: { dur: 1.2, hits: [0.42], dmg: [230, 260], reach: 5.4, cone: -0.45, lunge: 5, poise: 70, heavyHit: true, arc: { t0: 2.0, len: 3.9, rev: 0, tilt: [-1.0, 0, 0.25] }, sfx: 'skill' },
+  focus: { dur: 1.2, hits: [0.46], dmg: [95, 110], reach: 6.5, cone: -2, lunge: 14, poise: 40, heavyHit: true, arc: { t0: 2.0, len: 3.9, rev: 0, tilt: [-1.0, 0, 0.25] }, sfx: 'skill' },
 };
-// 天樞 · the Lord's sword: quick sweeping slashes, the only blade that truly cuts what lives in hell
+// 天樞 · the Lord's sword: the quickest blade, the only one that truly cuts what lives in hell
 const ATK_TS = {
-  l0: { dur: 0.42, hits: [0.09], dmg: [34, 40], reach: 3.4, cone: -0.1, lunge: 3.8, poise: 8, arc: { t0: 2.2, len: 3.5, rev: 0, tilt: [-0.22, 0, -0.55] }, sfx: 'slash' },
-  l1: { dur: 0.4, hits: [0.09], dmg: [34, 40], reach: 3.4, cone: -0.1, lunge: 3.8, poise: 8, arc: { t0: 2.2, len: 3.5, rev: 1, tilt: [-0.22, 0, 0.58] }, sfx: 'slash' },
-  l2: { ...ATK.l2, dmg: [26, 32], poise: 9, sfx: 'slash' },
-  l3: { ...ATK.l3, dmg: [62, 70], poise: 18 },
-  heavy: { ...ATK.heavy, dmg: [84, 96] },
-  counter: { ...ATK.counter, dmg: [150, 170] },
+  l0: { dur: 0.58, hits: [0.21], dmg: [48, 57], reach: 3.4, cone: -0.1, lunge: 3.8, poise: 10, arc: { t0: 2.2, len: 3.5, rev: 0, tilt: [-0.22, 0, -0.55] }, sfx: 'slash' },
+  l1: { dur: 0.56, hits: [0.2], dmg: [48, 57], reach: 3.4, cone: -0.1, lunge: 3.8, poise: 10, arc: { t0: 2.2, len: 3.5, rev: 1, tilt: [-0.22, 0, 0.58] }, sfx: 'slash' },
+  l2: { ...ATK.l2, dmg: [38, 46], poise: 11, sfx: 'slash' },
+  l3: { ...ATK.l3, dmg: [88, 100], poise: 22 },
+  heavy: { ...ATK.heavy, dmg: [96, 110] },
+  counter: { ...ATK.counter, dmg: [170, 195] },
+  focus: { ...ATK.focus, dmg: [72, 84] },
 };
 // the father's sword: balanced slashes; dull until the cradle's light polishes it
 const ATK_SW = {
-  l0: { dur: 0.42, hits: [0.09], dmg: [30, 36], reach: 3.3, cone: -0.1, lunge: 3.6, poise: 7, arc: { t0: 2.2, len: 3.5, rev: 0, tilt: [-0.22, 0, -0.55] }, sfx: 'slash' },
-  l1: { dur: 0.42, hits: [0.09], dmg: [30, 36], reach: 3.3, cone: -0.1, lunge: 3.6, poise: 7, arc: { t0: 2.2, len: 3.5, rev: 1, tilt: [-0.22, 0, 0.58] }, sfx: 'slash' },
-  l2: { ...ATK.l2, sfx: 'slash' }, l3: ATK.l3, heavy: ATK.heavy, counter: ATK.counter,
+  l0: { dur: 0.66, hits: [0.26], dmg: [44, 52], reach: 3.3, cone: -0.1, lunge: 3.6, poise: 9, arc: { t0: 2.2, len: 3.5, rev: 0, tilt: [-0.22, 0, -0.55] }, sfx: 'slash' },
+  l1: { dur: 0.64, hits: [0.24], dmg: [44, 52], reach: 3.3, cone: -0.1, lunge: 3.6, poise: 9, arc: { t0: 2.2, len: 3.5, rev: 1, tilt: [-0.22, 0, 0.58] }, sfx: 'slash' },
+  l2: { ...ATK.l2, sfx: 'slash' }, l3: ATK.l3, heavy: ATK.heavy, counter: ATK.counter, focus: ATK.focus,
 };
 const ATK_SW_DULL = Object.fromEntries(Object.entries(ATK_SW).map(([k, a]) => [k, { ...a, dmg: a.dmg.map((d) => d * 0.8) }]));
+// how long the swing itself takes (the rest of the time before `hits` is the wind-up)
+const SWING = { sword: 0.09, spear: 0.08, tianshu: 0.08, greatsword: 0.15 };
 const atkT = () => (prog.weapon === 'greatsword' ? ATK_GS : prog.weapon === 'tianshu' ? ATK_TS : prog.weapon === 'sword' ? (prog.swordLit ? ATK_SW : ATK_SW_DULL) : ATK);
 // how each weapon looks and lands: slash light, trail, thrust streak, impact sparks, hit-stop
 const WLOOK = {
@@ -336,6 +344,13 @@ function buildFX() {
   lance.rotation.x = Math.PI / 2;
   const lanceG = new THREE.Group(); lanceG.add(lance); lance.position.z = 2.0; scene.add(lanceG); lanceG.visible = false;
   FX.lance = { g: lanceG, m: lance, t: 9 };
+  // impact: a hot flash where the blow lands and a slash streak across it (drawn over everything, like a hunt's hit marks)
+  FX.imp = [];
+  for (let i = 0; i < 12; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.glow, color: new THREE.Color(1, 1, 1), transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, fog: false }));
+    sp.visible = false; sp.renderOrder = 30; scene.add(sp);
+    FX.imp.push({ sp, t: 9, life: 0.1, sx: 1, sy: 1 });
+  }
   // skill shockwave
   const wave = new THREE.Mesh(new THREE.RingGeometry(0.55, 1.0, 96), new THREE.MeshBasicMaterial({ map: TEX.rune, color: new THREE.Color(1.9, 1.4, 0.65), transparent: true, depthWrite: false, side: THREE.DoubleSide }));
   wave.rotation.x = -Math.PI / 2; scene.add(wave); wave.visible = false;
@@ -484,14 +499,23 @@ function updateFX(dt) {
   updatePool(FX.smoke, dt);
   const A = FX.arc;
   A.t += dt;
-  if (A.t < 0.4) {
+  if (A.t < 0) { A.g.visible = false; A.g.rotation.y = P.yaw; }
+  else if (A.t < 0.4) {
+    A.g.visible = true;
     A.mat.uniforms.uProg.value = clamp(A.t / 0.13, 0, 1.6);
     A.mat.uniforms.uAlpha.value = 1 - smooth(0.12, 0.38, A.t);
     A.g.position.set(P.pos.x, P.pos.y + 1.15, P.pos.z);
   } else A.g.visible = false;
   const L = FX.lance; L.t += dt;
-  if (L.t < 0.3) { const k = L.t / 0.3; L.m.material.opacity = 1 - k; L.m.scale.set(1 - k * 0.5, 0.7 + easeOut(k) * 0.6, 1); L.g.position.set(P.pos.x, P.pos.y + 1.2, P.pos.z); }
+  if (L.t < 0) { L.g.visible = false; L.g.rotation.y = P.yaw; }
+  else if (L.t < 0.3) { L.g.visible = true; const k = L.t / 0.3; L.m.material.opacity = 1 - k; L.m.scale.set(1 - k * 0.5, 0.7 + easeOut(k) * 0.6, 1); L.g.position.set(P.pos.x, P.pos.y + 1.2, P.pos.z); }
   else L.g.visible = false;
+  for (const im of FX.imp) {
+    if (im.t >= im.life) continue;
+    im.t += dt; const k = im.t / im.life;
+    if (k >= 1) { im.sp.visible = false; continue; }
+    im.sp.material.opacity = 1 - k * k; im.sp.scale.set(im.sx * (1 + k * 0.35), im.sy * (1 - k * 0.3), 1);
+  }
   const Wv = FX.wave; Wv.t += dt;
   if (Wv.t < 0.9) {
     const k = Wv.t / 0.9;
@@ -1149,7 +1173,12 @@ const START = new THREE.Vector3(SPAWN.x, 0, SPAWN.z); let START_YAW = Math.PI;
 function buildBoss() {
   const G = {
     scene, P, prog, state: () => state, hurtPlayer: (d, f) => hurtPlayer(d * ((boss && boss.cfg.dmgK) || 1), f, true), burst, FX, dmgNumber, Audio, bigText, toast, regionCard, fireProjectile,
-    hitstop: (v) => (hitstop = Math.max(hitstop, v)), shake: (v) => (CAM.shake = Math.max(CAM.shake, v)), flash: flashScreen,
+    hitstop: (v) => (hitstop = Math.max(hitstop, v)), shake: (v) => (CAM.shake = Math.max(CAM.shake, v)), flash: flashScreen, featherBurst,
+    onWound: (b, part) => {
+      if (!prog.tips) prog.tips = {};
+      if (!prog.tips.wound) { prog.tips.wound = true; save(); toast(`<i class="dia"></i>${part.cn}出現傷口 · ${isTouch ? '按住「鎖定」' : '按住 C'}進入集中模式，對準傷口攻擊`, true); }
+    },
+    onPartBreak: (b, part) => { P.flasks = Math.min(P.maxFlasks, P.flasks + 1); toast(`<i class="dia"></i>破壞了${part.cn} · 光露 +1`, true); },
     ui: { bar: $('bossBar'), hp: $('bossHp'), hpD: $('bossHpD') },
     onBossDefeated: () => {
       prog.boss = true; save();
@@ -1245,7 +1274,7 @@ function moveWorld(out) {
   out.set(fx * move.y + rx * move.x, 0, fz * move.y + rz * move.x);
   return out;
 }
-function canAct() { return state === 'play' && !paused; }
+function canAct() { return state === 'play' && !paused && !P.clash; }
 function doJump() {
   if (!canAct() || P.castT >= 0) return;
   if (P.grounded) {
@@ -1273,6 +1302,8 @@ function doDodge() {
   if (canAct() && P.glide && (noInput || !has('wings'))) { P.glide = false; P.vel.y = Math.min(P.vel.y, -6); featherBurst(P.pos.x, P.pos.y + 1.3, P.pos.z, 4, 1.5); return; } // fold wings: dive
   if (canAct() && !P.grounded && has('wings') && canWing()) { airDash(w, noInput); return; }
   if (!canAct() || P.dashCd > 0 || P.stamina < 14 || P.castT >= 0) return;
+  if (P.atk.kind && P.atk.t < (P.atk.last || 0) + 0.03 && P.atk.t > 0.08) { P.dodgeQ = time; return; } // committed: buffer it
+  P.dodgeQ = 0;
   if (noInput && !P.lock && P.grounded && has('shield')) { startGuard(); return; }
   if (P.rollT >= 0) return;
   // a dodge roll; locked on with no direction, a quick hop back instead (eyes stay on the foe)
@@ -1423,12 +1454,40 @@ function nearestEnemy(maxD, cone, camPref) {
   }
   return best;
 }
-function hitEnemy(e, dmg, poise, kind) {
+function hitEnemy(e, dmg, poise, kind, info) {
   // nothing of hell is harmed by mortal light until the seraph carries the Empyrean lord's weapon
   if ((e.hell || (e.isBoss && e.cfg.hell)) && !holyBlade()) { dmg *= 0.08; poise *= 0.15; kind = 'resist'; resistHint(); }
   if (TEST.oneHit) { dmg *= e.isBoss ? 12 : 60; poise *= 4; }
-  if (e.isBoss) e.damage(dmg, poise, P.pos, kind); else damageShade(e, dmg, P.pos, kind);
+  if (e.isBoss) return e.damage(dmg, poise, P.pos, kind, info || {});
+  damageShade(e, dmg, P.pos, kind);
+  return null;
 }
+// a heavy blow on a boss: pop the aimed wound, or meet its attack head-on
+function bossBlow(e, dmg) {
+  const k = P.atk.kind;
+  if (k === 'focus' && P.atk.aim && e.popWound(P.atk.aim, dmg)) { CAM.kick = -4; flashScreen(0.25); return true; }
+  if (OFFSET_KINDS.has(k)) {
+    const r = e.tryOffset();
+    if (r === 'offset') { flashScreen(0.4); hitstop = Math.max(hitstop, 0.26); CAM.kick = -5; e.anchor('weapon', _v); impact(_v.x, _v.y, _v.z, 1.3, 0.9, [2.4, 1.9, 1.1]); Audio.sfx('perfect'); }
+    if (r === 'clash') startClash(e);
+  }
+  return false;
+}
+// a blow lands: flash + streak at the point of impact, sized by how heavy the blow was
+let impI = 0;
+function impact(x, y, z, power, ang, col) {
+  const put = (sx, sy, rot, life, c) => {
+    const im = FX.imp[impI++ % FX.imp.length];
+    im.sp.position.set(x, y, z); im.sx = sx; im.sy = sy; im.life = life; im.t = 0;
+    im.sp.material.rotation = rot; im.sp.material.color.setRGB(c[0], c[1], c[2]); im.sp.scale.set(sx, sy, 1); im.sp.visible = true; im.sp.material.opacity = 1;
+  };
+  const c1 = [col[0] * 0.55, col[1] * 0.55, col[2] * 0.55], c2 = [col[0] * 0.8, col[1] * 0.8, col[2] * 0.8];
+  put(0.7 + power * 0.9, 0.7 + power * 0.9, 0, 0.08 + power * 0.04, c1);
+  put(1.7 + power * 2.3, 0.09 + power * 0.07, ang, 0.13 + power * 0.06, c2);
+  if (power > 0.6) put(1.2 + power * 1.4, 0.06 + power * 0.04, ang + 1.25, 0.12, c2);
+}
+const IMP_ANG = { l0: 0.62, l1: -0.62, l2: 0.06, l3: 0.18, heavy: 0.12, counter: 1.1, focus: 1.1 };
+const OFFSET_KINDS = new Set(['heavy', 'l3', 'counter', 'focus']);
 function doHit(A) {
   if (A.slam) { slam(A); return; }
   const fx = Math.sin(P.yaw + P.spin), fz = Math.cos(P.yaw + P.spin), L = wlook();
@@ -1439,11 +1498,21 @@ function doHit(A) {
     if (Math.abs(e.pos.y - P.pos.y) > (e.hy || 2.8)) continue;
     if (A.cone > -1.5 && d > er + 0.8 && (dx * fx + dz * fz) / (d + 1e-5) < A.cone) continue;
     const dmg = (A.dmg[0] + Math.random() * (A.dmg[1] - A.dmg[0])) * P.atk.mult * P.atkMul;
-    hitEnemy(e, dmg, A.poise * P.atk.mult, P.atk.kind === 'counter' || P.atk.kind === 'heavy' ? 'crit' : '');
-    burst(FX.sparks, e.pos.x, e.pos.y + 1.3 * (e.sc || 1), e.pos.z, A.heavyHit ? 26 : 12, { speed: A.heavyHit ? 7 : 5, up: 1.5, life: 0.5, size: A.heavyHit ? 1.3 : 0.9, c: L.spark });
+    if (!(e.isBoss && bossBlow(e, dmg))) hitEnemy(e, dmg, A.poise * P.atk.mult, P.atk.kind === 'counter' || P.atk.kind === 'heavy' ? 'crit' : '', { aim: P.atk.aim });
+    // the point of impact: on the target's surface, facing you, at chest height
+    const hy = e.pos.y + Math.min(2.4, (e.hy || 2.2) * 0.55) * (e.isBoss ? 1 : e.sc || 1), k = (d - er * 0.6) / (d + 1e-5);
+    const ix = P.pos.x + dx * k, iz = P.pos.z + dz * k, pw = P.atk.kind === 'counter' || P.atk.kind === 'heavy' ? 1 : P.atk.kind === 'l3' || A.heavyHit ? 0.7 : 0.4;
+    impact(ix, hy, iz, pw, (IMP_ANG[P.atk.kind] ?? 0.3) * (A.arc && A.arc.rev ? -1 : 1), L.spark);
+    burst(FX.sparks, ix, hy, iz, A.heavyHit ? 34 : 16, { speed: A.heavyHit ? 8 : 6, up: 1.5, life: 0.55, size: A.heavyHit ? 1.3 : 0.9, c: L.spark });
     n++;
   }
-  if (n) { hitstop = Math.max(hitstop, L.stop); CAM.shake = Math.max(CAM.shake, L.shake); if (A.heavyHit) Audio.sfx('hitHeavy'); }
+  if (n) {
+    // hitstop by weight: light blows bite, finishers and counters stop the world for a beat
+    const kd = P.atk.kind, tier = kd === 'counter' || kd === 'heavy' ? 0.15 : kd === 'l3' ? 0.1 : 0.065, gs = prog.weapon === 'greatsword' ? 1.3 : 1;
+    hitstop = Math.max(hitstop, tier * gs); CAM.shake = Math.max(CAM.shake, L.shake + tier * 1.6);
+    if (tier > 0.09) CAM.kick = -2.6 * gs;
+    Audio.sfx(A.heavyHit || tier > 0.09 ? 'hitHeavy' : 'hit');
+  }
 }
 // the greatsword comes down: everything around the point of impact is struck
 function slam(A) {
@@ -1453,42 +1522,49 @@ function slam(A) {
   burst(FX.smoke, cx, gy + 0.4, cz, 34, { speed: R * 1.4, up: 1.6, life: 1.0, size: 2.4, c: [0.85, 0.74, 0.62] });
   burst(FX.sparks, cx, gy + 0.5, cz, 70, { speed: R * 1.8, up: 4, life: 0.9, size: 1.2, c: L.spark });
   const Wv = FX.wave; Wv.t = 0.42; Wv.m.visible = true; Wv.m.position.set(cx, gy + 0.12, cz); Wv.r = R;
+  impact(cx, gy + 0.6, cz, 1, 1.5, L.spark); CAM.kick = -3.2; hitstop = Math.max(hitstop, 0.13);
   for (const e of enemyList()) {
     const d = Math.hypot(e.pos.x - cx, e.pos.z - cz);
     if (d - (e.r || 0.6) > R || Math.abs(e.pos.y - gy) > 4) continue;
     const dmg = (A.dmg[0] + Math.random() * (A.dmg[1] - A.dmg[0])) * P.atk.mult * P.atkMul * (d < R * 0.5 ? 1 : 0.7);
-    hitEnemy(e, dmg, A.poise * P.atk.mult, 'crit');
+    if (!(e.isBoss && bossBlow(e, dmg))) hitEnemy(e, dmg, A.poise * P.atk.mult, 'crit', { aim: P.atk.aim });
   }
   for (const b of breakables) if (!b.broken && b.kind === 'rock' && P.atk.kind === 'heavy' && P.atk.mult >= 1.6 && Math.hypot(b.x - cx, b.z - cz) < R + 1.5 && Math.abs(b.y - gy) < 6) breakIt(b);
   Audio.sfx('slam');
 }
 function startAttack(kind, mult = 1) {
   const A = atkT()[kind];
-  P.atk = { kind, t: 0, dur: A.dur, hitsDone: 0, queued: false, mult, combo: COMBO.indexOf(kind), quake: kind === 'heavy' && mult >= 1.6 && has('oath') };
-  const tgt = P.lock && !P.lock.dead ? P.lock : nearestEnemy(7, -0.2);
-  if (tgt) P.yaw = Math.atan2(tgt.pos.x - P.pos.x, tgt.pos.z - P.pos.z);
+  P.atk = { kind, t: 0, dur: A.dur, hitsDone: 0, queued: false, mult, combo: COMBO.indexOf(kind), quake: kind === 'heavy' && mult >= 1.6 && has('oath'),
+    hit: A.hits[0], sw: SWING[prog.weapon] || 0.09, last: A.hits[A.hits.length - 1] };
+  const lead = Math.max(0, A.hits[0] - P.atk.sw); // the effects wait for the swing, not the wind-up
+  let tgt = P.lock && !P.lock.dead ? P.lock : nearestEnemy(7, -0.2);
+  if (kind === 'focus' && P.aim) { tgt = P.aim.e; P.atk.aim = P.aim.part; P.aim.e.anchor(P.aim.part, _v); P.yaw = Math.atan2(_v.x - P.pos.x, _v.z - P.pos.z); }
+  else if (P.focus) { P.yaw = CAM.yaw + Math.PI; if (P.aim) P.atk.aim = P.aim.part; tgt = P.aim ? P.aim.e : null; }
+  else if (tgt) P.yaw = Math.atan2(tgt.pos.x - P.pos.x, tgt.pos.z - P.pos.z);
   else { const w = moveWorld(_v); if (w.lengthSq() > 0.05) P.yaw = Math.atan2(w.x, w.z); }
   let lunge = A.lunge;
   if (tgt) {
     const gap = Math.hypot(tgt.pos.x - P.pos.x, tgt.pos.z - P.pos.z) - (tgt.r || 0.6);
     if (gap < 1.6) lunge *= 0.25;
-    else if ((kind === 'counter' || kind === 'heavy' || kind === 'l3') && gap < 11) lunge = Math.max(lunge, Math.min(60, (gap - 1.2) * 9));
+    else if ((kind === 'counter' || kind === 'heavy' || kind === 'l3' || kind === 'focus') && gap < 11) lunge = Math.max(lunge, Math.min(60, (gap - 1.2) * 9));
   }
   P.vel.x = Math.sin(P.yaw) * lunge; P.vel.z = Math.cos(P.yaw) * lunge;
   P.spin = 0;
   const Ar = FX.arc;
   if (A.arc) {
-    Ar.t = 0; Ar.g.visible = true; Ar.g.rotation.y = P.yaw; Ar.tilt.rotation.set(...A.arc.tilt);
+    Ar.t = -lead; Ar.g.visible = false; Ar.g.rotation.y = P.yaw; Ar.tilt.rotation.set(...A.arc.tilt);
     Ar.mat.uniforms.uT0.value = A.arc.t0; Ar.mat.uniforms.uLen.value = A.arc.len; Ar.mat.uniforms.uRev.value = A.arc.rev;
     Ar.g.scale.setScalar((kind === 'counter' ? 1.45 : kind === 'l2' ? 1.1 : 1) * (prog.weapon === 'greatsword' ? 1.4 : 1));
   }
-  if (A.thrust) { const L = FX.lance; L.t = 0; L.g.visible = true; L.g.rotation.y = P.yaw; L.g.scale.setScalar(kind === 'heavy' ? 1.5 + (mult - 1) : A.lanceS || 1); }
+  if (A.thrust) { const L = FX.lance; L.t = -lead; L.g.visible = false; L.g.rotation.y = P.yaw; L.g.scale.setScalar(kind === 'heavy' ? 1.5 + (mult - 1) : A.lanceS || 1); }
   if (A.slam) { featherBurst(P.pos.x, P.pos.y + 2.2, P.pos.z, 4, 1.5); CAM.shake = Math.max(CAM.shake, 0.06); }
   Audio.sfx(A.sfx);
   if (kind === 'heavy') { featherBurst(P.pos.x, P.pos.y + 1.2, P.pos.z, 6, 2.5); CAM.shake = Math.max(CAM.shake, 0.12); }
+  if (kind === 'focus') { burst(FX.sparks, P.pos.x, P.pos.y + 1.2, P.pos.z, 30, { speed: 5, up: 2, life: 0.7, size: 1, c: [2.4, 1.0, 0.5] }); }
   if (kind === 'counter') { bigText('聖裁', 'JUDGEMENT'); burst(FX.sparks, P.pos.x, P.pos.y + 1.2, P.pos.z, 50, { speed: 7, up: 2, life: 0.9, size: 1.1 }); }
 }
 function lightAttack() {
+  if (P.clash) { clashPush(); return; }
   if (P.rollT >= 0 && canAct()) { // pressed mid-roll: come up out of it swinging
     if (P.rollT > P.rollDur * 0.58) { P.rollT = -1; startAttack('l0'); } else P.rollQ = true;
     return;
@@ -1496,10 +1572,12 @@ function lightAttack() {
   if (!canAct() || P.dashT > 0 || P.castT >= 0 || P.healT >= 0) return;
   if (P.glide) P.glide = false;
   if (P.counterT > 0 && !P.atk.kind) { P.counterT = 0; startAttack('counter'); return; }
+  // focus mode with a wound under the reticle: the focus strike
+  if (P.focus && P.aim && P.aim.e.parts[P.aim.part].wound && !P.atk.kind) { startAttack('focus'); return; }
   if (!P.atk.kind) startAttack('l0');
   else if (P.atk.combo >= 0 && P.atk.t > 0.12) P.atk.queued = true;
 }
-function attackDown() { if (!canAct()) return; P.atkHeld = true; P.atkDownT = time; }
+function attackDown() { if (P.clash) { clashPush(); return; } if (!canAct()) return; P.atkHeld = true; P.atkDownT = time; }
 function attackUp() {
   if (!P.atkHeld) return;
   P.atkHeld = false;
@@ -1508,6 +1586,30 @@ function attackUp() {
     if (canAct() && k > 0.15) { startAttack('heavy', 1 + k * 0.8); return; }
   }
   lightAttack();
+}
+// ---- focus mode: hold to aim; wounds glow, and attacks go where the reticle is
+function updateFocus(dt) {
+  const want = !!(input.focusKey || input.focusTouch) && state === 'play' && !paused && !P.glide && !P.clash && P.grounded;
+  P.focus = want;
+  P.focusK = damp(P.focusK || 0, want ? 1 : 0, 10, dt);
+  hud.ret.classList.toggle('on', want);
+  P.aim = null;
+  if (!want) return;
+  let best = null, bd = 0.32;
+  for (const b of bosses) {
+    if (!b.engaged || b.dead || Math.hypot(b.pos.x - P.pos.x, b.pos.z - P.pos.z) > 34) continue;
+    for (const k in b.parts) {
+      b.anchor(k, _v).project(camera);
+      if (_v.z > 1) continue;
+      const d = Math.hypot(_v.x, _v.y * 0.8) - (b.parts[k].wound ? 0.06 : 0);
+      if (d < bd) { bd = d; best = { e: b, part: k }; }
+    }
+  }
+  P.aim = best;
+  const pt = best && best.e.parts[best.part];
+  hud.ret.classList.toggle('wound', !!(pt && pt.wound)); hud.ret.classList.toggle('lock', !!pt);
+  const lbl = pt ? `${pt.cn}${pt.wound ? ' · 傷口' : pt.broken ? ' · 已破壞' : ''}` : '';
+  if (lbl !== hud.retS) { hud.retS = lbl; hud.retL.textContent = lbl; }
 }
 function doLock() {
   if (!canAct()) return;
@@ -1544,9 +1646,34 @@ function skillImpact() {
   for (const e of enemyList()) if (Math.hypot(e.pos.x - P.pos.x, e.pos.z - P.pos.z) - (e.r || 0.6) < 8) hitEnemy(e, 60 + Math.random() * 10, 30, 'crit');
   if (P.onWater) for (let k = 0; k < 3; k++) ripple(P.pos.x, P.pos.z, 3 + k * 2, 1.6 + k * 0.3);
 }
+// ---- power clash: blade against blade, mash attack to drive it back
+function startClash(b) {
+  if (P.clash) return;
+  if (b.st !== 'clash') { b.hitDone = true; b.go('clash'); }
+  P.clash = { b, v: 0.45, t: 0 }; P.atk.kind = null; P.charge = -1; P.rollT = -1; P.vel.set(0, P.vel.y, 0); P.guardT = 0;
+  P.yaw = Math.atan2(b.pos.x - P.pos.x, b.pos.z - P.pos.z);
+  hud.clash.classList.add('on'); bigText('力量對抗', 'POWER CLASH'); Audio.sfx('slam'); hitstop = Math.max(hitstop, 0.2); CAM.kick = -4; CAM.shake = Math.max(CAM.shake, 0.5);
+}
+function clashPush() {
+  const C = P.clash; C.v += 0.09; CAM.shake = Math.max(CAM.shake, 0.18); Audio.sfx('hit');
+  hero.tipWorld(0, _tip); burst(FX.sparks, _tip.x, _tip.y, _tip.z, 10, { speed: 5, up: 1, life: 0.4, size: 0.9, c: [2.3, 1.6, 0.8] });
+}
+function updateClash(dt) {
+  const C = P.clash; if (!C) return;
+  C.t += dt; C.v -= (C.b.phase === 2 ? 0.27 : 0.2) * dt;
+  P.vel.x = 0; P.vel.z = 0; P.yaw = Math.atan2(C.b.pos.x - P.pos.x, C.b.pos.z - P.pos.z);
+  hud.clashF.style.transform = `scaleX(${clamp(C.v, 0, 1)})`;
+  const done = C.v >= 1 ? true : C.v <= 0 || C.t > 4.2 || C.b.st !== 'clash' ? false : null;
+  if (done === null) return;
+  hud.clash.classList.remove('on'); P.clash = null;
+  if (done) { flashScreen(0.5); hitstop = Math.max(hitstop, 0.3); CAM.kick = -6; C.b.anchor('weapon', _v); impact(_v.x, _v.y, _v.z, 1.4, 0.4, [2.6, 1.9, 1.0]); Audio.sfx('perfect'); }
+  else P.inv = 0;
+  C.b.clashEnd(done);
+}
 function hurtPlayer(dmg, from, fromBoss) {
   if (P.inv > 0 || state !== 'play' || TEST.god) return;
   if (!fromBoss) dmg *= regionDmgK();
+  if (P.guardT > 0 && fromBoss && boss && boss.st === 'slam' && !P.clash) { startClash(boss); return; } // a shield under an overhead slam: power clash
   if (P.guardT > 0) {
     const parry = P.guardT > 0.38; P.guardT = 0.12; P.inv = 0.3;
     const d = _p.copy(P.pos).sub(from); d.y = 0; d.normalize(); P.vel.x = d.x * 4; P.vel.z = d.z * 4;
@@ -1572,6 +1699,7 @@ function updatePlayer(dt) {
   if (mag > 0.01) wish.divideScalar(Math.max(1, wish.length()));
   P.flapCd = (P.flapCd || 0) - dt; P.flapT = (P.flapT || 0) - dt; P.guardT = (P.guardT || 0) - dt; P.airDashCd = (P.airDashCd || 0) - dt;
   P.dashCd -= dt; P.inv -= dt; P.hurtT -= dt; P.skillCd -= dt; P.staminaDelay -= dt;
+  updateFocus(dt); updateClash(dt);
   if ((P.calmT = (P.calmT || 0) - dt) <= 0) { P.calmT = 0.5; P.calm = !(boss && boss.engaged) && !beacons.some((b) => b.st === 'siege') && !shades.some((sh) => !sh.dead && !sh.dormant && sh.pos.distanceToSquared(P.pos) < 400); }
 
   P.counterT -= dt; P.perfectCd -= dt;
@@ -1580,7 +1708,9 @@ function updatePlayer(dt) {
     const A = atkT()[P.atk.kind];
     P.atk.t += dt;
     while (P.atk.hitsDone < A.hits.length && P.atk.t >= A.hits[P.atk.hitsDone]) { doHit(A); P.atk.hitsDone++; if (P.atk.quake && P.atk.hitsDone === 1) quake(); }
-    if (A.spin) P.spin = clamp(P.atk.t / (A.dur * 0.62), 0, 1) * Math.PI * 2;
+    if (A.spin) P.spin = clamp((P.atk.t - (A.hits[0] - 0.12)) / (A.dur * 0.45), 0, 1) * Math.PI * 2;
+    // a roll pressed during the wind-up is held until the blow lands (you commit to a swing, as in a hunt)
+    if (P.dodgeQ && P.atk.t > P.atk.last + 0.03) { P.dodgeQ = 0; const k = P.atk.kind; P.atk.kind = null; P.spin = 0; doDodge(); if (P.rollT < 0) P.atk.kind = k; }
     const canChain = P.atk.queued && P.atk.combo >= 0 && P.atk.combo < 3;
     if (canChain && P.atk.t >= A.dur * 0.7) startAttack(COMBO[P.atk.combo + 1]);
     else if (P.atk.t >= A.dur) { P.atk.kind = null; P.spin = 0; }
@@ -1660,9 +1790,11 @@ function updatePlayer(dt) {
       if (Math.random() < dt * 9) emit(FX.smoke, { x: P.pos.x - wish.x * 0.6, y: P.pos.y + 0.1, z: P.pos.z - wish.z * 0.6, vy: 0.4, life: 0.5, s: 0.7, g: 0.2, c: C.LAYER.cur === 2 ? [0.42, 0.26, 0.22] : [0.92, 0.88, 0.8], drag: 3 });
     }
     const run = P.sprinting ? 10.8 : sprint ? 7.2 : lerp(1.6, 5.4, mag / 0.88);
-    const strafe = P.lock && !sprint && P.grounded;
+    const strafe = (P.lock || P.focus) && !P.sprinting && P.grounded;
     P.vel.x = damp(P.vel.x, wish.x * (strafe ? Math.min(run, 4.2) : run), accelG, dt); P.vel.z = damp(P.vel.z, wish.z * (strafe ? Math.min(run, 4.2) : run), accelG, dt);
-    if (strafe) P.yaw = dampAngle(P.yaw, Math.atan2(P.lock.pos.x - P.pos.x, P.lock.pos.z - P.pos.z), 10, dt);
+    if (P.clash) { P.vel.x = 0; P.vel.z = 0; }
+    else if (P.focus && !P.atk.kind) P.yaw = dampAngle(P.yaw, CAM.yaw + Math.PI, 14, dt);
+    else if (strafe && P.lock) P.yaw = dampAngle(P.yaw, Math.atan2(P.lock.pos.x - P.pos.x, P.lock.pos.z - P.pos.z), 10, dt);
     else if (mag > 0.1) P.yaw = dampAngle(P.yaw, Math.atan2(wish.x, wish.z), P.grounded ? 12 : 5, dt);
   }
   if (!P.glide && P.dashT <= 0) P.vel.y -= (P.castT >= 0 ? 8 : 26) * dt;
@@ -2242,12 +2374,22 @@ function updateCamera(dt) {
     CAM.fov = lerp(VIEW.h > VIEW.w ? 62 : 46, 58, k);
     if (transT > 2.4) { state = 'play'; onEnterPlay(); }
   } else if (state === 'ending') { cameraEnding(out, look); CAM.fov = damp(CAM.fov, 52, 2, dt); }
-  else { playCamera(dt, out, look, false); CAM.fov = damp(CAM.fov, P.glide ? 64 : P.dashT > 0 ? 63 : P.sprinting ? 62 : 58, 4, dt); }
+  else {
+    playCamera(dt, out, look, false); CAM.fov = damp(CAM.fov, P.glide ? 64 : P.dashT > 0 ? 63 : P.sprinting ? 62 : P.focus ? 50 : 58, 4, dt);
+    const fk = P.focusK || 0;
+    if (fk > 0.01) { // over the right shoulder, a little closer, so the reticle sits beside the hero
+      _v.subVectors(look, out).setY(0).normalize(); const rx = -_v.z, rz = _v.x;
+      out.x += rx * 1.25 * fk; out.z += rz * 1.25 * fk; look.x += rx * 1.25 * fk; look.z += rz * 1.25 * fk; look.y += 0.3 * fk;
+      out.lerp(look, 0.2 * fk);
+    }
+  }
   if (CAM.shake > 0) { out.x += (Math.random() - 0.5) * CAM.shake; out.y += (Math.random() - 0.5) * CAM.shake; CAM.shake = Math.max(0, CAM.shake - dt * 1.4); }
   if (window.__camOv) { out.copy(window.__camOv.pos); look.copy(window.__camOv.look); }
   camera.position.copy(out);
   camera.lookAt(look);
-  if (Math.abs(camera.fov - CAM.fov) > 0.01) { camera.fov = CAM.fov; camera.updateProjectionMatrix(); }
+  CAM.kick = damp(CAM.kick || 0, 0, 9, dt);
+  const fovNow = CAM.fov + CAM.kick;
+  if (Math.abs(camera.fov - fovNow) > 0.01) { camera.fov = fovNow; camera.updateProjectionMatrix(); }
 }
 
 // ------------------------------------------------------------------ HUD
@@ -2351,7 +2493,7 @@ function questState() {
     rows.push({ ...task('支線 · 救出其餘被困的人', ocd >= oc.length, `${ocd}/${oc.length}`), side: true });
     rows.push({ ...task('支線 · 守住其餘燈火', obd >= ob.length, `${obd}/${ob.length}`), side: true });
     rows.push(feathersRow('earth'));
-  } else if (!pillarAwake() && !prog.boss2) {
+  } else if (!pillarAwake() && !prog.boss2 && !TEST.on) {
     // up in the sky before the mortal world's part is done (an old save, or a fall upward): send them home
     ch = '第一章 · 人間'; en = 'CHAPTER I';
     main = { id: 'back', t: '從天緣躍下，回到人間' };
@@ -2897,7 +3039,13 @@ function setupInput() {
     const up = (e) => { if (!el.classList.contains('press')) return; el.classList.remove('press'); attackUp(); };
     el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
   }
-  bind('bLock', doLock); bind('bHeal', doHeal);
+  bind('bHeal', doHeal);
+  { // lock: tap to lock on, hold to enter focus mode
+    const el = $('bLock'); let t0 = 0, tm = 0;
+    el.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); el.classList.add('press'); try { el.setPointerCapture(e.pointerId); } catch (_) {} t0 = performance.now(); tm = setTimeout(() => { input.focusTouch = true; el.classList.add('focus'); }, 260); });
+    const up = () => { el.classList.remove('press', 'focus'); clearTimeout(tm); if (!input.focusTouch && performance.now() - t0 < 260) doLock(); input.focusTouch = false; };
+    el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+  }
   bind('bSkill', doSkill); bind('bJump', doJump); bind('bInteract', doInteract);
   { // dodge: tap to roll, keep holding to sprint
     const el = $('bDodge');
@@ -2934,11 +3082,12 @@ function setupInput() {
     else if (k === 'KeyE' || k === 'KeyF') doInteract();
     else if (k === 'KeyM') openMap();
     else if (k === 'KeyO') openQuest();
+    else if (k === 'KeyC') input.focusKey = true;
     else if (k === 'KeyG') guideOn(18);
     else if (k === 'KeyB' || k === 'KeyC') openCodex();
   });
-  addEventListener('keyup', (e) => { input.keys.delete(e.code); if (e.code === 'KeyJ') attackUp(); });
-  addEventListener('blur', () => { input.keys.clear(); input.rmb = false; input.dodgeTouch = false; });
+  addEventListener('keyup', (e) => { input.keys.delete(e.code); if (e.code === 'KeyJ') attackUp(); if (e.code === 'KeyC') input.focusKey = false; });
+  addEventListener('blur', () => { input.keys.clear(); input.rmb = false; input.dodgeTouch = false; input.focusKey = false; input.focusTouch = false; });
 }
 function readMove() {
   if (input.joyId !== null) {
@@ -3621,7 +3770,7 @@ function frame() {
     const dy = Math.atan2(Math.sin(P.yaw - (P.prevYaw ?? P.yaw)), Math.cos(P.yaw - (P.prevYaw ?? P.yaw))); P.prevYaw = P.yaw;
     P.bank = P.glide && dt > 0 ? clamp(dy / dt / 1.6, -1, 1) : 0;
   }
-  hero.update(dt, { wpn: prog.weapon, mode, speed: P.speed, phase: P.phase, grounded: P.grounded, vy: P.vel.y, glide: P.glide, dash: P.dashT, atk: P.atk, cast: P.castT, hurt: P.hurtT, charge: P.charge, lock: !!P.lock, heal: P.healT >= 0 ? 1 : 0,
+  hero.update(dt, { wpn: prog.weapon, mode, speed: P.speed, phase: P.phase, grounded: P.grounded, vy: P.vel.y, glide: P.glide, dash: P.dashT, atk: P.atk, cast: P.castT, hurt: P.hurtT, charge: P.clash ? 0.6 : P.charge, lock: !!P.lock || !!P.focus, heal: P.healT >= 0 ? 1 : 0,
     roll: P.rollT >= 0 ? clamp(P.rollT / P.rollDur, 0, 1) : -1, rollKind: P.rollKind, flap: Math.max(0, P.flapT || 0), bank: P.bank, display: 1 });
   if (hero.angel > 0.6 && P.glide && !P.grounded) { // light streams off the wingtips in flight
     for (let i = 0; i < 2; i++) if (Math.random() < 0.75) { hero.wingTip(i, _tip); emit(FX.sparks, { x: _tip.x, y: _tip.y, z: _tip.z, vx: -P.vel.x * 0.08, vy: -0.3, vz: -P.vel.z * 0.08, life: 0.5, s: 0.5, drag: 3, c: [1.5, 1.35, 1.05] }); }
@@ -3689,7 +3838,7 @@ async function init() {
   hookCloudClock(scene);
   placeAtStart();
   hud.hpf = $('hpf'); hud.hpd = $('hpd'); hud.hpn = $('hpn'); hud.hpw = $('hpw');
-  hud.stw = $('stw'); hud.stf = $('stf'); hud.qMark = $('qMark'); hud.qmD = $('qMarkD'); hud.qmArrow = $('qMarkA'); hud.skCd = $('skCd'); hud.bSkill = $('bSkill'); hud.skNum = $('skNum');
+  hud.stw = $('stw'); hud.stf = $('stf'); hud.ret = $('focusRet'); hud.retL = $('focusLbl'); hud.clash = $('clash'); hud.clashF = $('clashF'); hud.qMark = $('qMark'); hud.qmD = $('qMarkD'); hud.qmArrow = $('qMarkA'); hud.skCd = $('skCd'); hud.bSkill = $('bSkill'); hud.skNum = $('skNum');
   hud.jumpLbl = $('jumpLbl'); hud.bJump = $('bJump');
   hud.lockRet = $('lockRet'); hud.lockHp = $('lockHp'); hud.bLock = $('bLock'); hud.healN = $('healN'); hud.bHeal = $('bHeal'); hud.bAtk = $('bAtk'); hud.atkLbl = $('atkLbl');
   hud.mmg = $('mmc').getContext('2d');
@@ -3719,4 +3868,4 @@ addEventListener('resize', resize);
 addEventListener('orientationchange', () => setTimeout(resize, 250));
 document.addEventListener('visibilitychange', () => { if (Audio.ctx) { if (document.hidden) Audio.ctx.suspend(); else Audio.ctx.resume(); } });
 init().catch((e) => { console.error(e); $('loadMsg').textContent = '載入失敗：' + e.message; });
-window.__LF = { EARTH, talk: (id) => talk(id), dlg: () => DLG, dlgNext: () => dlgNext(), bag: (t) => openBag(t), spots: () => STORY_SPOTS, warp: (id) => warpTo(id), test: TEST, quest: () => QS, layer: () => C.LAYER.cur, hell: () => HELL, sites: () => ({ captives, beacons, folk }), kill: (sh) => killShade(sh), interact: () => doInteract(), dyn: () => ({ ...dyn, pr: renderer.getPixelRatio() }), levelUp: (n) => levelUp(n), showPower: (k) => showPower(k), breakables, equipWeapon: (w) => equipWeapon(w), calls: () => { renderer.info.autoReset = false; renderer.info.reset(); composer.render(0.016); const r = { ...renderer.info.render }; renderer.info.autoReset = true; return r; }, pause: (b) => (paused = b), FX, slow: () => (DT_MAX = 0.05), act: { attackDown, attackUp, lightAttack, doLock, doHeal, startAttack, perfectDodge, doAttack, doJump, doSkill, doDodge, doInteract, openMap, openSettings, damageShade, regionCard, toast }, fast: () => (DT_MAX = 0.25), THREE, scene, composer, q: (o) => { Object.assign(QUAL[settings.quality], o); applyQuality(); }, P, CAM, W, hero: () => hero, boss: () => boss, state: () => state, prog, shades, feathers, setState: (s) => (state = s), camera, renderer };
+window.__LF = { dbg: () => ({ hitstop, slowT, enemyScale, paused, time, DT_MAX }), clash: (b) => startClash(b), impact: (...a) => impact(...a), EARTH, talk: (id) => talk(id), dlg: () => DLG, dlgNext: () => dlgNext(), bag: (t) => openBag(t), spots: () => STORY_SPOTS, warp: (id) => warpTo(id), test: TEST, quest: () => QS, layer: () => C.LAYER.cur, hell: () => HELL, sites: () => ({ captives, beacons, folk }), kill: (sh) => killShade(sh), interact: () => doInteract(), dyn: () => ({ ...dyn, pr: renderer.getPixelRatio() }), levelUp: (n) => levelUp(n), showPower: (k) => showPower(k), breakables, equipWeapon: (w) => equipWeapon(w), calls: () => { renderer.info.autoReset = false; renderer.info.reset(); composer.render(0.016); const r = { ...renderer.info.render }; renderer.info.autoReset = true; return r; }, pause: (b) => (paused = b), FX, slow: () => (DT_MAX = 0.05), act: { attackDown, attackUp, lightAttack, doLock, doHeal, startAttack, perfectDodge, doAttack, doJump, doSkill, doDodge, doInteract, openMap, openSettings, damageShade, regionCard, toast }, fast: () => (DT_MAX = 0.25), THREE, scene, composer, q: (o) => { Object.assign(QUAL[settings.quality], o); applyQuality(); }, P, CAM, W, hero: () => hero, boss: () => boss, state: () => state, prog, shades, feathers, setState: (s) => (state = s), camera, renderer };

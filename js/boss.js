@@ -28,6 +28,9 @@ function decalMaterial() {
   });
 }
 
+// breakable parts, as in a hunt: [name, english, share of max hp, damage taken ×]
+const PARTS = { head: ['頭 · 光環', 'HALO', 0.14, 1.35], wings: ['雙翼', 'WINGS', 0.2, 1.0], weapon: ['武器', 'WEAPON', 0.15, 0.75], legs: ['雙腿', 'LEGS', 0.12, 0.9] };
+const _a = new THREE.Vector3(), _b = new THREE.Vector3();
 export class Boss {
   constructor(G, cfg = {}) {
     this.G = G;
@@ -63,6 +66,13 @@ export class Boss {
     this.hitDone = false; this.leapFrom = new THREE.Vector3(); this.leapTo = new THREE.Vector3();
     this.ring = { on: false, r: 0, hit: false, center: new THREE.Vector3() };
     this.volley = 0; this.lastAct = '';
+    // parts, wounds and trips
+    this.parts = {}; this.tripN = 0; this.tripAcc = 0; this.reachK = 1;
+    for (const [k, [cn, en, hpK, mult]] of Object.entries(PARTS)) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.glow, color: new THREE.Color(2.6, 0.55, 0.3), transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending, fog: false }));
+      sp.visible = false; sp.renderOrder = 25; G.scene.add(sp);
+      this.parts[k] = { k, cn, en, max: cfg.maxHp * hpK, hp: cfg.maxHp * hpK, mult, broken: false, wAcc: 0, wound: false, scar: 0, spr: sp };
+    }
     // telegraph decals
     this.decal = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), decalMaterial());
     this.decal.rotation.x = -Math.PI / 2; this.decal.visible = false; this.decal.renderOrder = 3;
@@ -91,6 +101,8 @@ export class Boss {
   reset() {
     if (this.dead) return;
     this.hp = this.maxHp; this.poise = 100; this.phase = 1; this.engaged = false; this.st = 'dormant'; this.t = 0;
+    for (const p of Object.values(this.parts)) { p.wound = false; p.wAcc = 0; p.scar = 0; p.spr.visible = false; } // broken parts stay broken
+    this.tripN = 0; this.tripAcc = 0;
     this.pos.copy(this.home); this.ring.on = false; this.ringMesh.visible = false; this.decal.visible = false;
     this.G.ui.bar.classList.add('hidden'); this.G.ui.bar.classList.remove('p2'); document.body.classList.remove('boss');
     this.actor.M.skin.emissiveIntensity = 1.5;
@@ -110,27 +122,103 @@ export class Boss {
   }
   inArea(p, pad = 0) {
     const L = this.local(p);
-    if (this.st === 'sweep') return L.d < 8 + pad && L.f > -1.5 && Math.abs(Math.atan2(L.l, L.f)) < 1.45;
-    if (this.st === 'slam' || this.st === 'ring') return L.f > -1 && L.f < 10.5 + pad && Math.abs(L.l) < 1.7 + pad;
+    if (this.st === 'sweep') return L.d < 8 * this.reachK + pad && L.f > -1.5 && Math.abs(Math.atan2(L.l, L.f)) < 1.45;
+    if (this.st === 'slam' || this.st === 'ring') return L.f > -1 && L.f < 10.5 * this.reachK + pad && Math.abs(L.l) < 1.7 + pad;
     if (this.st === 'leap') return Math.hypot(p.x - this.leapTo.x, p.z - this.leapTo.z) < 4.8 + pad;
     return false;
   }
-  damage(dmg, poise, from, kind) {
+  // where a part is in the world right now
+  anchor(k, out) {
+    const A = this.actor, b = A.rig && A.rig.b;
+    if (k === 'head' && b && b.Head) return b.Head.getWorldPosition(out).setY(out.y + 0.25 * this.cfg.scale);
+    if (k === 'legs' && b && b.LeftLeg && b.RightLeg) { b.LeftLeg.getWorldPosition(out); b.RightLeg.getWorldPosition(_a); return out.add(_a).multiplyScalar(0.5); }
+    if (k === 'wings' && A.wings && A.wings[0]) return A.wings[0].hand.getWorldPosition(out);
+    if (k === 'weapon' && A.weapon) return A.tipWorld(1, out);
+    return out.copy(this.pos).setY(this.pos.y + 3);
+  }
+  // which part a blow from `from` lands on: the aimed one, else the wings from behind, the head when it is down,
+  // the weapon while it is buried after a slam, the legs otherwise
+  pickPart(from, aim) {
+    if (aim && this.parts[aim]) return aim;
+    const L = this.local(from);
+    if (this.st === 'stagger' && Math.random() < 0.6) return 'head';
+    if (L.f < -0.8) return 'wings';
+    if ((this.st === 'slam' || this.st === 'ring') && this.t > this.impactAt && this.t < this.impactAt + 1.0 && Math.hypot(this.anchor('weapon', _a).x - from.x, _a.z - from.z) < 4.5) return 'weapon';
+    return 'legs';
+  }
+  damage(dmg, poise, from, kind, info = {}) {
     const G = this.G;
-    if (this.invuln || this.dead) { G.dmgNumber(new THREE.Vector3(this.pos.x, this.pos.y + 7, this.pos.z), '—', ''); return; }
-    const mult = this.st === 'stagger' ? 1.35 : 1;
+    if (this.invuln || this.dead) { G.dmgNumber(new THREE.Vector3(this.pos.x, this.pos.y + 7, this.pos.z), '—', ''); return null; }
+    const part = this.parts[this.pickPart(from, info.aim)];
+    const mult = (this.st === 'stagger' ? 1.35 : 1) * part.mult * (part.wound ? 1.25 : 1);
     dmg *= mult;
     this.hp -= dmg; this.poise -= poise * (this.phase === 2 ? 0.75 : 1);
     this.flash = 0.12;
-    const hp = new THREE.Vector3(this.pos.x, this.pos.y + 4.5, this.pos.z).lerp(from, 0.15);
-    G.dmgNumber(hp.setY(this.pos.y + 5.5 + Math.random()), Math.round(dmg), kind || (mult > 1 ? 'crit' : ''));
-    G.burst(G.FX.sparks, hp.x, this.pos.y + 3.5, hp.z, 16, { speed: 6, up: 1, life: 0.6, size: 1 });
+    const at = this.anchor(part.k, _b);
+    const hp = new THREE.Vector3(at.x, at.y, at.z).lerp(from, 0.2);
+    G.dmgNumber(hp.setY(Math.max(hp.y, this.pos.y + 1.5) + 0.6 + Math.random() * 0.5), Math.round(dmg), kind === 'resist' ? kind : mult >= 1.25 ? 'weak' : kind || '');
+    G.burst(G.FX.sparks, hp.x, hp.y, hp.z, 16, { speed: 6, up: 1, life: 0.6, size: 1 });
     G.hitstop(dmg > 80 ? 0.1 : 0.05);
     G.shake(0.12 + Math.min(0.2, dmg * 0.001));
     G.Audio.sfx('hit');
-    if (this.hp <= 0) { this.die(); return; }
-    if (this.phase === 1 && this.hp < this.maxHp * 0.5) { this.go('transform'); return; }
-    if (this.poise <= 0 && this.st !== 'stagger') { this.poise = this.phase === 2 ? 140 : 100; this.go('stagger'); G.bigText('破勢', 'POSTURE BROKEN'); }
+    if (this.hp <= 0) { this.die(); return { part: part.k }; }
+    // a part takes its share: break it, open a wound in it, trip on the legs
+    if (!part.broken && part.k !== 'legs') { part.hp -= dmg; if (part.hp <= 0) this.breakPart(part); }
+    if (part.k === 'legs' && this.st !== 'stagger') {
+      this.tripAcc += dmg;
+      if (this.tripAcc >= this.maxHp * (0.09 + this.tripN * 0.04)) { this.tripN++; this.tripAcc = 0; this.topple('倒地', 'TOPPLED', 4.2); return { part: part.k }; }
+    }
+    if (!part.wound && part.scar <= 0 && !info.pop) {
+      part.wAcc += dmg;
+      if (part.wAcc >= this.maxHp * 0.07) { part.wound = true; part.wAcc = 0; G.onWound && G.onWound(this, part); }
+    }
+    if (this.phase === 1 && this.hp < this.maxHp * 0.5) { this.go('transform'); return { part: part.k }; }
+    if (this.poise <= 0 && this.st !== 'stagger') { this.poise = this.phase === 2 ? 140 : 100; this.topple('破勢', 'POSTURE BROKEN', 3.4); }
+    return { part: part.k, mult };
+  }
+  topple(cn, en, dur) {
+    if (this.st === 'dying' || this.st === 'transform') return;
+    this.ring.on = false; this.ringMesh.visible = false;
+    this.go('stagger'); this.dur = dur; this.G.bigText(cn, en);
+  }
+  breakPart(part) {
+    const G = this.G, A = this.actor, at = this.anchor(part.k, _a);
+    part.broken = true;
+    G.bigText(`破壞 · ${part.cn}`, `${part.en} BROKEN`); G.shake(0.5); G.hitstop(0.16); G.flash && G.flash(0.3);
+    G.burst(G.FX.sparks, at.x, at.y, at.z, 70, { speed: 9, up: 3, life: 1.1, size: 1.3, c: [2.2, 1.4, 0.7] });
+    if (part.k === 'head') A.halo.visible = false;
+    if (part.k === 'wings') { A.wingK = 0.82; for (const w of A.wings) if (w.primIM) w.primIM.count = 3; G.featherBurst && G.featherBurst(at.x, at.y, at.z, 16, 3); }
+    if (part.k === 'weapon') { A.weapon.scale.z = 0.6; this.reachK = 0.72; }
+    G.onPartBreak && G.onPartBreak(this, part);
+  }
+  // a focus strike on an open wound: it bursts, a heavy toll, and the boss reels
+  popWound(k, base) {
+    const part = this.parts[k];
+    if (!part || !part.wound || this.invuln || this.dead) return false;
+    part.wound = false; part.scar = 20; part.spr.visible = false;
+    const at = this.anchor(k, _b);
+    this.G.burst(this.G.FX.sparks, at.x, at.y, at.z, 90, { speed: 10, up: 3, life: 1.0, size: 1.4, c: [2.6, 0.9, 0.4] });
+    this.damage(this.maxHp * 0.045 + base * 2.2, 40, this.G.P.pos, 'weak', { aim: k, pop: true });
+    this.G.bigText('破傷', 'WOUND DESTROYED'); this.G.hitstop(0.22); this.G.shake(0.6);
+    if (!this.dead && !['stagger', 'transform', 'dying', 'clash'].includes(this.st)) this.go('flinch');
+    return true;
+  }
+  // a heavy blow that meets the boss's own at the moment it lands cancels it (offset); blade against blade in an
+  // overhead slam locks the two in a power clash instead
+  tryOffset() {
+    if (!['sweep', 'slam', 'ring'].includes(this.st) || this.hitDone) return null;
+    const tl = this.impactAt - this.t;
+    if (tl < -0.06 || tl > 0.4) return null;
+    this.hitDone = true; this.decal.visible = false;
+    if (this.st === 'slam') { this.go('clash'); return 'clash'; }
+    this.topple('相殺', 'OFFSET', 3.0);
+    return 'offset';
+  }
+  clashEnd(win) {
+    if (this.st !== 'clash') return;
+    const G = this.G;
+    if (win) { this.damage(this.maxHp * 0.06, 60, G.P.pos, 'crit', { aim: 'weapon' }); if (!this.dead) this.topple('力量對抗', 'POWER CLASH', 4.6); }
+    else { this.go('idle'); G.hurtPlayer(28, this.pos); }
   }
   go(st) {
     this.st = st; this.t = 0; this.hitDone = false; this.impactAt = 99; this.decal.visible = false;
@@ -151,6 +239,8 @@ export class Boss {
         this.G.bigText('覺醒', 'THE WARDEN AWAKENS');
         break;
       case 'stagger': this.dur = 3.4; this.G.Audio.sfx('slam'); break;
+      case 'flinch': this.dur = 1.3; this.G.Audio.sfx('roar'); break;
+      case 'clash': this.dur = 9; break;
       case 'walk': this.dur = 1.5 + Math.random() * 1.5; break;
       case 'idle': this.dur = 0.6 + Math.random() * 0.5; break;
     }
@@ -196,9 +286,10 @@ export class Boss {
     const P = this.G.P;
     const L = this.local(P.pos);
     const r = Math.random(), p2 = this.phase === 2;
-    if (L.d > 15) return r < (p2 ? 0.55 : 0.4) ? (p2 && r < 0.25 ? 'barrage' : 'leap') : 'walk';
-    if (L.d > 8) return p2 && r < 0.3 ? 'barrage' : r < 0.55 ? 'leap' : 'walk';
-    if (p2 && r < 0.28 && this.lastAct !== 'ring') return 'ring';
+    const fly = !this.parts.wings.broken, halo = !this.parts.head.broken; // broken wings can't carry it; a broken halo can't ring
+    if (L.d > 15) return fly && r < (p2 ? 0.55 : 0.4) ? (p2 && r < 0.25 ? 'barrage' : 'leap') : 'walk';
+    if (L.d > 8) return fly && p2 && r < 0.3 ? 'barrage' : fly && r < 0.55 ? 'leap' : 'walk';
+    if (p2 && halo && r < 0.28 && this.lastAct !== 'ring') return 'ring';
     if (Math.abs(Math.atan2(L.l, L.f)) > 1.2) return 'sweep';
     return r < 0.55 ? 'sweep' : 'slam';
   }
@@ -325,9 +416,21 @@ export class Boss {
       A.M.skin.emissiveIntensity = 1.5 + k * 2.2; A.M.dress.emissiveIntensity = 0.9 + k * 1.6;
       if (this.t > this.dur) { this.phase = 2; this.poise = 140; G.ui.bar.classList.add('p2'); this.go('idle'); }
     } else if (st === 'stagger') {
-      Object.assign(T, { hipY: 0.55, thL: -1.3, knL: 1.4, thR: 0.25, knR: 1.7, tX: 0.55, hX: 0.6, sRx: -0.3, eR: -0.3, sLx: -0.2, sLz: 0.4, fold: 0.7, wScale: 0.9 });
-      spMode = 'down'; rate = 10;
+      // down on one knee and a hand, head low enough to reach
+      const up = clamp((this.t - (this.dur - 0.7)) / 0.7, 0, 1);
+      Object.assign(T, { hipY: lerp(0.5, 0.8, up), thL: -1.3, knL: 1.45, thR: 0.3, knR: 1.75, tX: lerp(0.75, 0.3, up), hX: lerp(0.7, 0.2, up), sRx: -0.3, eR: -0.3, sLx: lerp(-1.2, -0.4, up), sLz: 0.3, eL: -0.1, fold: 0.85, wScale: 0.85 });
+      spMode = 'down'; rate = this.t < 0.3 ? 14 : 6;
       if (this.t > this.dur) this.go('idle');
+    } else if (st === 'flinch') {
+      const k = Math.sin(clamp(this.t / this.dur, 0, 1) * Math.PI);
+      Object.assign(T, { tX: -0.45 * k, hX: -0.55 * k, sLz: 0.4 + 0.8 * k, sRz: -0.4 - 0.8 * k, sLx: -0.3, sRx: -0.5, hipY: 0.95 - 0.08 * k, thL: 0.25 * k, knR: 0.4 * k, fold: 0.2, wScale: 1.1, wLift: 0.3 * k });
+      rate = 12;
+      if (this.t > this.dur) this.go('idle');
+    } else if (st === 'clash') {
+      // weapons locked: it bears down on you
+      Object.assign(T, { sRx: -1.15, sLx: -1.05, sRz: -0.15, sLz: 0.15, eR: -0.3, eL: -0.35, tX: 0.5, hX: 0.25, hipY: 0.8, thL: -0.6, knL: 0.75, thR: 0.45, knR: 0.55, fold: 0.1, wScale: 1.2, wLift: 0.3 });
+      rate = 10;
+      if (Math.random() < 0.3) { this.anchor('weapon', _a); G.burst(G.FX.sparks, _a.x, _a.y, _a.z, 2, { speed: 4, up: 1, life: 0.4, size: 0.8, c: [2.2, 1.5, 0.7] }); }
     } else if (st === 'dying') {
       const k = clamp(this.t / 2.0, 0, 1);
       Object.assign(T, { hipY: lerp(0.95, 0.52, k), thL: -1.35 * k, knL: 1.45 * k, thR: 0.25, knR: 1.75 * k, tX: 0.32 + 0.2 * k, hX: 0.55 * k, sRx: -0.55, eR: -0.7, sLx: -0.55, sLz: -0.15, eL: -0.75, fold: 0.2, wScale: 1.0 });
@@ -349,6 +452,18 @@ export class Boss {
     // keep the player outside the body
     const pd = Math.hypot(P.pos.x - this.pos.x, P.pos.z - this.pos.z);
     if (pd < 1.7 && pd > 0.01 && Math.abs(P.pos.y - this.pos.y) < 6) { P.pos.x = this.pos.x + (P.pos.x - this.pos.x) / pd * 1.7; P.pos.z = this.pos.z + (P.pos.z - this.pos.z) / pd * 1.7; }
+    // wounds: a glowing gash on the part, brighter in focus mode; scars heal over time
+    for (const p of Object.values(this.parts)) {
+      if (p.scar > 0) p.scar -= edt;
+      const on = p.wound && this.engaged && !this.dead;
+      p.spr.visible = on;
+      if (on) {
+        this.anchor(p.k, p.spr.position);
+        const f = G.P.focus ? 1 : 0, pulse = 0.75 + Math.sin(this.t * 7 + p.max) * 0.25;
+        p.spr.scale.setScalar((1.3 + f * 0.8) * pulse * (this.cfg.scale / 3));
+        p.spr.material.opacity = (0.55 + f * 0.45) * pulse;
+      }
+    }
     // pose
     for (const k of KEYS) this.c[k] = damp(this.c[k], T[k], rate, edt);
     this.updateDecal();

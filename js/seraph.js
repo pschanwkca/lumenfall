@@ -428,10 +428,14 @@ export class SeraphAnimator {
     const A = S.atk;
     if (A && A.kind) {
       const wp = S.wpn || 'spear', gs = wp === 'greatsword';
-      const k = A.kind, a = easeOut(A.t / ((A.kind === 'heavy' ? 0.14 : 0.2) * (gs ? 1.7 : 1))), rec = clamp((A.t - A.dur * 0.62) / (A.dur * 0.38), 0, 1);
+      // wind-up coils slowly into the pose, the swing snaps through on the hit, the recovery drifts back
+      const k = A.kind, hitT = A.hit ?? 0.1, sw = A.sw ?? 0.1, s0 = Math.max(0, hitT - sw);
+      const a = easeOut(clamp((A.t - s0) / (sw * 1.35), 0, 1)), wind = s0 > 0 ? clamp(A.t / s0, 0, 1) : 1;
+      const rec = clamp((A.t - Math.max(A.dur * 0.62, (A.last ?? hitT) + 0.12)) / (A.dur * 0.3), 0, 1);
       const W = (x, y) => lerp(x, y, a);
-      T.thL = -0.45; T.thR = 0.32; T.knL = 0.25; T.knR = 0.35; T.hipY = 0.9; T.hipX = 0;
-      spMode = 'arm'; T.fold = 0.7; T.wScale = 0.82; T.hand = 0.45; T.spread = 0.5; rate = 34;
+      T.thL = -0.45; T.thR = 0.32; T.knL = 0.25; T.knR = 0.35; T.hipY = 0.9 - (1 - a) * wind * (gs ? 0.06 : 0.035); T.hipX = 0;
+      spMode = 'arm'; T.fold = 0.7; T.wScale = 0.82; T.hand = 0.45; T.spread = 0.5;
+      rate = A.t < s0 ? (gs ? 7 : 11) : 34;
       if (gs && (k === 'l0' || k === 'l1')) {
         // the greatsword: two-handed diagonal cleaves, the whole body turning into it
         const f = k === 'l0';
@@ -441,7 +445,7 @@ export class SeraphAnimator {
         T.thL = -0.65; T.knL = 0.65; T.thR = 0.5; T.knR = 0.55; T.hipY = 0.86;
       } else if (gs && (k === 'l3' || k === 'heavy')) {
         // overhead slam: lift it high, hang there, then bring it down into the ground
-        const T0 = A.dur * 0.38, up = clamp(A.t / T0, 0, 1), dn = clamp((A.t - T0) / (A.dur * 0.1), 0, 1);
+        const T0 = Math.max(0.05, hitT - 0.12), up = clamp(A.t / T0, 0, 1), dn = clamp((A.t - T0) / 0.12, 0, 1);
         T.sRx = lerp(lerp(-1.0, -3.0, up), -0.55, dn); T.sLx = lerp(lerp(-1.0, -2.9, up), -0.6, dn);
         T.sRz = -0.15; T.sLz = 0.2; T.eR = lerp(-0.6, -0.05, dn); T.eL = lerp(-0.6, -0.1, dn);
         T.tX = lerp(-0.3, 0.55, dn); T.hX = lerp(-0.35, 0.3, dn); T.hipY = lerp(0.96, 0.78, dn);
@@ -458,8 +462,8 @@ export class SeraphAnimator {
       else if (k === 'l1') { T.tY = W(0.7, -0.85); T.sRx = W(-1.6, -1.25); T.sRz = W(0.35, -1.3); T.eR = W(-0.25, -0.05); T.tX = 0.16; T.sLz = 0.6; T.sLx = 0.1; T.eL = -0.5; }
       else if (k === 'l2') { T.tY = -0.2; T.sRx = -0.15; T.sRz = -1.45; T.eR = -0.05; T.tX = 0.12; T.sLz = 1.3; T.sLx = 0.1; T.eL = -0.2; T.thL = -0.3; T.thR = 0.2; T.fold = 0.15; T.wScale = 1.0; }
       else if (k === 'l3' || k === 'heavy') { T.tY = W(-0.45, 0.12); T.sRx = W(-1.0, -1.62); T.sRz = W(-0.4, -0.05); T.eR = W(-1.6, 0.0); T.tX = W(0.0, 0.34); T.thL = -0.8; T.knL = 0.55; T.thR = 0.5; T.sLz = 0.7; T.sLx = 0.3; T.eL = -0.3; T.fold = k === 'heavy' ? -0.05 : 0.2; T.wScale = k === 'heavy' ? 1.1 : 0.9; T.hand = k === 'heavy' ? 0.08 : 0.3; T.spread = k === 'heavy' ? 1.05 : 0.7; }
-      else if (k === 'counter') {
-        const up = clamp(A.t / 0.22, 0, 1), dn = clamp((A.t - 0.26) / 0.12, 0, 1);
+      else if (k === 'counter' || k === 'focus') {
+        const up = clamp(A.t / Math.max(0.08, hitT - 0.08), 0, 1), dn = clamp((A.t - (hitT - 0.04)) / 0.12, 0, 1);
         T.sRx = lerp(lerp(-1.2, -2.9, up), -0.9, dn); T.sRz = -0.2; T.eR = -0.1; T.sLx = lerp(-2.4, -0.6, dn); T.sLz = 0.4; T.eL = -0.3;
         T.tX = lerp(-0.25, 0.42, dn); T.hX = lerp(-0.4, 0.2, dn); T.hipY = lerp(0.98, 0.84, dn); T.fold = -0.1; T.wScale = 1.2; T.wLift = 0.3; T.hand = 0.05; T.spread = 1.15;
       }
@@ -762,7 +766,7 @@ export class SeraphActor {
       const up = lerp(-0.5, 0.22 + c.wLift - c.fold * 0.18 + c.flap, e1) + rise + sUp - s * this.bank * 0.42;
       const pitch = lerp(0.62, c.fold * 0.42 - c.wLift * 0.3, e1) + sPitch;
       w.root.rotation.set(pitch, s * fold * 1.32, s * up);
-      w.root.scale.setScalar(Math.max(0.001, c.wScale * sc * (1 + over * 0.35)));
+      w.root.scale.setScalar(Math.max(0.001, c.wScale * sc * (this.wingK ?? 1) * (1 + over * 0.35)));
       // the wrist: folded, the hand lies back along the arm with its primaries drooping
       const hf = clamp(lerp(1, c.hand, Math.min(e2, 1.3)) + sHand + (gl ? -s * this.bank * 0.06 : 0), -0.08, 1.05);
       w.hand.rotation.set(-hf * 0.2, hf * 2.7, -hf * 0.32);

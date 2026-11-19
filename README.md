@@ -83,6 +83,22 @@ Sized after Monster Hunter's hunt HUD so the scene stays the subject:
 - The crater's pillar sleeps (a faint thread of light) until Camael's echo has spoken, so the sky cannot be reached early;
   arriving in the sky early (old saves) points you back down
 
+## Hunt combat (v1.6, after Monster Hunter Wilds)
+
+- **Weight**: every attack has a readable wind-up, a fast swing on the hit frame and a recovery you commit to. A roll
+  pressed during the wind-up is buffered until the blow lands. Damage per hit is higher so fights last as long.
+- **Hit feel**: an impact flash and slash streak at the point of contact, hitstop by weight (light 0.065 s, finishers
+  0.1 s, charged / counter 0.15 s; greatsword ×1.3), a camera kick on heavy blows, orange numbers on weak spots.
+- **Parts**: each boss has halo/head (×1.35, reachable when it is down), wings (from behind), weapon (while buried
+  after a slam) and legs. Breaking the wings stops leaps and volleys, the halo stops the ring, the weapon shortens its
+  reach; each break gives a flask back. Damage to the legs trips it.
+- **Wounds and focus mode**: enough damage on a part opens a glowing wound (×1.25 damage). Hold lock (desktop: C) for
+  focus mode: an over-the-shoulder camera and reticle that names the part; attacking a wound is a focus strike that
+  bursts it for heavy damage and makes the boss reel.
+- **Offset and power clash**: a heavy blow (charged, finisher, counter, focus strike) landing as the boss's own sweep
+  lands cancels it and knocks it down; meeting an overhead slam (or guarding one with the shield) starts a power clash —
+  mash attack to drive it back and floor it.
+
 ## Chapter I pacing (v1.5)
 
 The mortal world's main road is three people on the way to the knight, each pointing to the next:

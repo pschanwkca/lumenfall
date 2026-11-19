@@ -839,6 +839,29 @@ html.desk #qMark b{font-size:10px;top:12px}
 #mapList li.camp .tp:disabled{opacity:.4;cursor:default}
 /* side quests carry 支線 in their name now: their counts read like any other */
 .qrow.side b{font-family:var(--cin)!important;letter-spacing:.06em!important;padding:0!important;box-shadow:none!important}
+
+/* ---- combat v1.6: weak-spot numbers, focus reticle, power clash */
+.dn.weak{font-size:19px;color:#ffb36b;text-shadow:0 0 8px rgba(255,120,40,.95),0 1px 0 #7a3a12,0 0 1px #3a1a08}
+#focusRet{position:absolute;left:50%;top:50%;width:0;height:0;opacity:0;transition:opacity .2s;pointer-events:none}
+#focusRet.on{opacity:1}
+#focusRet i{position:absolute;border-radius:50%}
+#focusRet .r1{left:-17px;top:-17px;width:34px;height:34px;box-shadow:inset 0 0 0 1.5px rgba(255,246,222,.9),0 0 8px rgba(255,220,150,.6);transition:transform .2s,box-shadow .2s}
+#focusRet .r2{left:-26px;top:-26px;width:52px;height:52px;border:1px dashed rgba(255,240,205,.55);animation:retSpin 6s linear infinite}
+#focusRet .c{left:-2px;top:-2px;width:4px;height:4px;background:#fff6dc;box-shadow:0 0 6px #ffd98a}
+#focusRet span{position:absolute;left:24px;top:-26px;white-space:nowrap;font:600 11px var(--serif);letter-spacing:.2em;color:#fffaf0;
+  text-shadow:0 1px 2px rgba(40,28,10,.9),0 0 1px rgba(40,28,10,.95)}
+#focusRet.lock .r1{transform:scale(.8)}
+#focusRet.wound .r1{box-shadow:inset 0 0 0 2px #ff8a4a,0 0 14px rgba(255,90,40,.9)}
+#focusRet.wound span{color:#ffc79a}
+@keyframes retSpin{to{transform:rotate(360deg)}}
+#clash{position:absolute;left:50%;top:76%;transform:translate(-50%,-50%) scale(.9);opacity:0;transition:opacity .15s,transform .15s;pointer-events:none;text-align:center}
+#clash.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
+#clash .t{font:600 15px var(--serif);letter-spacing:.4em;color:#fffaf0;text-shadow:0 1px 3px rgba(40,28,10,.9)}
+#clash .t small{display:block;font:500 8px var(--cin);letter-spacing:.4em;margin-top:2px}
+#clash .bar{position:relative;width:220px;height:8px;margin:8px auto 6px;background:rgba(40,28,14,.55);box-shadow:inset 0 0 0 1px rgba(255,236,190,.8)}
+#clash .bar i{position:absolute;left:1px;top:1px;bottom:1px;right:1px;transform-origin:left;background:linear-gradient(90deg,#e3a24a,#fff0c4);box-shadow:0 0 10px rgba(255,200,120,.9)}
+#clash .h{font:500 11px var(--serif);letter-spacing:.3em;color:#ffe6b0;text-shadow:0 1px 2px rgba(40,28,10,.9);animation:breathe .5s infinite}
+#bLock.focus{box-shadow:0 0 0 2px #ffcf8a,0 0 16px rgba(255,190,110,.9)!important}
 </style>
 <script>
 (() => {
@@ -927,6 +950,8 @@ html.desk #qMark b{font-size:10px;top:12px}
   <div id="lvUp" class="hidden"><div class="emb"><svg viewBox="0 0 132 132"><g class="fx"><path transform="rotate(0 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(30 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(60 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(90 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(120 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(150 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(180 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(210 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(240 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(270 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(300 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/><path transform="rotate(330 66 66)" d="M66 6c3 6 3 12 0 18c-3-6-3-12 0-18z"/></g><circle class="r1" cx="66" cy="66" r="44"/><g class="r1"><path transform="rotate(0 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(15 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(30 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(45 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(60 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(75 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(90 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(105 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(120 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(135 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(150 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(165 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(180 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(195 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(210 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(225 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(240 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(255 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(270 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(285 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(300 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(315 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(330 66 66)" d="M66 12v7" stroke="#d7b468" stroke-width=".8"/><path transform="rotate(345 66 66)" d="M66 12v4" stroke="#d7b468" stroke-width=".8"/></g><circle class="r2" cx="66" cy="66" r="52"/><circle class="r1" cx="66" cy="66" r="36" opacity=".5"/></svg><div class="num"><small id="lvSmall">LEVEL</small><b id="lvNum">2</b><em id="lvFromRow">Lv <span id="lvFrom">1</span> →</em></div></div><div class="k" id="lvK">LEVEL UP</div><div class="t" id="lvT">光羽之力 · 增強</div><ul id="lvStats"></ul><div class="perk" id="lvPerk"></div></div>
   <div id="hpw" class="ctl"><span class="l">HP</span><div class="bar"><div id="hpd"></div><div id="hpf"></div></div><span id="hpn">100 / 100</span></div>
   <div id="stw" class="ctl"><i id="stf"></i></div>
+  <div id="focusRet"><i class="r1"></i><i class="r2"></i><i class="c"></i><span id="focusLbl"></span></div>
+  <div id="clash"><div class="t">力量對抗<small>POWER CLASH</small></div><div class="bar"><i id="clashF"></i></div><div class="h">連按攻擊</div></div>
   <div id="qMark" class="ctl"><i class="dm"></i><span id="qMarkA"><i></i></span><b id="qMarkD"></b></div>
   <svg id="stam" viewBox="0 0 44 44"><defs><linearGradient id="stg" x1="0" x2="1"><stop offset="0" stop-color="#e6c57a"/><stop offset="1" stop-color="#fff6dc"/></linearGradient></defs><circle class="tr" cx="22" cy="22" r="18"/><circle id="stArc" class="ar" cx="22" cy="22" r="18"/></svg>
   <div id="joy" class="ctl"><div id="joyBase"><div id="joyKnob"></div></div></div>
@@ -976,7 +1001,7 @@ html.desk #qMark b{font-size:10px;top:12px}
     </nav>
   </div>
   <div id="tapHint"><span class="c t-only">觸碰開始</span><span class="e t-only">TAP TO BEGIN</span><span class="c d-only">點擊或按任意鍵開始</span><span class="e d-only">PRESS ANY KEY</span></div>
-  <div class="corner bl">PROTOTYPE · v1.5 · 黎恩</div>
+  <div class="corner bl">PROTOTYPE · v1.6 · 黎恩</div>
   <div class="corner br t-only">MOBILE · LANDSCAPE</div><div class="corner br d-only">DESKTOP · KEYBOARD &amp; MOUSE</div>
 </div>
 
@@ -1085,7 +1110,7 @@ html.desk #qMark b{font-size:10px;top:12px}
         <dt>攻擊</dt><dd>連按四段連擊・長按蓄力重擊</dd>
         <dt>閃避</dt><dd>翻滾閃避・剛好避開 → 聖時慢動作・按住衝刺</dd>
         <dt>聖裁</dt><dd>聖時內按攻擊，發動反擊</dd>
-        <dt>鎖定</dt><dd>鎖定最近敵人／大型 Boss</dd>
+        <dt>鎖定</dt><dd>輕按鎖定・按住進入集中模式，對準傷口攻擊</dd>
         <dt>聖環　聖瓶</dt><dd>範圍淨化　回復生命</dd></dl></div>
     </div>
     <div class="cols d-only">
@@ -1105,6 +1130,7 @@ html.desk #qMark b{font-size:10px;top:12px}
         <dt><i class="key">Q</i></dt><dd>聖環・範圍淨化</dd>
         <dt><i class="key">R</i></dt><dd>光露・回復生命</dd>
         <dt><i class="key">TAB</i> 中鍵</dt><dd>鎖定最近敵人／大型 Boss</dd>
+        <dt><i class="key">C</i></dt><dd>按住集中模式・對準傷口攻擊 → 集中一擊</dd>
         <dt>空中右鍵</dt><dd>收翼俯衝</dd></dl></div>
     </div>
     <p class="note">收集光羽就會升 Lv（生命、攻擊提升）。旅程由人間的晨鐘堡開始，<br>跟住故事同線索走，武器、能力同父親的翅膀都會在路上逐一得到。</p>
