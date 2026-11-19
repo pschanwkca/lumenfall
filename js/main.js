@@ -37,7 +37,7 @@ const settings = Object.assign({ quality: isTouch ? 'mid' : 'high', sound: true,
 const TEST = Object.assign({ on: false, god: false, oneHit: false, powers: false, coords: false }, store.get('lumenfall_test', {}));
 const progKey = () => (TEST.on ? 'lumenfall_progress_test' : 'lumenfall_progress');
 let prog = Object.assign({ f: [], s: [false, false, false, false], end: false, boss: false, boss2: false, boss3: false, realm: false, earth: false, weapon: 'sword', kills: {}, seen: {}, broken: {}, rescued: {}, beacons: {} }, store.get(progKey(), {}));
-if (!prog.rescued) prog.rescued = {}; if (!prog.beacons) prog.beacons = {};
+if (!prog.rescued) prog.rescued = {}; if (!prog.beacons) prog.beacons = {}; if (!prog.vigil) prog.vigil = {}; if (!prog.tips) prog.tips = {}; if (!prog.chests) prog.chests = {};
 // weapons are found in the world now; a journey that already beat Ophiel keeps the greatsword it was given
 if (!prog.weapons) prog.weapons = prog.end || prog.earth || prog.f.length ? { spear: true, greatsword: !!prog.boss } : {}; // older journeys keep the lance they woke with
 prog.weapons.sword = true; // the father's sword: everyone sets out with it
@@ -177,7 +177,10 @@ const ATK_SW = {
 const ATK_SW_DULL = Object.fromEntries(Object.entries(ATK_SW).map(([k, a]) => [k, { ...a, dmg: a.dmg.map((d) => d * 0.8) }]));
 // how long the swing itself takes (the rest of the time before `hits` is the wind-up)
 const SWING = { sword: 0.09, spear: 0.08, tianshu: 0.08, greatsword: 0.15 };
-const atkT = () => (prog.weapon === 'greatsword' ? ATK_GS : prog.weapon === 'tianshu' ? ATK_TS : prog.weapon === 'sword' ? (prog.swordLit ? ATK_SW : ATK_SW_DULL) : ATK);
+// a weapon found in a chest fights in one of the three forms (sword, lance, greatsword), with its own edge
+const wbase = (w = prog.weapon) => (WEAPON_INFO[w] && WEAPON_INFO[w].base) || w;
+const wperk = () => WEAPON_INFO[prog.weapon] || {};
+const atkT = () => { const b = wbase(); return b === 'greatsword' ? ATK_GS : b === 'tianshu' ? ATK_TS : b === 'sword' ? (prog.swordLit || prog.weapon !== 'sword' ? ATK_SW : ATK_SW_DULL) : ATK; };
 // how each weapon looks and lands: slash light, trail, thrust streak, impact sparks, hit-stop
 const WLOOK = {
   spear: { a: [0.95, 0.66, 0.26], b: [2.2, 1.9, 1.35], lance: [2.2, 1.7, 0.95], spark: [1.9, 1.6, 1.0], stop: 0.035, shake: 0.06 },
@@ -186,7 +189,12 @@ const WLOOK = {
 };
 WLOOK.sword = { a: [0.72, 0.72, 0.74], b: [1.65, 1.66, 1.7], lance: [1.7, 1.7, 1.75], spark: [1.7, 1.65, 1.5], stop: 0.04, shake: 0.08 };
 WLOOK.holysword = { a: [1.05, 0.72, 0.28], b: [2.4, 2.0, 1.3], lance: [2.2, 1.7, 0.95], spark: [2.1, 1.7, 1.0], stop: 0.045, shake: 0.1 };
-const wlook = () => (prog.weapon === 'sword' ? (prog.swordLit ? WLOOK.holysword : WLOOK.sword) : WLOOK[prog.weapon] || WLOOK.spear);
+WLOOK.knight = { a: [0.55, 0.66, 1.0], b: [1.8, 2.0, 2.4], lance: [1.6, 1.8, 2.3], spark: [1.7, 1.85, 2.2], stop: 0.045, shake: 0.09 };
+WLOOK.fallen = { a: [1.2, 0.25, 0.08], b: [2.6, 0.9, 0.4], lance: [2.4, 0.8, 0.35], spark: [2.6, 0.9, 0.35], stop: 0.055, shake: 0.12 };
+WLOOK.keeper = { a: [0.85, 0.7, 0.45], b: [2.0, 1.85, 1.5], lance: [2.0, 1.8, 1.3], spark: [1.9, 1.7, 1.2], stop: 0.035, shake: 0.06 };
+WLOOK.watcher = { a: [1.0, 0.9, 0.7], b: [2.5, 2.35, 2.0], lance: [2.4, 2.2, 1.8], spark: [2.3, 2.1, 1.7], stop: 0.04, shake: 0.07 };
+WLOOK.bell = { a: [1.25, 0.6, 0.15], b: [2.7, 1.8, 0.7], lance: [2.5, 1.5, 0.55], spark: [2.6, 1.6, 0.6], stop: 0.08, shake: 0.26 };
+const wlook = () => (prog.weapon === 'sword' ? (prog.swordLit ? WLOOK.holysword : WLOOK.sword) : WLOOK[prog.weapon] || WLOOK[wbase()] || WLOOK.spear);
 function applyWeaponLook() {
   const L = wlook();
   if (FX.arc) { FX.arc.mat.uniforms.uA.value.set(...L.a); FX.arc.mat.uniforms.uB.value.set(...L.b); }
@@ -298,6 +306,8 @@ const Audio = {
       case 'shrine': [60, 67, 72, 76, 79, 84].forEach((x, i) => this.bell(m(x), 0.1, 4, i * 0.12)); this.noise(1.6, 150, 2400, 0.12, 0.5); break;
       case 'ui': this.bell(m(91), 0.05, 0.6); break;
       case 'land': this.thud(60, 0.12); break;
+      case 'grab': this.noise(0.12, 900, 380, 0.08, 0.8); this.thud(110, 0.05); break;
+      case 'climb': this.noise(0.07, 1300, 520, 0.035, 0.7); break;
       case 'charge': this.noise(0.9, 180, 1500, 0.07, 0.8); break;
       case 'perfect': this.noise(0.5, 2400, 500, 0.12, 1); [84, 91, 96].forEach((x, i) => this.bell(m(x), 0.08, 2.5, i * 0.06)); break;
       case 'roar': this.thud(45, 0.5); this.noise(1.6, 120, 600, 0.25, 0.6); break;
@@ -1251,12 +1261,36 @@ function support(x, z, y) {
   const wl = waterAt(x, z); if (h < wl) { h = wl; water = true; }
   const ph = padHeightAt(x, z, y);
   if (ph > h) { h = ph; water = false; }
+  for (const c of colliders.solids) { // the tops of rocks, trees, roofs and towers can be stood on
+    if (c.noStand || c.y1 <= h || y < c.y0 || (y < c.y1 - 60 && !c.terrain)) continue;
+    const rq = (c.rq ?? c.r) + 4; if (Math.abs(x - c.x) > rq || Math.abs(z - c.z) > rq) continue;
+    const t = solidTop(c, x, z);
+    if (t > h && (c.terrain || y >= t - 0.75)) { h = t; water = false; } // a 'terrain' solid (the colossus' robe) is ground, like a hill
+  }
   return { h, water };
+}
+// standing height of a solid's top at (x, z) (-1e9 off it): a flat disc, or a box's own roof profile
+function solidTop(c, x, z) {
+  const dx = x - c.x, dz = z - c.z;
+  if (c.bx) { const B = c.bx; return c.top(dx * B.cs - dz * B.sn, dx * B.sn + dz * B.cs); }
+  if (c.topf) return c.topf(dx, dz);
+  const sr = c.sr ?? c.r; return dx * dx + dz * dz < sr * sr ? (c.st ?? c.y1) : -1e9;
 }
 function pushOut(pos, rad, prevY = pos.y) {
   const py = Math.max(pos.y, prevY);
   for (const c of colliders.solids) {
-    if (pos.y > c.y1 || pos.y + 1.7 < c.y0) continue;
+    if (pos.y > c.y1 || pos.y + 1.7 < c.y0 || c.terrain) continue;
+    if (c.bx) { // a house or hall: a real box, so he meets its walls rather than a circle around it
+      const B = c.bx, dx = pos.x - c.x, dz = pos.z - c.z;
+      let lx = dx * B.cs - dz * B.sn, lz = dx * B.sn + dz * B.cs;
+      const ex = B.hw + rad, ez = B.hd + rad, ax = Math.abs(lx), az = Math.abs(lz);
+      if (ax >= ex || az >= ez) continue;
+      if (!c.noStand && py >= c.top(clamp(lx, -B.hw, B.hw), clamp(lz, -B.hd, B.hd)) - 0.75) continue;
+      if (ex - ax < ez - az) lx = Math.sign(lx) * ex; else lz = Math.sign(lz) * ez;
+      pos.x = c.x + lx * B.cs + lz * B.sn; pos.z = c.z - lx * B.sn + lz * B.cs;
+      continue;
+    }
+    if (!c.noStand && py >= (c.st ?? c.y1) - 0.75) continue; // on (or stepping up onto) its top
     const dx = pos.x - c.x, dz = pos.z - c.z, rr = c.r + rad, d2 = dx * dx + dz * dz;
     if (d2 < rr * rr && d2 > 1e-8) { const d = Math.sqrt(d2); pos.x = c.x + (dx / d) * rr; pos.z = c.z + (dz / d) * rr; }
   }
@@ -1269,6 +1303,144 @@ function pushOut(pos, rad, prevY = pos.y) {
   }
 }
 
+// ------------------------------------------------------------------ climbing: any wall, tower, tree, roof or island face
+// (as in the wilds of Hyrule) stamina is the only limit; at the top he hauls himself over, on the way he can leap
+const CLIMB = { gap: 0.4, sp: 2.5, drain: 7.5, jumpCost: 18 };
+const _wt = { d: 0, nx: 0, nz: 0, top: 0, bot: 0 }, _ws = { c: null, pad: false, d: 0, nx: 0, nz: 0, top: 0, bot: 0 };
+function wallSurf(c, pad, x, z, o) { // distance to a surface, its outward normal and the height of its top there
+  const dx = x - c.x, dz = z - c.z;
+  if (c.bx) {
+    const B = c.bx, lx = dx * B.cs - dz * B.sn, lz = dx * B.sn + dz * B.cs, qx = Math.abs(lx) - B.hw, qz = Math.abs(lz) - B.hd;
+    let ax, az;
+    if (qx > 0 && qz > 0) { o.d = Math.hypot(qx, qz); ax = Math.sign(lx) * qx / o.d; az = Math.sign(lz) * qz / o.d; }
+    else if (qx > qz) { o.d = qx; ax = Math.sign(lx); az = 0; } else { o.d = qz; ax = 0; az = Math.sign(lz); }
+    o.nx = ax * B.cs + az * B.sn; o.nz = -ax * B.sn + az * B.cs;
+    o.top = c.top(clamp(lx, -B.hw, B.hw), clamp(lz, -B.hd, B.hd)); o.bot = c.y0;
+    return o;
+  }
+  const dd = Math.hypot(dx, dz) || 1e-6, rr = c.rf ? c.rf(Math.atan2(dz, dx)) : c.r;
+  o.d = dd - rr; o.nx = dx / dd; o.nz = dz / dd;
+  o.top = pad ? (c.dyn ? c.dyn() : c.top) : (c.st ?? c.y1); o.bot = pad ? (c.bot ?? -1e9) : c.y0;
+  return o;
+}
+// the wall in front of him (facing fx, fz) within reach, or null
+function findWall(x, y, z, fx, fz, reach, face = 0.55) {
+  let best = null, bd = reach;
+  const test = (c, pad) => {
+    const rq = (c.rq ?? c.r) + reach + 1; if (Math.abs(x - c.x) > rq || Math.abs(z - c.z) > rq) return;
+    wallSurf(c, pad, x, z, _wt);
+    if (_wt.d > bd || _wt.d < -0.4) return;
+    if (-(fx * _wt.nx + fz * _wt.nz) < face) return;
+    if (y >= _wt.top - 0.75 || y + 1.6 < _wt.bot) return;
+    bd = _wt.d; Object.assign(_ws, _wt); _ws.c = c; _ws.pad = pad; best = _ws;
+  };
+  for (const c of colliders.solids) if (!c.noClimb && !c.terrain && c.y1 > -1e8 && y <= c.y1 && y + 1.6 >= c.y0) test(c, false);
+  for (const p of colliders.pads) if (!p.noClimb) test(p, true);
+  return best;
+}
+function canGrab() {
+  return state === 'play' && !paused && !P.clash && !P.atk.kind && P.rollT < 0 && P.dashT <= 0 && P.castT < 0 && P.healT < 0 && P.charge < 0 &&
+    !P.lock && !P.focus && P.stamina > 1 && P.inv < 0.5 && P.hurtT <= 0 && !(P.climbCd > 0);
+}
+function startClimb(w) {
+  P.climb = { c: w.c, pad: w.pad, nx: w.nx, nz: w.nz, top: w.top, mv: 0, pull: -1, leap: 0, t: 0, step: 0 };
+  P.glide = false; P.grounded = false; P.sprinting = false; P.vel.set(0, 0, 0);
+  P.yaw = Math.atan2(-w.nx, -w.nz);
+  P.pos.x -= w.nx * (w.d - CLIMB.gap); P.pos.z -= w.nz * (w.d - CLIMB.gap);
+  P.staminaDelay = 0.6; Audio.sfx('grab');
+  if (!prog.tips.climb) { prog.tips.climb = true; save(); setTimeout(() => toast(isTouch ? '<i class="dia"></i>攀爬中 · 推搖桿上下左右爬 · 跳躍向上躍 · 閃避放手' : '<i class="dia"></i>攀爬中 · WASD 上下左右爬 · SPACE 向上躍 · SHIFT 放手', true), 200); }
+  burst(FX.smoke, P.pos.x - w.nx * 0.35, P.pos.y + 1.3, P.pos.z - w.nz * 0.35, 5, { speed: 1.2, up: 0.3, life: 0.6, size: 0.8, c: C.LAYER.cur === 2 ? [0.42, 0.26, 0.22] : [0.92, 0.88, 0.8] });
+}
+function letGo(push = 1.6, vy = 0) {
+  const K = P.climb; if (!K) return;
+  P.climb = null; P.climbCd = 0.35;
+  P.vel.set(K.nx * push, vy, K.nz * push);
+}
+// pressing into a wall on the ground (a beat, so brushing past trees doesn't grab them) or in the air (at once)
+function tryGrab(dt, wish, mag) {
+  if (P.climb || !canGrab() || mag < 0.45) { P.grabT = 0; return; }
+  const fx = wish.x / mag, fz = wish.z / mag;
+  const w = findWall(P.pos.x, P.pos.y, P.pos.z, fx, fz, P.grounded ? 0.48 : 0.62, P.grounded ? 0.72 : 0.5);
+  if (!w) { P.grabT = 0; return; }
+  if (P.grounded && w.top - P.pos.y < 0.75) { P.grabT = 0; return; }
+  P.grabT = (P.grabT || 0) + dt;
+  if (!P.grounded || P.grabT > (w.top - P.pos.y < 2.1 ? 0.06 : 0.2)) { P.grabT = 0; startClimb(w); }
+}
+function climbMove(dt) {
+  const K = P.climb;
+  K.t += dt;
+  if (K.pull >= 0) { P.vel.set(0, 0, 0); return; } // hauling over the top: the position is driven below
+  // stick up = climb up; sideways follows the camera so it never feels mirrored
+  let up = move.y, side = move.x;
+  const rx = K.nz, rz = -K.nx;
+  if (Math.cos(CAM.yaw) * rx - Math.sin(CAM.yaw) * rz < 0) side = -side;
+  const m = Math.hypot(up, side);
+  let vy = 0, vs = 0;
+  if (K.leap > 0) { // a climbing leap: a burst up (or sideways) the wall
+    K.leap -= dt;
+    const k = Math.sin(clamp(K.leap / 0.38, 0, 1) * Math.PI) * 1.6;
+    vy = K.ldy * 7 * k; vs = K.ldx * 7 * k;
+    K.mv = 1;
+  } else if (m > 0.15) {
+    const k = Math.min(1, m) * CLIMB.sp;
+    vy = (up / m) * k; vs = (side / m) * k;
+    P.stamina -= CLIMB.drain * dt * Math.min(1, m); P.staminaDelay = 0.6;
+    K.mv = damp(K.mv, 1, 10, dt);
+    const ph0 = P.phase; P.phase += dt * 5.2 * Math.min(1, m);
+    if (Math.floor(ph0 / Math.PI) !== Math.floor(P.phase / Math.PI)) { Audio.sfx('climb'); if (Math.random() < 0.4) emit(FX.smoke, { x: P.pos.x - K.nx * 0.4, y: P.pos.y + 1.8, z: P.pos.z - K.nz * 0.4, vy: -0.6, life: 0.7, s: 0.5, g: 0.6, c: C.LAYER.cur === 2 ? [0.42, 0.26, 0.22] : [0.92, 0.88, 0.8], drag: 2 }); }
+  } else K.mv = damp(K.mv, 0, 8, dt);
+  P.vel.set(rx * vs, vy, rz * vs);
+  P.yaw = dampAngle(P.yaw, Math.atan2(-K.nx, -K.nz), 14, dt);
+  if (P.stamina <= 0) { // out of breath: he slips off
+    P.stamina = 0; P.sprintSpent = true; letGo(1.2, -1);
+    CAM.shake = Math.max(CAM.shake, 0.15);
+  }
+}
+// after moving: stay on the wall (turning round towers and corners), haul over at the top, step off at the foot
+function climbAfter(dt) {
+  const K = P.climb;
+  if (K.pull >= 0) {
+    K.pull += dt / 0.55;
+    const u = clamp(K.pull, 0, 1), a = smooth(0, 0.6, u), b = smooth(0.45, 1, u);
+    P.pos.set(lerp(K.p0.x, K.p1.x, b), lerp(K.p0.y, K.p1.y + 0.15, a) - 0.15 * b, lerp(K.p0.z, K.p1.z, b));
+    if (u >= 1) { P.pos.copy(K.p1); P.climb = null; P.grounded = true; P.vel.set(0, 0, 0); P.climbCd = 0.3; rollDust(4, 1); Audio.sfx('land'); }
+    return;
+  }
+  const w = findWall(P.pos.x, P.pos.y, P.pos.z, -K.nx, -K.nz, 1.0, 0.1);
+  const topNow = w ? w.top : K.top;
+  // the top: haul over onto whatever is up there (a ledge, a roof, the crown of a tree), or spring off it
+  if (P.pos.y + 1.25 >= topNow && (move.y > 0.3 || K.leap > 0 || !w)) {
+    const ix = P.pos.x - K.nx * 0.95, iz = P.pos.z - K.nz * 0.95, h = support(ix, iz, topNow + 1.2).h;
+    if (h > topNow - 1.2 && h < topNow + 1.4) {
+      K.pull = 0; K.leap = 0; K.p0 = P.pos.clone(); K.p1 = new THREE.Vector3(ix, h, iz);
+      P.stamina = Math.max(0, P.stamina - 3); Audio.sfx('jump');
+      return;
+    }
+    if (K.c.noStand) { letGo(1.6, 7.5); return; } // a spire or a flame: he springs off it, wings ready
+    letGo(-2.4, 7.5); return; // nothing to stand on: he vaults up and over
+  }
+  if (!w) { letGo(1.2, 0); return; }
+  K.c = w.c; K.pad = w.pad; K.nx = w.nx; K.nz = w.nz; K.top = w.top;
+  P.pos.x -= w.nx * (w.d - CLIMB.gap); P.pos.z -= w.nz * (w.d - CLIMB.gap);
+  // the foot of the wall: climbing down onto the ground just lets go
+  const g = support(P.pos.x + K.nx * 0.3, P.pos.z + K.nz * 0.3, P.pos.y + 0.3).h;
+  if (P.pos.y <= g + 0.02 && move.y < -0.2) { P.pos.y = g; P.climb = null; P.grounded = true; P.climbCd = 0.5; P.vel.set(0, 0, 0); }
+  else if (P.pos.y < g) P.pos.y = g;
+}
+function climbLeap() { // jump while climbing: a leap in the held direction (up by default); away from the wall: kick off
+  const K = P.climb; if (!K || K.pull >= 0 || K.leap > 0) return;
+  let up = move.y, side = move.x;
+  const rx = K.nz, rz = -K.nx;
+  if (Math.cos(CAM.yaw) * rx - Math.sin(CAM.yaw) * rz < 0) side = -side;
+  if (up < -0.6) { letGo(6, 7); P.yaw = Math.atan2(K.nx, K.nz); Audio.sfx('jump'); featherBurst(P.pos.x, P.pos.y + 1.3, P.pos.z, 3, 1.4); return; }
+  if (P.stamina < CLIMB.jumpCost * 0.5) { CAM.shake = Math.max(CAM.shake, 0.08); return; }
+  const m = Math.hypot(up, side);
+  if (m < 0.3) { up = 1; side = 0; } else { up /= m; side /= m; }
+  K.leap = 0.38; K.ldy = Math.max(-0.3, up); K.ldx = side;
+  P.stamina -= CLIMB.jumpCost; P.staminaDelay = 0.9; Audio.sfx('jump');
+  burst(FX.smoke, P.pos.x - K.nx * 0.3, P.pos.y + 0.6, P.pos.z - K.nz * 0.3, 6, { speed: 1.4, up: -0.4, life: 0.6, size: 0.9, c: C.LAYER.cur === 2 ? [0.42, 0.26, 0.22] : [0.92, 0.88, 0.8] });
+}
+
 // ------------------------------------------------------------------ player actions
 let hitstop = 0;
 const move = { x: 0, y: 0 };
@@ -1277,8 +1449,9 @@ function moveWorld(out) {
   out.set(fx * move.y + rx * move.x, 0, fz * move.y + rz * move.x);
   return out;
 }
-function canAct() { return state === 'play' && !paused && !P.clash; }
+function canAct() { return state === 'play' && !paused && !P.clash && !P.climb; }
 function doJump() {
+  if (P.climb && state === 'play' && !paused) { climbLeap(); return; }
   if (!canAct() || P.castT >= 0) return;
   if (P.grounded) {
     P.vel.y = 9.4; P.grounded = false; Audio.sfx('jump');
@@ -1300,6 +1473,7 @@ function flap() {
   Audio.sfx('glide');
 }
 function doDodge() {
+  if (P.climb) { if (state === 'play' && !paused && P.climb.pull < 0) letGo(1.4, 0); return; } // let go of the wall
   const w = moveWorld(_v);
   const noInput = w.lengthSq() < 0.04;
   if (canAct() && P.glide && (noInput || !has('wings'))) { P.glide = false; P.vel.y = Math.min(P.vel.y, -6); featherBurst(P.pos.x, P.pos.y + 1.3, P.pos.z, 4, 1.5); return; } // fold wings: dive
@@ -1386,7 +1560,7 @@ function buildBreakables() {
       const m = new THREE.Mesh(rg, rockMat); m.scale.set(3.4, 2.6, 3.2); m.position.y = 1.6; m.castShadow = m.receiveShadow = true; g.add(m);
     }
     g.position.set(x, y, z); (L ? EARTH.root : scene).add(g);
-    const col = { x, z, r: 3.3, y0: y - 1, y1: y + 6 };
+    const col = { x, z, r: 3.3, y0: y - 1, y1: y + 6, noClimb: true, noStand: true }; // a seal must be broken, not climbed
     colliders.solids.push(col);
     const b = { id, kind, x, y, z, g, col, broken: !!prog.broken[id], need: kind === 'seal' ? 'shield' : 'oath', gate: !feather };
     if (b.broken) { g.visible = false; col.y1 = -1e9; }
@@ -1497,11 +1671,12 @@ function doHit(A) {
   let n = 0;
   for (const e of enemyList()) {
     const dx = e.pos.x - P.pos.x, dz = e.pos.z - P.pos.z, d = Math.hypot(dx, dz), er = e.r || 0.6;
-    if (d - er > A.reach) continue;
+    const WP = wperk(), kd0 = P.atk.kind;
+    if (d - er > A.reach * (WP.reach || 1)) continue;
     if (Math.abs(e.pos.y - P.pos.y) > (e.hy || 2.8)) continue;
     if (A.cone > -1.5 && d > er + 0.8 && (dx * fx + dz * fz) / (d + 1e-5) < A.cone) continue;
-    const dmg = (A.dmg[0] + Math.random() * (A.dmg[1] - A.dmg[0])) * P.atk.mult * P.atkMul;
-    if (!(e.isBoss && bossBlow(e, dmg))) hitEnemy(e, dmg, A.poise * P.atk.mult, P.atk.kind === 'counter' || P.atk.kind === 'heavy' ? 'crit' : '', { aim: P.atk.aim });
+    const dmg = (A.dmg[0] + Math.random() * (A.dmg[1] - A.dmg[0])) * P.atk.mult * P.atkMul * (WP.dmg || 1) * (kd0 === 'counter' ? WP.counter || 1 : kd0 === 'focus' ? WP.focus || 1 : 1);
+    if (!(e.isBoss && bossBlow(e, dmg))) hitEnemy(e, dmg, A.poise * P.atk.mult * (WP.poise || 1), P.atk.kind === 'counter' || P.atk.kind === 'heavy' ? 'crit' : '', { aim: P.atk.aim });
     // the point of impact: on the target's surface, facing you, at chest height
     const hy = e.pos.y + Math.min(2.4, (e.hy || 2.2) * 0.55) * (e.isBoss ? 1 : e.sc || 1), k = (d - er * 0.6) / (d + 1e-5);
     const ix = P.pos.x + dx * k, iz = P.pos.z + dz * k, pw = P.atk.kind === 'counter' || P.atk.kind === 'heavy' ? 1 : P.atk.kind === 'l3' || A.heavyHit ? 0.7 : 0.4;
@@ -1511,7 +1686,7 @@ function doHit(A) {
   }
   if (n) {
     // hitstop by weight: light blows bite, finishers and counters stop the world for a beat
-    const kd = P.atk.kind, tier = kd === 'counter' || kd === 'heavy' ? 0.15 : kd === 'l3' ? 0.1 : 0.065, gs = prog.weapon === 'greatsword' ? 1.3 : 1;
+    const kd = P.atk.kind, tier = kd === 'counter' || kd === 'heavy' ? 0.15 : kd === 'l3' ? 0.1 : 0.065, gs = wbase() === 'greatsword' ? 1.3 : 1;
     hitstop = Math.max(hitstop, tier * gs); CAM.shake = Math.max(CAM.shake, L.shake + tier * 1.6);
     if (tier > 0.09) CAM.kick = -2.6 * gs;
     Audio.sfx(A.heavyHit || tier > 0.09 ? 'hitHeavy' : 'hit');
@@ -1538,7 +1713,7 @@ function slam(A) {
 function startAttack(kind, mult = 1) {
   const A = atkT()[kind];
   P.atk = { kind, t: 0, dur: A.dur, hitsDone: 0, queued: false, mult, combo: COMBO.indexOf(kind), quake: kind === 'heavy' && mult >= 1.6 && has('oath'),
-    hit: A.hits[0], sw: SWING[prog.weapon] || 0.09, last: A.hits[A.hits.length - 1] };
+    hit: A.hits[0], sw: SWING[wbase()] || 0.09, last: A.hits[A.hits.length - 1] };
   const lead = Math.max(0, A.hits[0] - P.atk.sw); // the effects wait for the swing, not the wind-up
   let tgt = P.lock && !P.lock.dead ? P.lock : nearestEnemy(7, -0.2);
   if (kind === 'focus' && P.aim) { tgt = P.aim.e; P.atk.aim = P.aim.part; P.aim.e.anchor(P.aim.part, _v); P.yaw = Math.atan2(_v.x - P.pos.x, _v.z - P.pos.z); }
@@ -1557,7 +1732,7 @@ function startAttack(kind, mult = 1) {
   if (A.arc) {
     Ar.t = -lead; Ar.g.visible = false; Ar.g.rotation.y = P.yaw; Ar.tilt.rotation.set(...A.arc.tilt);
     Ar.mat.uniforms.uT0.value = A.arc.t0; Ar.mat.uniforms.uLen.value = A.arc.len; Ar.mat.uniforms.uRev.value = A.arc.rev;
-    Ar.g.scale.setScalar((kind === 'counter' ? 1.45 : kind === 'l2' ? 1.1 : 1) * (prog.weapon === 'greatsword' ? 1.4 : 1));
+    Ar.g.scale.setScalar((kind === 'counter' ? 1.45 : kind === 'l2' ? 1.1 : 1) * (wbase() === 'greatsword' ? 1.4 : 1));
   }
   if (A.thrust) { const L = FX.lance; L.t = -lead; L.g.visible = false; L.g.rotation.y = P.yaw; L.g.scale.setScalar(kind === 'heavy' ? 1.5 + (mult - 1) : A.lanceS || 1); }
   if (A.slam) { featherBurst(P.pos.x, P.pos.y + 2.2, P.pos.z, 4, 1.5); CAM.shake = Math.max(CAM.shake, 0.06); }
@@ -1686,6 +1861,7 @@ function hurtPlayer(dmg, from, fromBoss) {
     return;
   }
   if (P.inHell && !holyBlade()) dmg *= 3;
+  if (P.climb) letGo(2, 0); // a blow knocks him off the wall
   P.hp -= dmg; P.inv = 0.9; P.hurtT = 0.35; P.lastHurt = time;
   const d = _p.copy(P.pos).sub(from); d.y = 0; d.normalize();
   P.vel.x = d.x * 9; P.vel.z = d.z * 9; P.vel.y = 3.5; P.grounded = false; P.glide = false; P.atk.kind = null; P.charge = -1; P.healT = -1; P.spin = 0;
@@ -1701,7 +1877,7 @@ function updatePlayer(dt) {
   const mag = Math.min(1, wish.length());
   if (mag > 0.01) wish.divideScalar(Math.max(1, wish.length()));
   P.flapCd = (P.flapCd || 0) - dt; P.flapT = (P.flapT || 0) - dt; P.guardT = (P.guardT || 0) - dt; P.airDashCd = (P.airDashCd || 0) - dt;
-  P.dashCd -= dt; P.inv -= dt; P.hurtT -= dt; P.skillCd -= dt; P.staminaDelay -= dt;
+  P.dashCd -= dt; P.inv -= dt; P.hurtT -= dt; P.skillCd -= dt; P.staminaDelay -= dt; P.climbCd = (P.climbCd || 0) - dt; P.scramble = 0;
   updateFocus(dt); updateClash(dt);
   if ((P.calmT = (P.calmT || 0) - dt) <= 0) { P.calmT = 0.5; P.calm = !(boss && boss.engaged) && !beacons.some((b) => b.st === 'siege') && !shades.some((sh) => !sh.dead && !sh.dormant && sh.pos.distanceToSquared(P.pos) < 400); }
 
@@ -1747,8 +1923,10 @@ function updatePlayer(dt) {
   }
 
   // velocity
+  tryGrab(dt, wish, mag);
   const accelG = P.grounded ? 16 : 4.5;
-  if (P.rollT >= 0) {
+  if (P.climb) climbMove(dt);
+  else if (P.rollT >= 0) {
     P.rollT += dt;
     const u = clamp(P.rollT / P.rollDur, 0, 1);
     // fast off the mark, carried through the turn, braking as he comes up
@@ -1792,15 +1970,37 @@ function updatePlayer(dt) {
       if (P.stamina <= 0) { P.stamina = 0; P.sprintSpent = true; }
       if (Math.random() < dt * 9) emit(FX.smoke, { x: P.pos.x - wish.x * 0.6, y: P.pos.y + 0.1, z: P.pos.z - wish.z * 0.6, vy: 0.4, life: 0.5, s: 0.7, g: 0.2, c: C.LAYER.cur === 2 ? [0.42, 0.26, 0.22] : [0.92, 0.88, 0.8], drag: 3 });
     }
-    const run = P.sprinting ? 10.8 : sprint ? 7.2 : lerp(1.6, 5.4, mag / 0.88);
+    let run = P.sprinting ? 10.8 : sprint ? 7.2 : lerp(1.6, 5.4, mag / 0.88);
     const strafe = (P.lock || P.focus) && !P.sprinting && P.grounded;
-    P.vel.x = damp(P.vel.x, wish.x * (strafe ? Math.min(run, 4.2) : run), accelG, dt); P.vel.z = damp(P.vel.z, wish.z * (strafe ? Math.min(run, 4.2) : run), accelG, dt);
+    // steep ground: he scrambles up on hands and feet, slowly, on stamina; spent, he slides back down
+    let sliding = false; P.slideT = (P.slideT || 0) - dt;
+    if (P.grounded && mag > 0.2) {
+      // a drop or a wall beside him (a tower's edge, a step) is not a slope: those samples are ignored
+      const sy = P.pos.y + 1.2, h0 = P.pos.y, gH = (x, z) => { const h = support(x, z, sy).h; return Math.abs(h - h0) > 2.6 ? h0 : h; };
+      const gx = (gH(P.pos.x + 0.6, P.pos.z) - gH(P.pos.x - 0.6, P.pos.z)) / 1.2, gz = (gH(P.pos.x, P.pos.z + 0.6) - gH(P.pos.x, P.pos.z - 0.6)) / 1.2, sl = Math.hypot(gx, gz);
+      if (P.stamina > 30) P.climbSpent = false;
+      if (sl > 1.55) {
+        const ux = gx / sl, uz = gz / sl, into = mag > 0.2 ? (wish.x * ux + wish.z * uz) / mag : 0;
+        if (into > 0.25 && !P.climbSpent && P.slideT <= 0 && !P.atk.kind) {
+          P.scramble = 1; run = Math.min(run, 2.7 / Math.hypot(1, sl)); P.sprinting = false;
+          P.stamina -= 6 * dt; P.staminaDelay = 0.6;
+          if (P.stamina <= 0) { P.stamina = 0; P.climbSpent = true; P.slideT = 0.8; }
+          P.yaw = dampAngle(P.yaw, Math.atan2(ux, uz), 8, dt);
+        } else if (into > 0.25 && (P.climbSpent || P.slideT > 0)) P.slideT = Math.max(P.slideT, 0.25);
+        if (P.slideT > 0) { // sliding back down the face
+          P.vel.x = damp(P.vel.x, -ux * 6, 8, dt); P.vel.z = damp(P.vel.z, -uz * 6, 8, dt);
+          if (Math.random() < dt * 14) emit(FX.smoke, { x: P.pos.x, y: P.pos.y + 0.1, z: P.pos.z, vy: 0.6, life: 0.6, s: 0.8, g: 0.2, c: C.LAYER.cur === 2 ? [0.42, 0.26, 0.22] : [0.92, 0.88, 0.8], drag: 3 });
+          sliding = true;
+        }
+      }
+    }
+    if (!sliding) { P.vel.x = damp(P.vel.x, wish.x * (strafe ? Math.min(run, 4.2) : run), accelG, dt); P.vel.z = damp(P.vel.z, wish.z * (strafe ? Math.min(run, 4.2) : run), accelG, dt); }
     if (P.clash) { P.vel.x = 0; P.vel.z = 0; }
     else if (P.focus && !P.atk.kind) P.yaw = dampAngle(P.yaw, CAM.yaw + Math.PI, 14, dt);
     else if (strafe && P.lock) P.yaw = dampAngle(P.yaw, Math.atan2(P.lock.pos.x - P.pos.x, P.lock.pos.z - P.pos.z), 10, dt);
     else if (mag > 0.1) P.yaw = dampAngle(P.yaw, Math.atan2(wish.x, wish.z), P.grounded ? 12 : 5, dt);
   }
-  if (!P.glide && P.dashT <= 0) P.vel.y -= (P.castT >= 0 ? 8 : 26) * dt;
+  if (!P.glide && P.dashT <= 0 && !P.climb) P.vel.y -= (P.castT >= 0 ? 8 : 26) * dt;
   { // a long free fall becomes a dive: faster, with rushing wind
     const below = P.pos.y - support(P.pos.x, P.pos.z, P.pos.y).h;
     P.diving = !P.glide && !P.grounded && P.vel.y < -30 && below > 45;
@@ -1812,6 +2012,8 @@ function updatePlayer(dt) {
   P.pos.addScaledVector(P.vel, dt);
   pushOut(P.pos, 0.35, prevY);
 
+  if (P.climb) { climbAfter(dt); P.onWater = false; P.lastAirY = P.pos.y; }
+  else {
   const sup = support(P.pos.x, P.pos.z, Math.max(P.pos.y, prevY));
   const wasGround = P.grounded;
   if (P.pos.y <= sup.h) {
@@ -1832,6 +2034,7 @@ function updatePlayer(dt) {
   }
   if (P.grounded) P.lastAirY = P.pos.y;
   P.onWater = P.grounded && sup.water;
+  }
 
   // stamina
   if (P.grounded && P.staminaDelay <= 0) P.stamina = Math.min(100, P.stamina + 32 * dt);
@@ -1902,7 +2105,7 @@ function dropToHell() {
 }
 function lavaBurn() {
   flashScreen(0.5); CAM.shake = Math.max(CAM.shake, 0.4);
-  P.pos.copy(P.safe); P.pos.y += 0.5; P.vel.set(0, 0, 0); P.glide = false; P.grounded = true;
+  P.pos.copy(P.safe); P.pos.y += 0.5; P.vel.set(0, 0, 0); P.climb = null; P.glide = false; P.grounded = true;
   P.hp = Math.max(1, P.hp - 25); P.lastHurt = time;
   burst(FX.sparks, P.pos.x, P.pos.y + 1, P.pos.z, 40, { speed: 6, up: 3, life: 1, size: 1.1, c: [2.4, 0.8, 0.2] });
   toast('<i class="dia"></i>熔焰灼身 · 被推回地面');
@@ -1916,14 +2119,14 @@ function resistHint() {
 function riftRepel() {
   // the seal holds: the dark throws the seraph back up to the rim (no harm done — the way down isn't open yet)
   flashScreen(0.7); CAM.shake = Math.max(CAM.shake, 0.5);
-  P.pos.copy(P.safe); P.pos.y += 1; P.vel.set(0, 0, 0); P.glide = false; P.grounded = true;
+  P.pos.copy(P.safe); P.pos.y += 1; P.vel.set(0, 0, 0); P.climb = null; P.glide = false; P.grounded = true;
   burst(FX.sparks, P.pos.x, P.pos.y + 1, P.pos.z, 40, { speed: 6, up: 3, life: 1, size: 1.1, c: [2, 0.55, 0.25] });
   toast('<i class="dia"></i>深淵被封印 · 一股力量將你推回地面', true);
   Audio.sfx('hurt');
 }
 function fallRespawn() {
   flashScreen(0.9);
-  P.pos.copy(P.safe); P.vel.set(0, 0, 0); P.glide = false; P.grounded = true;
+  P.pos.copy(P.safe); P.vel.set(0, 0, 0); P.climb = null; P.glide = false; P.grounded = true;
   P.hp = Math.max(1, P.hp - 20); P.lastHurt = time;
   toast(P.inRealm ? '<i class="dia"></i>墜入雲層 · 光羽將你帶回神域' : '<i class="dia"></i>墜入雲海 · 光羽將你帶回大地');
   Audio.sfx('hurt');
@@ -1939,7 +2142,7 @@ function revive() {
   $('deathOv').classList.add('hidden');
   $('hud').classList.remove('dim');
   flashScreen(1);
-  P.pos.copy(P.checkpoint); P.vel.set(0, 0, 0); P.hp = P.maxHp; P.stamina = 100; P.inv = 2; P.lastHurt = time; P.flasks = P.maxFlasks; hero.resetCloth();
+  P.pos.copy(P.checkpoint); P.vel.set(0, 0, 0); P.climb = null; P.hp = P.maxHp; P.stamina = 100; P.inv = 2; P.lastHurt = time; P.flasks = P.maxFlasks; hero.resetCloth();
   P.inEarth = P.checkpoint.y < -350 && P.checkpoint.y > -1200; P.inHell = P.checkpoint.y < -1200; P.inRealm = P.checkpoint.y > 200; syncLayer(); currentRegion = ''; updateQuest();
   for (const b of beacons) if (b.st === 'siege') endSiege(b, 'calm');
   for (const b of bosses) b.reset();
@@ -2020,6 +2223,8 @@ function buildFolk() {
     beacons.push(b);
   }
   EARTH.lamps.set(lampsLit());
+  for (const v of EARTH.vigils) v.set(!!prog.vigil[v.id], true);
+  for (const c of EARTH.chests) c.set(!!prog.chests[c.id], true);
 }
 function folkFlinch(b) { for (const p of b.keepers) if (p.st === 'guard') p.set('cower'); }
 function wake(sh, x, z) {
@@ -2062,6 +2267,89 @@ function kindle(b) {
   setTimeout(() => toast(`<i class="dia"></i>${b.name} 成為據點 · 生命上限 +10 · 可從地圖傳送`, true), 1200);
   if (b.next) setTimeout(() => say(b.next), 3600);
   EARTH.lamps.set(lampsLit()); updateQuest();
+}
+// ---- vigil towers: wake the stone at the top and the land around it is drawn onto the map (and it becomes a camp)
+let mapReveal = null; // { id, t0 } while a newly seen region inks itself onto the map
+function awakenVigil(v) {
+  prog.vigil[v.id] = true; save();
+  v.set(true);
+  burst(FX.sparks, v.x, v.y + 2, v.z, 70, { speed: 6, up: 6, life: 1.5, size: 1.2, c: [2.2, 1.7, 0.9] });
+  featherBurst(v.x, v.y + 2, v.z, 14, 3.2);
+  flashScreen(0.55); CAM.shake = Math.max(CAM.shake, 0.18); Audio.sfx('shrine');
+  bigText('守望甦醒', 'THE VIGIL WAKES');
+  P.checkpoint.set(v.x + 1.4, v.y + 0.3, v.z);
+  setTimeout(() => say(v.line), 1500);
+  // then the view: the map opens and the land around the tower inks itself in
+  setTimeout(() => { if (state !== 'play' || paused) return; mapReveal = { id: v.id, t0: performance.now() }; openMap(); }, 3200);
+  setTimeout(() => toast(`<i class="dia"></i>${v.name} · 地圖已揭示 · 成為據點，可從地圖傳送`, true), 3600);
+  updateQuest();
+}
+// ---- chests: kneel, lift the lid, light pours out, and the weapon inside is his (it goes into the reliquary)
+function openChest(c) {
+  if (prog.chests[c.id]) return;
+  prog.chests[c.id] = true; save();
+  c.set(true);
+  P.yaw = Math.atan2(c.x - P.pos.x, c.z - P.pos.z); P.vel.set(0, 0, 0);
+  Audio.sfx('pickup');
+  burst(FX.sparks, c.x, c.y + 0.7, c.z, 40, { speed: 2.5, up: 4, life: 1.2, size: 1, c: [2.2, 1.8, 1.1] });
+  setTimeout(() => {
+    featherBurst(c.x, c.y + 0.9, c.z, 8, 1.8); flashScreen(0.25);
+    if (!WEAPON_INFO[c.item]) return;
+    prog.weapons[c.item] = true; if (!prog.reliquary) { prog.reliquary = true; $('bBag').classList.remove('hidden'); } save();
+    showWeapon(c.item);
+    setTimeout(() => toast(`<i class="dia"></i>${WEAPON_INFO[c.item].name} · 已放入聖匣 · ${isTouch ? '點右上角的匣子' : '按 I'}裝備`, true), 2600);
+  }, 650);
+}
+function chestsOpened() { return EARTH.chests.filter((c) => prog.chests[c.id]).length; }
+function vigilsAwake() { return EARTH.vigils.filter((v) => prog.vigil[v.id]).length; }
+// the parchment over what he hasn't seen yet: blank, faintly hatched; holes where the towers (and memory) show the land
+let fogCv = null, fogKey = '';
+function earthFog(anim) {
+  const key = Object.keys(prog.vigil).filter((k) => prog.vigil[k]).sort().join(',') + (anim ? '|' + anim.id + anim.k.toFixed(2) : '');
+  if (fogCv && fogKey === key) return fogCv;
+  fogKey = key;
+  const N = 256, ext = C.EWORLD, toC = (w) => ((w + C.EHALF) / ext) * N;
+  fogCv ||= document.createElement('canvas'); fogCv.width = fogCv.height = N;
+  const g = fogCv.getContext('2d');
+  g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, N, N);
+  g.fillStyle = '#ddd5c4'; g.fillRect(0, 0, N, N);
+  g.strokeStyle = 'rgba(150,128,90,0.16)'; g.lineWidth = 0.7;
+  for (let i = -N; i < N; i += 5) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i + N, N); g.stroke(); }
+  g.globalCompositeOperation = 'destination-out';
+  const hole = (x, z, r, seed) => {
+    const cx = toC(x), cy = toC(z), R = (r / ext) * N;
+    let grd = g.createRadialGradient(cx, cy, R * 0.62, cx, cy, R); grd.addColorStop(0, 'rgba(0,0,0,1)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grd; g.beginPath(); g.arc(cx, cy, R, 0, 6.3); g.fill();
+    // an inked, uneven rim rather than a perfect circle
+    const rnd = C.mulberry(seed);
+    for (let i = 0; i < 22; i++) { const a = (i / 22) * 6.283 + rnd() * 0.2, rr = R * (0.72 + rnd() * 0.18), br = R * (0.12 + rnd() * 0.1), bx = cx + Math.cos(a) * rr, by = cy + Math.sin(a) * rr;
+      grd = g.createRadialGradient(bx, by, 0, bx, by, br); grd.addColorStop(0, 'rgba(0,0,0,0.9)'); grd.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = grd; g.beginPath(); g.arc(bx, by, br, 0, 6.3); g.fill(); }
+  };
+  EARTH.known.forEach((k, i) => hole(k.x, k.z, k.r, 31 + i));
+  EARTH.vigils.forEach((v, i) => {
+    if (!prog.vigil[v.id]) return;
+    const k = anim && anim.id === v.id ? anim.k : 1;
+    if (k > 0.01) hole(v.x, v.z, v.r * (0.25 + 0.75 * k), 77 + i * 13);
+  });
+  g.globalCompositeOperation = 'source-over';
+  return fogCv;
+}
+function revealedAt(x, z) {
+  for (const k of EARTH.known) if (Math.hypot(x - k.x, z - k.z) < k.r * 0.8) return true;
+  for (const v of EARTH.vigils) if (prog.vigil[v.id] && Math.hypot(x - v.x, z - v.z) < v.r * 0.8) return true;
+  return false;
+}
+function drawVigils(g, toS, size, labels) {
+  const u = size / 140;
+  for (const v of EARTH.vigils) {
+    const [x, y] = toS(v.x, v.z), on = !!prog.vigil[v.id];
+    g.save(); g.translate(x, y);
+    g.beginPath(); g.moveTo(-2.4 * u, 3.6 * u); g.lineTo(-1.4 * u, -3 * u); g.lineTo(0, -5.4 * u); g.lineTo(1.4 * u, -3 * u); g.lineTo(2.4 * u, 3.6 * u); g.closePath();
+    g.fillStyle = on ? '#e8c776' : '#3b3440'; g.strokeStyle = on ? '#8a6a2e' : '#d9b46a'; g.lineWidth = 1.1 * u; g.fill(); g.stroke();
+    g.fillStyle = on ? '#fffaf0' : '#d9b46a'; g.beginPath(); g.arc(0, -1.2 * u, 0.9 * u, 0, 6.3); g.fill();
+    g.restore();
+    if (labels && on) { g.fillStyle = '#7d6232'; g.font = `500 ${Math.round(Math.max(11, size / 50))}px "Noto Serif TC", serif`; g.textAlign = 'center'; g.fillText(tr(v.name), x, y + 7 * u + 10); }
+  }
 }
 function rescue(c) {
   c.done = true; prog.rescued[c.id] = true; save();
@@ -2132,6 +2420,8 @@ function updateInteract() {
     if (!t && P.inEarth) {
       for (const c of captives) if (!c.done && Math.hypot(P.pos.x - c.x, P.pos.z - c.z) < 4.8 && Math.abs(P.pos.y - c.y) < 4) { const n = c.guards.filter((g) => !g.dead).length; t = n ? { kind: 'crystalSealed', n, c } : { kind: 'purify', c }; }
       for (const b of beacons) if (b.st === 'won' && Math.hypot(P.pos.x - b.x, P.pos.z - b.z) < 6 && Math.abs(P.pos.y - b.y) < 4) t = { kind: 'kindle', b };
+      for (const v of EARTH.vigils) if (Math.hypot(P.pos.x - v.x, P.pos.z - v.z) < 3.2 && Math.abs(P.pos.y - v.y) < 2.4) t = { kind: prog.vigil[v.id] ? 'vigilLook' : 'vigil', v, k: v.id };
+      for (const c of EARTH.chests) if (!prog.chests[c.id] && Math.hypot(P.pos.x - c.x, P.pos.z - c.z) < 2.4 && Math.abs(P.pos.y - c.y) < 1.8) t = { kind: 'chest', c, k: c.id };
     }
   }
   const key = (o) => JSON.stringify(o && { k: o.kind, n: o.n, i: o.s?.i ?? o.c?.id ?? o.b?.id ?? o.k });
@@ -2149,6 +2439,7 @@ function updateInteract() {
         descend: ['返回人間之島', 'RETURN TO THE ISLE'], rise: ['乘光柱前往雲上', 'RIDE THE PILLAR INTO THE SKY'], riseLocked: ['光柱沒有回應', 'THE PILLAR DOES NOT ANSWER'], coreWarden: ['聖核被守衛封住', 'THE WARDEN STILL HOLDS THE CORE'],
         riseHell: ['返回人間', 'RETURN TO THE MORTAL WORLD'], hellGate: [prog.boss4 ? '查看冥門' : '冥門被封印', 'THE GATE OF THE ABYSS'],
         purify: ['淨化蝕晶', 'PURIFY THE CRYSTAL'], crystalSealed: [`擊退看守的瘴獸 <em>${t.n}</em>`, 'GUARDED BY BEASTS'], kindle: ['點亮燈火', 'KINDLE THE BEACON'],
+        vigil: ['喚醒守望羽石', 'AWAKEN THE VIGIL STONE'], vigilLook: ['眺望四方', 'SURVEY THE LAND'], chest: ['打開寶匣', 'OPEN THE CHEST'],
         story: t.sp && (typeof t.sp.label === 'function' ? t.sp.label() : t.sp.label),
       }[t.kind];
       $('intLbl').innerHTML = L[0]; $('intSub').textContent = L[1];
@@ -2170,6 +2461,9 @@ function doInteract() {
   else if (t.kind === 'story') runSpot(t.sp);
   else if (t.kind === 'purify') { rescue(t.c); interactTarget = null; $('bInteract').classList.add('hidden'); }
   else if (t.kind === 'kindle') { kindle(t.b); interactTarget = null; $('bInteract').classList.add('hidden'); }
+  else if (t.kind === 'vigil') { awakenVigil(t.v); interactTarget = null; $('bInteract').classList.add('hidden'); }
+  else if (t.kind === 'vigilLook') openMap();
+  else if (t.kind === 'chest') { openChest(t.c); interactTarget = null; $('bInteract').classList.add('hidden'); }
   else if (t.kind === 'ascendLocked') { toast(`<i class="dia"></i>需要 Lv${ASCEND_LV} 才能踏上天梯 · 目前 Lv${P.lv}`); Audio.sfx('ui'); }
   else Audio.sfx('ui');
 }
@@ -2181,7 +2475,7 @@ function startTrip(up) {
   const to = fromHell ? EARTH.riftRim.clone() : rise ? new THREE.Vector3(SPAWN.x, 0, SPAWN.z) : up ? REALM.landing.clone() : new THREE.Vector3(T.x, T.floorY, T.z + 10);
   trip = { up: !!up, rise, fromHell, from: P.pos.clone(), to, t: 0, dur: rise || fromHell ? 5.2 : up ? 4.8 : 3.8 };
   state = 'ascend';
-  P.vel.set(0, 0, 0); P.atk.kind = null; P.lock = null; P.castT = -1; P.charge = -1; P.dashT = 0; P.rollT = -1;
+  P.vel.set(0, 0, 0); P.climb = null; P.atk.kind = null; P.lock = null; P.castT = -1; P.charge = -1; P.dashT = 0; P.rollT = -1;
   $('hud').classList.add('cine'); interactTarget = null; $('bInteract').classList.add('hidden');
   if (!tripBeam) {
     tripBeam = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 1, 32, 1, true).translate(0, 0.5, 0), new THREE.MeshBasicMaterial({ map: TEX.beam, color: new THREE.Color(2.2, 1.75, 1.0), transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, fog: false }));
@@ -2203,7 +2497,7 @@ function updateTrip(dt) {
   if (Math.random() < dt * 70) { const a = Math.random() * 6.28, r = 2 + Math.random() * 5; emit(FX.sparks, { x: P.pos.x + Math.cos(a) * r, y: P.pos.y + (trip.up ? -4 : 6) + Math.random() * 3, z: P.pos.z + Math.sin(a) * r, vy: trip.up ? -26 : 26, life: 0.45, s: 1.3 }); }
   if (k >= 1) {
     const up = trip.up, rise = trip.rise, fromHell = trip.fromHell; trip = null;
-    state = 'play'; P.glide = false; P.grounded = true; P.vel.set(0, 0, 0);
+    state = 'play'; P.glide = false; P.grounded = true; P.vel.set(0, 0, 0); P.climb = null;
     tripBeam.visible = false;
     $('hud').classList.remove('cine');
     flashScreen(0.85); CAM.shake = 0.35;
@@ -2495,6 +2789,7 @@ function questState() {
     const ocd = oc.filter((c) => c.done).length, obd = ob.filter((b) => b.st === 'lit').length;
     rows.push({ ...task('支線 · 救出其餘被困的人', ocd >= oc.length, `${ocd}/${oc.length}`), side: true });
     rows.push({ ...task('支線 · 守住其餘燈火', obd >= ob.length, `${obd}/${ob.length}`), side: true });
+    rows.push({ ...task('支線 · 登上守望塔，喚醒羽石', vigilsAwake() >= EARTH.vigils.length, `${vigilsAwake()}/${EARTH.vigils.length}`), side: true });
     rows.push(feathersRow('earth'));
   } else if (!pillarAwake() && !prog.boss2 && !TEST.on) {
     // up in the sky before the mortal world's part is done (an old save, or a fall upward): send them home
@@ -2766,7 +3061,12 @@ function drawMap(g, size, cx, cz, range, round) {
     { const [x, y] = toS(HELL.gate.x, HELL.gate.z - 10); g.fillStyle = '#1a1214'; g.strokeStyle = '#ff7a4a'; g.lineWidth = 1.3 * u; g.fillRect(x - 6 * u, y - 7 * u, 12 * u, 9 * u); g.strokeRect(x - 6 * u, y - 7 * u, 12 * u, 9 * u); }
     if (!round) for (const m of HELL.marks) { const [x, y] = toS(m.x, m.z); g.fillStyle = '#f3dccb'; g.font = `500 ${Math.round(Math.max(11, size / 46))}px "Noto Serif TC", serif`; g.textAlign = 'center'; g.fillText(tr(m.name), x, y + 18 * u); }
   }
-  else if (earth) { const [ox, oy] = toS(-C.EHALF, -C.EHALF); g.drawImage(mapBase2, ox, oy, C.EWORLD * s, C.EWORLD * s); drawEarthPOI(g, toS, s, size); for (const m of EARTH.marks) { const [x, y] = toS(m.x, m.z); g.strokeStyle = 'rgba(155,122,60,0.75)'; g.lineWidth = 1.2; g.beginPath(); g.arc(x, y, Math.max(4, m.r * s * 0.3), 0, 6.3); g.stroke(); if (!round) { g.fillStyle = '#7d6232'; g.font = `500 ${Math.round(Math.max(11, size / 46))}px "Noto Serif TC", serif`; g.textAlign = 'center'; g.fillText(tr(m.name), x, y + Math.max(4, m.r * s * 0.3) + 13); } } }
+  else if (earth) {
+    const [ox, oy] = toS(-C.EHALF, -C.EHALF); g.drawImage(mapBase2, ox, oy, C.EWORLD * s, C.EWORLD * s);
+    const ma = mapReveal && !round ? { id: mapReveal.id, k: clamp((performance.now() - mapReveal.t0 - 350) / 1700, 0, 1) } : null;
+    g.drawImage(earthFog(ma && ma.k < 1 ? { id: ma.id, k: smooth(0, 1, ma.k) } : null), ox, oy, C.EWORLD * s, C.EWORLD * s);
+    drawEarthPOI(g, toS, s, size); drawVigils(g, toS, size, !round);
+    for (const m of EARTH.marks) { if (!revealedAt(m.x, m.z)) continue; const [x, y] = toS(m.x, m.z); g.strokeStyle = 'rgba(155,122,60,0.75)'; g.lineWidth = 1.2; g.beginPath(); g.arc(x, y, Math.max(4, m.r * s * 0.3), 0, 6.3); g.stroke(); if (!round) { g.fillStyle = '#7d6232'; g.font = `500 ${Math.round(Math.max(11, size / 46))}px "Noto Serif TC", serif`; g.textAlign = 'center'; g.fillText(tr(m.name), x, y + Math.max(4, m.r * s * 0.3) + 13); } } }
   else { const [ox, oy] = toS(-320, -320); g.drawImage(mapBase, ox, oy, 640 * s, 640 * s); }
   const u = size / 140;
   // updrafts
@@ -2863,6 +3163,10 @@ function updateHUD(dt) {
     hud.regAcc = 0;
     const [cn, en] = regionAt(P.pos.x, P.pos.z, P.inRealm ? 999 : P.pos.y);
     if (cn !== currentRegion) { currentRegion = cn; regionCard(cn, en); }
+    if (P.inEarth && state === 'play' && !prog.tips.vigil) { // the first time he comes near a tower that could be climbed
+      const v = EARTH.vigils.find((o) => !prog.vigil[o.id] && Math.hypot(P.pos.x - o.x, P.pos.z - o.z) < 34);
+      if (v) { prog.tips.vigil = true; save(); toast(`<i class="dia"></i>${v.name} · 這座塔可以攀爬 · 塔頂的守望羽石會為你揭示四周的地圖`, true); }
+    }
   }
 }
 
@@ -2877,6 +3181,15 @@ function openMap() {
   cv.width = size * pr; cv.height = size * pr; cv.style.width = cv.style.height = size + 'px';
   const g = cv.getContext('2d'); g.setTransform(pr, 0, 0, pr, 0, 0);
   if (P.inRealm) drawMap(g, size, REALM.x, REALM.z - 42, 150, false); else if (P.inHell) drawMap(g, size, C.HCX, C.HCZ - 55, 200, false); else if (P.inEarth) drawMap(g, size, 40, -10, 590, false); else drawMap(g, size, 0, -4, 248, false);
+  if (mapReveal && P.inEarth) { // ink spreading over the parchment
+    const tick = () => {
+      if ($('mapOv').classList.contains('hidden') || !mapReveal) { mapReveal = null; return; }
+      g.setTransform(pr, 0, 0, pr, 0, 0); drawMap(g, size, 40, -10, 590, false);
+      if (performance.now() - mapReveal.t0 > 2200) { mapReveal = null; return; }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
   const lit = prog.s.filter(Boolean).length;
   $('mapList').innerHTML = SHRINES.map((s, i) => `<li class="${prog.s[i] ? 'lit' : ''}"><i class="dia"></i><span>${s.name}</span><em>${prog.s[i] ? '已點亮' : shadesAlive(i) ? '封印中' : '待點亮'}</em></li>`).join('') +
     `<li class="${prog.end ? 'lit' : ''}"><i class="star">✦</i><span>環光聖所</span><em>${prog.end ? '已甦醒' : lit === 4 ? '可進入' : `${lit}/4`}</em></li>` +
@@ -2887,10 +3200,12 @@ function openMap() {
   if (P.inEarth) {
     // camps you can travel to, like a hunt's camps: home, and every beacon whose light you have kindled
     const camps = [{ id: 'home', name: '晨鐘堡', here: Math.hypot(P.pos.x - START.x, P.pos.z - START.z) < 30 }]
-      .concat(beacons.filter((b) => b.st === 'lit').map((b) => ({ id: b.id, name: b.name, here: Math.hypot(P.pos.x - b.x, P.pos.z - b.z) < 30 })));
+      .concat(beacons.filter((b) => b.st === 'lit').map((b) => ({ id: b.id, name: b.name, here: Math.hypot(P.pos.x - b.x, P.pos.z - b.z) < 30 })))
+      .concat(EARTH.vigils.filter((v) => prog.vigil[v.id]).map((v) => ({ id: 'v:' + v.id, name: v.name, here: Math.hypot(P.pos.x - v.x, P.pos.z - v.z) < 12 })));
     $('mapList').innerHTML = `<li class="${nRescued() === captives.length ? 'lit' : ''}"><i class="dia"></i><span>被困的人</span><em>${nRescued()}/${captives.length} 已救出</em></li>` +
       beacons.map((b) => `<li class="${b.st === 'lit' ? 'lit' : ''}"><i class="dia"></i><span>${b.name}</span><em>${b.st === 'lit' ? '燈火長明' : b.st === 'won' ? '可點燈' : '待守護'}</em></li>`).join('') +
       `<li class="${prog.boss3 ? 'lit' : ''}"><i class="dia"></i><span>墮天騎士</span><em>${prog.boss3 ? '已淨化' : '未挑戰'}</em></li>` +
+      `<li class="${vigilsAwake() === EARTH.vigils.length ? 'lit' : ''}"><i class="dia"></i><span>守望塔</span><em>${vigilsAwake()}/${EARTH.vigils.length} 已甦醒</em></li>` +
       `<li class="mhd"><span>據點 · 傳送</span><small>${P.calm ? '' : '附近有敵人'}</small></li>` +
       camps.map((c) => `<li class="lit camp"><i class="star">✦</i><span>${c.name}</span>${c.here ? '<em>你在這裡</em>' : `<button class="tp" data-tp="${c.id}"${P.calm ? '' : ' disabled'}>傳送</button>`}</li>`).join('');
   }
@@ -2901,6 +3216,14 @@ function openMap() {
 }
 function travelTo(id) {
   if (state !== 'play' || !P.inEarth || !P.calm) return;
+  if (id.startsWith('v:')) { // to the top of a woken tower, ready to glide off
+    const v = EARTH.vigils.find((o) => 'v:' + o.id === id && prog.vigil[o.id]); if (!v) return;
+    closeOverlays();
+    P.pos.set(v.x + 1.5, v.y + 0.3, v.z); P.yaw = Math.atan2(v.x - P.pos.x, v.z - P.pos.z) + Math.PI; CAM.yaw = P.yaw + Math.PI; CAM.pitch = 0.3;
+    P.vel.set(0, 0, 0); P.climb = null; P.safe.copy(P.pos); P.checkpoint.copy(P.pos); P.glide = false; P.lock = null; P.rollT = -1; P.dashT = 0; P.atk.kind = null;
+    flashScreen(0.8); regionCard(v.name, v.en); Audio.sfx('purify'); featherBurst(P.pos.x, P.pos.y + 1.2, P.pos.z, 10, 2.4); updateQuest();
+    return;
+  }
   const b = id === 'home' ? null : beacons.find((x) => x.id === id && x.st === 'lit');
   if (id !== 'home' && !b) return;
   const x = b ? b.x : START.x, z = b ? b.z + 6 : START.z;
@@ -2908,7 +3231,7 @@ function travelTo(id) {
   const y0 = C.groundAtL(x, z, 1) + 1.5; P.pos.set(x, y0, z);
   const h = support(x, z, y0 + 1).h; if (h > -1e8) P.pos.y = h + 0.3;
   P.yaw = b ? Math.PI : START_YAW; CAM.yaw = P.yaw + Math.PI; CAM.pitch = 0.22;
-  P.vel.set(0, 0, 0); P.safe.copy(P.pos); P.checkpoint.copy(P.pos); P.glide = false; P.lock = null; P.rollT = -1; P.dashT = 0; P.atk.kind = null;
+  P.vel.set(0, 0, 0); P.climb = null; P.safe.copy(P.pos); P.checkpoint.copy(P.pos); P.glide = false; P.lock = null; P.rollT = -1; P.dashT = 0; P.atk.kind = null;
   flashScreen(0.8); regionCard(b ? b.name : '晨鐘堡', b ? b.en : 'BELLDAWN HOLD'); Audio.sfx('purify');
   featherBurst(P.pos.x, P.pos.y + 1.2, P.pos.z, 10, 2.4);
   updateQuest();
@@ -3412,6 +3735,21 @@ const WEAPON_INFO = {
   greatsword: { glyph: '劍', name: '墮光大劍', en: "OPHIEL'S GREATSWORD", stats: [5, 1, 4], how: '墮翼之丘 · 歐菲爾的石像前',
     moves: '斜劈 · 回劈 · 迴旋斬 · 砸地', short: '雙手重劈 · 第四擊砸向地面',
     desc: '歐菲爾守護搖籃時用的大劍。出手慢，但每一下都很重；第四擊和蓄力重擊會砸向地面，震傷周圍所有敵人，也能擊破守衛的盾。' },
+  knight: { base: 'sword', glyph: '騎', name: '晨鐘騎士劍', en: 'BLADE OF THE BELLDAWN KNIGHTS', stats: [3, 3, 3], how: '傾城遺跡 · 王座旁的騎士匣', counter: 1.35,
+    moves: '斬擊 · 斬擊 · 迴旋斬 · 突擊', short: '聖裁反擊傷害 +35%', perk: '聖裁反擊 +35%',
+    desc: '晨鐘堡騎士團的制式長劍，刃口一直有人打磨，直到最後一個騎士倒下。劍格上刻著：「先護人，後護城。」' },
+  fallen: { base: 'sword', glyph: '墮', name: '墮天者的斷劍', en: 'THE FALLEN SERAPH\'S BROKEN BLADE', stats: [4, 3, 2], how: '墮天巨像 · 它的肩上', dmg: 1.25, reach: 0.9,
+    moves: '斬擊 · 斬擊 · 迴旋斬 · 突擊', short: '傷害 +25% · 刃短', perk: '傷害 +25% · 攻擊距離較短',
+    desc: '跟巨像一同墮下的天使留下的劍，斷了一截，裂縫裡還透著紅光。很重的一把劍——不是因為鐵，是因為它記得自己為何墮落。' },
+  keeper: { base: 'spear', glyph: '叉', name: '守燈人的魚叉', en: "THE LAMPKEEPER'S HARPOON", stats: [2, 4, 5], how: '守燈岬燈塔 · 塔頂的迴廊', dmg: 0.9, reach: 1.15,
+    moves: '突刺 · 突刺 · 旋身橫掃 · 衝刺突擊', short: '攻擊距離最長', perk: '攻擊距離 +15% · 傷害稍低',
+    desc: '燈塔看守人用來在風暴夜把落海的人拉上岸的魚叉。很長，很輕；它救過的人，比它刺過的東西多。' },
+  watcher: { base: 'spear', glyph: '望', name: '守望者之槍', en: "THE WATCHER'S LANCE", stats: [3, 4, 4], how: '沉沼古塔 · 半途的石台', focus: 1.35,
+    moves: '突刺 · 突刺 · 旋身橫掃 · 衝刺突擊', short: '集中一擊傷害 +35%', perk: '集中一擊 +35%',
+    desc: '墮落之前，守望塔上的天使用的白槍。它被設計成看得很遠、刺得很準——對準傷口的那一下，特別痛。' },
+  bell: { base: 'greatsword', glyph: '鐘', name: '鐘銅巨劍', en: 'THE BELL-BRONZE GREATSWORD', stats: [5, 1, 4], how: '霜脊修道院 · 迴廊裡的供奉匣', poise: 1.4,
+    moves: '斜劈 · 回劈 · 迴旋斬 · 砸地', short: '更容易打倒首領', perk: '削韌 +40% · 更易打出倒地',
+    desc: '修士們把崩落的舊鐘熔掉，鑄成一把巨劍，供在迴廊裡等「天上來的人」。每一下砸下去，都像鐘聲一樣嗡嗡作響。' },
   tianshu: { glyph: '樞', name: '天樞之劍', en: 'TIANSHU · PIVOT OF HEAVEN', stats: [4, 4, 3], how: '墮天巨像 · 集齊盾、翼、誓三道紋章',
     moves: '斬擊 · 斬擊 · 迴旋斬 · 突擊', short: '唯一能真正傷及地獄之物',
     desc: '神域之主交給你的劍。「天樞」——天的樞紐。只有它能真正傷及地獄之物；在地獄裡不拿著它，敵人幾乎打不動，你也會受到三倍傷害。' },
@@ -3420,6 +3758,7 @@ const POWER_HOW = { shield: '光羽之境 · 墮翼之丘的守衛', wings: '天
 const POWER_GIFT = { shield: '光之結晶 · 生命上限 +25', wings: '審判之羽 · 生命上限 +25 · 聖瓶 +1', oath: '騎士之誓 · 生命上限 +25 · 攻擊 +10%' };
 const BAG = { tab: 'weapons', sel: 0 };
 const ICON = {
+  sword: '<path d="M34 86 92 28l4 4-58 58z" class="f"/><path d="M92 28l7-3-3 7"/><path d="M28 74l18 18"/><path d="M22 98l12-12"/><circle cx="20" cy="100" r="3"/>',
   spear: '<path d="M18 102 92 28"/><path d="M92 28c4-10 12-16 18-18c-2 6-8 14-18 18z" class="f"/><circle cx="84" cy="36" r="5"/><path d="M26 94l-6-6"/>',
   greatsword: '<path d="M30 90 96 24l4 14-52 52z" class="f"/><path d="M96 24l8-4-4 8"/><path d="M26 74l20 20"/><path d="M18 102l14-14"/>',
   tianshu: '<path d="M26 94 94 26l3 6-65 65z" class="f"/><path d="M94 26l9-5-5 9"/><path d="M24 80c6 0 12 6 12 12M40 72c-6 0-12-6-12-12"/><path d="M16 104l10-10"/><circle cx="16" cy="104" r="3"/>',
@@ -3431,10 +3770,10 @@ const ICON = {
 };
 const glyphIcon = (g) => `<circle cx="60" cy="60" r="34" class="f"/><text x="60" y="72" text-anchor="middle">${g}</text>`;
 function bagItems() {
-  if (BAG.tab === 'weapons') return ['sword', 'greatsword', 'spear', 'tianshu'].map((w) => {
+  if (BAG.tab === 'weapons') return ['sword', 'greatsword', 'spear', 'tianshu', 'knight', 'fallen', 'keeper', 'watcher', 'bell'].map((w) => {
     const I = w === 'sword' && prog.swordLit ? WEAPON_INFO.holysword : WEAPON_INFO[w], own = !!prog.weapons[w];
-    return { own, icon: ICON[w], name: own ? I.name : '？？？', en: own ? I.en : 'UNKNOWN', badge: prog.weapon === w ? '裝備中' : '', w,
-      body: own ? `<p>${I.desc}</p><dl><dt>招式</dt><dd>${I.moves}</dd><dt>取得</dt><dd>${I.how}</dd></dl>${statBars(I.stats)}` : `<p class="hint">線索：${I.how}</p>` };
+    return { own, icon: ICON[w] || ICON[I.base] || glyphIcon(I.glyph), tag: I.base ? I.glyph : '', name: own ? I.name : '？？？', en: own ? I.en : 'UNKNOWN', badge: prog.weapon === w ? '裝備中' : '', w,
+      body: own ? `<p>${I.desc}</p><dl><dt>招式</dt><dd>${I.moves}</dd>${I.perk ? `<dt>特性</dt><dd>${I.perk}</dd>` : ''}<dt>取得</dt><dd>${I.how}</dd></dl>${statBars(I.stats)}` : `<p class="hint">線索：${I.how}</p>` };
   });
   if (BAG.tab === 'powers') return ['oath', 'wingsOfFather', 'shield', 'wings'].map((k) => {
     if (k === 'wingsOfFather') { const own = canWing(), I = WING_INFO; return { own, icon: glyphIcon(I.glyph), name: own ? I.name : '？？？', en: own ? I.en : 'UNKNOWN', body: own ? `<p>${I.desc}</p><dl><dt>來自</dt><dd>${I.how}</dd></dl>` : `<p class="hint">線索：${I.how}</p>` }; }
@@ -3448,6 +3787,7 @@ function bagItems() {
     });
     const seen = CODEX.filter((c) => codexState(c) > 0).length;
     rows.push({ own: true, icon: ICON.person, name: '救出的人', en: 'THE RESCUED', n: `${nRescued()}/${captives.length}`, k: nRescued() / Math.max(1, captives.length), body: `<p>被蝕晶封住的人。救出的人會回到晨鐘堡，點亮更多燈火。</p>${meter(nRescued(), captives.length)}` });
+    rows.push({ own: true, icon: ICON.sword, name: '打開的寶匣', en: 'CHESTS OPENED', n: `${chestsOpened()}/${EARTH.chests.length}`, k: chestsOpened() / Math.max(1, EARTH.chests.length), body: `<p>墮落的天使、守燈人、騎士與修士留下的匣子。每一個都藏著一把有故事的武器——多數放在要爬上去才到的地方。</p>${meter(chestsOpened(), EARTH.chests.length)}` });
     rows.push({ own: true, icon: ICON.flame, name: '守住的燈火', en: 'BEACONS HELD', n: `${nBeacons()}/${beacons.length}`, k: nBeacons() / Math.max(1, beacons.length), body: `<p>人們最後的燈火。每守住一座，生命上限 +10。</p>${meter(nBeacons(), beacons.length)}` });
     rows.push({ own: true, icon: ICON.book, name: '墮天錄', en: 'CODEX OF THE FALLEN', n: `${seen}/${CODEX.length}`, k: seen / CODEX.length, body: `<p>遇過的敵人與首領。按 B 打開墮天錄。</p>${meter(seen, CODEX.length)}` });
     return rows;
@@ -3462,7 +3802,7 @@ function renderBag() {
   document.querySelectorAll('#bagTabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === BAG.tab));
   const items = bagItems(); BAG.sel = Math.min(BAG.sel, items.length - 1);
   $('bagGrid').innerHTML = items.map((it, i) => `<button class="slot${it.own ? '' : ' lock'}${i === BAG.sel ? ' sel' : ''}" data-i="${i}">
-      <svg viewBox="0 0 120 120">${it.icon}</svg>${it.badge ? `<em>${it.badge}</em>` : ''}${it.n ? `<b>${it.n}</b>` : ''}${it.k !== undefined ? `<i class="bar" style="--k:${it.k}"></i>` : ''}</button>`).join('') + '<i class="slot empty"></i>'.repeat(Math.max(8, Math.ceil(items.length / 4) * 4) - items.length);
+      <svg viewBox="0 0 120 120">${it.icon}</svg>${it.tag && it.own ? `<s>${it.tag}</s>` : ''}${it.badge ? `<em>${it.badge}</em>` : ''}${it.n ? `<b>${it.n}</b>` : ''}${it.k !== undefined ? `<i class="bar" style="--k:${it.k}"></i>` : ''}</button>`).join('') + '<i class="slot empty"></i>'.repeat(Math.max(8, Math.ceil(items.length / 4) * 4) - items.length);
   const it = items[BAG.sel];
   const act = BAG.tab === 'weapons' && it.own ? (prog.weapon === it.w ? '<button class="lbtn on" disabled><span>裝備中</span><small>EQUIPPED</small></button>' : '<button class="lbtn" id="bagEquip"><span>裝備</span><small>EQUIP</small></button>') : '';
   $('bagDetail').innerHTML = `<div class="bigi${it.own ? '' : ' lock'}"><svg viewBox="0 0 120 120">${it.icon}</svg></div><h3>${it.name}</h3><small>${it.en}</small>${it.body}${act}`;
@@ -3495,6 +3835,8 @@ const WARPS = {
   earth: () => ['earth', EARTH.landing.x, EARTH.landing.z, '墜光坑', 'THE CRATER OF FALLEN LIGHT', EARTH.pillar],
   captive: () => { const c = captives.find((o) => !o.done) || captives[0]; return ['earth', c.x + 12, c.z + 12, '受困的人', 'THE SEALED', c]; },
   beacon: () => { const b = beacons.find((o) => o.st !== 'lit') || beacons[0]; return ['earth', b.x + 9, b.z + 9, '烽火台', 'THE BEACON', b]; },
+  vigil: () => { const v = EARTH.vigils.find((o) => !prog.vigil[o.id]) || EARTH.vigils[0]; return ['earth', v.x + 1.5, v.z, v.name, v.en, v, v.y]; },
+  chest: () => { const c = EARTH.chests.find((o) => !prog.chests[o.id]) || EARTH.chests[0]; return ['earth', c.x + Math.sin(c.yaw) * 1.8, c.z + Math.cos(c.yaw) * 1.8, '寶匣', 'A CHEST', c, c.y]; },
   boss3: () => ['earth', EARTH.bossHome.x + 14, EARTH.bossHome.z + 22, '傾城遺跡', 'THE FALLEN KEEP', EARTH.bossHome],
   spawn: () => ['isle', SPAWN.x, SPAWN.z, '鏡湖', 'THE MIRROR LAKE', { x: LAKE.x, z: LAKE.z }],
   shrine: () => { const s = SHRINES[Math.max(0, prog.s.findIndex((v) => !v))]; return ['isle', s.x + 7, s.z + 7, '聖壇', 'THE SHRINE', s]; },
@@ -3532,7 +3874,7 @@ function warpTo(id) {
   save();
   if (look) P.yaw = Math.atan2(look.x - x, look.z - z);
   CAM.yaw = P.yaw + Math.PI; CAM.pitch = 0.22;
-  P.vel.set(0, 0, 0); P.safe.copy(P.pos); P.checkpoint.copy(P.pos); P.glide = false; P.lock = null;
+  P.vel.set(0, 0, 0); P.climb = null; P.safe.copy(P.pos); P.checkpoint.copy(P.pos); P.glide = false; P.lock = null;
   flashScreen(0.8); regionCard(cn, en); updateQuest();
 }
 function takeFeathers(n) {
@@ -3597,7 +3939,7 @@ function initTestMode() {
 // the crater's pillar is the story's door to the sky: it wakes only once the fallen knight's echo has spoken
 const pillarAwake = () => !!(prog.talk.camael || TEST.powers);
 function placeAtStart() {
-  P.pos.copy(START); P.yaw = START_YAW; P.vel.set(0, 0, 0);
+  P.pos.copy(START); P.yaw = START_YAW; P.vel.set(0, 0, 0); P.climb = null;
   P.inEarth = true; P.inRealm = false; P.inHell = false;
   P.safe.copy(START); P.checkpoint.copy(START); P.grounded = true; P.glide = false;
   C.LAYER.cur = -1; syncLayer();
@@ -3797,8 +4139,9 @@ function frame() {
     const dy = Math.atan2(Math.sin(P.yaw - (P.prevYaw ?? P.yaw)), Math.cos(P.yaw - (P.prevYaw ?? P.yaw))); P.prevYaw = P.yaw;
     P.bank = P.glide && dt > 0 ? clamp(dy / dt / 1.6, -1, 1) : 0;
   }
-  hero.update(dt, { wpn: prog.weapon, mode, speed: P.speed, phase: P.phase, grounded: P.grounded, vy: P.vel.y, glide: P.glide, dash: P.dashT, atk: P.atk, cast: P.castT, hurt: P.hurtT, charge: P.clash ? 0.6 : P.charge, lock: !!P.lock || !!P.focus, heal: P.healT >= 0 ? 1 : 0,
-    roll: P.rollT >= 0 ? clamp(P.rollT / P.rollDur, 0, 1) : -1, rollKind: P.rollKind, flap: Math.max(0, P.flapT || 0), bank: P.bank, display: 1 });
+  hero.update(dt, { wpn: wbase(), mode, speed: P.speed, phase: P.phase, grounded: P.grounded, vy: P.vel.y, glide: P.glide, dash: P.dashT, atk: P.atk, cast: P.castT, hurt: P.hurtT, charge: P.clash ? 0.6 : P.charge, lock: !!P.lock || !!P.focus, heal: P.healT >= 0 ? 1 : 0,
+    roll: P.rollT >= 0 ? clamp(P.rollT / P.rollDur, 0, 1) : -1, rollKind: P.rollKind, flap: Math.max(0, P.flapT || 0), bank: P.bank, display: 1,
+    climb: P.climb ? { mv: P.climb.mv, pull: P.climb.pull, leap: P.climb.leap } : P.scramble ? { mv: clamp(P.speed / 1.6, 0, 1), slope: 1, pull: -1, leap: 0 } : null });
   if (hero.angel > 0.6 && P.glide && !P.grounded) { // light streams off the wingtips in flight
     for (let i = 0; i < 2; i++) if (Math.random() < 0.75) { hero.wingTip(i, _tip); emit(FX.sparks, { x: _tip.x, y: _tip.y, z: _tip.z, vx: -P.vel.x * 0.08, vy: -0.3, vz: -P.vel.z * 0.08, life: 0.5, s: 0.5, drag: 3, c: [1.5, 1.35, 1.05] }); }
     if (P.flapT > 0.2 && Math.random() < 0.15) { hero.wingTip(Math.random() < 0.5 ? 0 : 1, _tip); featherBurst(_tip.x, _tip.y, _tip.z, 1, 0.8); }
@@ -3811,7 +4154,7 @@ function frame() {
 
   updateCamera(dt);
   // world follows
-  W.sky.position.copy(camera.position);
+  W.sky.position.copy(camera.position); W.camPos = camera.position;
   CLOUD.value += dt;
   { // god rays: only when the camera looks roughly toward the sun
     camera.getWorldDirection(_v); const face = _v.dot(sunDir);

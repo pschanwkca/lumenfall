@@ -83,6 +83,29 @@ Sized after Monster Hunter's hunt HUD so the scene stays the subject:
 - The crater's pillar sleeps (a faint thread of light) until Camael's echo has spoken, so the sky cannot be reached early;
   arriving in the sky early (old saves) points you back down
 
+## Exploration (v1.8, after Breath of the Wild)
+
+- **Climb anything**: push into any wall, tower, tree, roof, rock or island face and he grabs on. Stick/WASD climbs
+  (sideways follows the camera), Jump is a climbing leap (about 2.7 m, costs stamina; held away from the wall it kicks
+  off), Dodge lets go. At the top he hauls himself over onto whatever is there (a ledge, a roof, a dome, a tree crown);
+  with nothing to stand on he vaults off, wings ready. Stamina drains while moving on a wall and only refills on the
+  ground; empty, he slips off. Steep ground (over ~57°) is scrambled up on hands and feet, slowly and on stamina;
+  spent, he slides back down
+- Buildings collide as real boxes with their roofs (the town's houses, the chapel, the abbey hall) and can be stood on;
+  rocks, trees and towers have standable tops; the colossus' robe is walked like a hill, its torso and head climbed.
+  Seals that must be broken, braziers and the colossus' blade cannot be climbed
+- **Vigil towers (守望塔)**: before the Fall, seraphs kept watch over the mortal world from six high places, each with a
+  vigil stone at the top: the field watch, the keeper's lighthouse, the Frostridge belfry, the keep tower, the colossus'
+  brow, and the Drowned Spire (a new white spire in the marsh, with stone collars to rest on half way). Wake a stone and
+  the map inks in the land around it; the tower becomes a camp to travel to, and a thread of light stands over it. The
+  mortal world's map starts as blank parchment except where he fell and the town he grew up in
+- **Chests (寶匣)**: five reliquary boxes, most of them where you have to climb, each holding a weapon with its story.
+  They fight in one of the three forms with their own edge: 晨鐘騎士劍 (castle throne · counters +35%), 墮天者的斷劍
+  (the colossus' shoulder · +25% damage, shorter), 守燈人的魚叉 (lighthouse gallery · +15% reach), 守望者之槍 (Drowned
+  Spire's first ledge · focus strikes +35%), 鐘銅巨劍 (abbey cloister · +40% stagger). No durability: each one is kept
+- Art fix: house, chapel and abbey roofs were upside-down prisms turned sideways; they are proper gables now. The
+  lighthouse halo and beams thin out when you stand on its gallery
+
 ## Review pass (v1.7)
 
 - Art: the hero wears a Belldawn-blue half-cape with a gold hem (cloth; folds away when the wings come out) in place of
@@ -145,6 +168,11 @@ people, beacons, codex) and clues. Locked slots show where to look.
 | 審判之槍 Spear of judgement | Astraea's echo | two quick long thrusts, spin sweep, lunge; white-gold light |
 | 墮光大劍 Ophiel's greatsword | before Ophiel's statue | two-handed cleaves, slow spin, overhead slam that hits everything around the impact; molten orange light, heavy hit-stop |
 | 天樞之劍 Tianshu | the colossus, all three seals | quick slashes; needed to hurt anything in hell; silver-blue light |
+| 晨鐘騎士劍 Belldawn knight's blade | chest by the keep's throne | sword form, blue steel; counters +35% |
+| 墮天者的斷劍 Fallen seraph's blade | chest on the colossus' shoulder | sword form, dark iron with red light; +25% damage, shorter |
+| 守燈人的魚叉 Lampkeeper's harpoon | chest on the lighthouse gallery | lance form, longest reach (+15%), a little lighter |
+| 守望者之槍 Watcher's lance | chest on the Drowned Spire's ledge | lance form, white; focus strikes +35% |
+| 鐘銅巨劍 Bell-bronze greatsword | chest in the abbey cloister | greatsword form, bronze; +40% stagger |
 
 ## Test mode
 

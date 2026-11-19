@@ -439,6 +439,7 @@ body.boss #lvUp{top:calc(var(--st) + 56px)}
 #bagOv .slot svg .f,#bagDetail .bigi svg .f{fill:rgba(214,178,104,.22)}
 #bagOv .slot svg text,#bagDetail .bigi svg text{stroke:none;fill:#8a6a2c;font:600 34px var(--serif)}
 #bagGrid .slot.lock svg{opacity:.22;filter:grayscale(1)}
+#bagGrid .slot s{position:absolute;right:5px;bottom:4px;font:600 12px var(--serif);text-decoration:none;color:#8a6a2e;opacity:.85}
 #bagGrid .slot em{position:absolute;left:50%;top:-7px;transform:translateX(-50%);padding:1px 7px;font:500 9.5px var(--serif);font-style:normal;letter-spacing:.14em;color:#fff8ea;white-space:nowrap;background:linear-gradient(90deg,#d7b06a,#b88a3c)}
 #bagGrid .slot b{position:absolute;right:7px;bottom:6px;font:600 10.5px var(--cin);color:var(--gold-d)}
 #bagGrid .slot .bar{position:absolute;left:8px;right:8px;bottom:2px;height:2px;background:rgba(198,162,90,.25)}
@@ -1031,7 +1032,7 @@ html.touch .act svg.i{width:46%;height:46%}
     </nav>
   </div>
   <div id="tapHint"><span class="c t-only">觸碰開始</span><span class="e t-only">TAP TO BEGIN</span><span class="c d-only">點擊或按任意鍵開始</span><span class="e d-only">PRESS ANY KEY</span></div>
-  <div class="corner bl">PROTOTYPE · v1.7 · 黎恩</div>
+  <div class="corner bl">PROTOTYPE · v1.8 · 黎恩</div>
   <div class="corner br t-only">MOBILE · LANDSCAPE</div><div class="corner br d-only">DESKTOP · KEYBOARD &amp; MOUSE</div>
 </div>
 
@@ -1115,7 +1116,7 @@ html.touch .act svg.i{width:46%;height:46%}
     <div class="sep"></div>
     <div class="tstat" id="testStat"><i></i><span></span></div>
     <div class="th">關卡跳轉<small>JUMP TO</small></div>
-    <div class="tch"><div class="tk">序章 · 第一章<small>BELLDAWN · THE MORTAL WORLD</small></div><div class="tg"><button data-warp="village">晨鐘堡</button><button data-warp="earth">墜光坑</button><button data-warp="captive">受困的人</button><button data-warp="beacon">烽火台</button><button class="bo" data-warp="boss3" data-boss="boss3">墮天騎士</button></div></div>
+    <div class="tch"><div class="tk">序章 · 第一章<small>BELLDAWN · THE MORTAL WORLD</small></div><div class="tg"><button data-warp="village">晨鐘堡</button><button data-warp="earth">墜光坑</button><button data-warp="captive">受困的人</button><button data-warp="beacon">烽火台</button><button data-warp="vigil">守望塔</button><button data-warp="chest">寶匣</button><button class="bo" data-warp="boss3" data-boss="boss3">墮天騎士</button></div></div>
     <div class="tch"><div class="tk">第二章<small>THE ISLE</small></div><div class="tg"><button data-warp="spawn">鏡湖</button><button data-warp="shrine">聖壇</button><button data-warp="temple">環光聖所</button><button class="bo" data-warp="boss1" data-boss="boss">墮光守衛</button></div></div>
     <div class="tch"><div class="tk">第三章<small>THE EMPYREAN</small></div><div class="tg"><button data-warp="realm">神域入口</button><button class="bo" data-warp="boss2" data-boss="boss2">審判者</button></div></div>
     <div class="tch"><div class="tk">第四章<small>THE COLOSSUS · THE ABYSS</small></div><div class="tg"><button data-warp="rift">墮天巨像</button><button data-warp="hell">墜落之地</button><button data-warp="bridge">熔河橋</button><button class="bo" data-warp="boss4" data-boss="boss4">亞巴頓</button><button data-warp="gate">冥門</button></div></div>
@@ -1136,6 +1137,7 @@ html.touch .act svg.i{width:46%;height:46%}
         <dt>右側拖曳</dt><dd>轉動視角</dd>
         <dt>跳躍／展翼</dt><dd>空中按展翼滑翔，再按振翼上升</dd>
         <dt>空中閃避</dt><dd>收翼俯衝</dd>
+        <dt>攀爬</dt><dd>推向牆壁、樹或塔就會爬上去・跳躍＝向上躍・閃避＝放手</dd>
         <dt>互動</dt><dd>靠近聖壇、聖核時出現</dd></dl></div>
       <div><h3>COMBAT</h3><dl>
         <dt>攻擊</dt><dd>連按四段連擊・長按蓄力重擊</dd>
@@ -1151,6 +1153,7 @@ html.touch .act svg.i{width:46%;height:46%}
         <dt>滾輪</dt><dd>拉近／拉遠鏡頭</dd>
         <dt><i class="key wide">SPACE</i></dt><dd>跳躍・空中展翼・再按振翼</dd>
         <dt><i class="key">E</i></dt><dd>互動</dd>
+        <dt>攀爬</dt><dd>向牆壁、樹或塔一直走就會爬・<i class="key wide">SPACE</i> 向上躍・<i class="key">SHIFT</i> 放手</dd>
         <dt><i class="key">M</i><i class="key">B</i></dt><dd>地圖　墮天錄</dd>
         <dt><i class="key">H</i></dt><dd>隱藏介面（拍照模式）</dd>
         <dt><i class="key">ESC</i></dt><dd>暫停・設定・釋放滑鼠</dd></dl></div>

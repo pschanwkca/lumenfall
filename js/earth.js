@@ -117,6 +117,34 @@ export const EARTH = { feathers: [], moreFeathers: [], enemies: [], marks: [], u
 export function earthCull(cam) {
   for (const m of EARTH.cull) { const s = m.boundingSphere; m.visible = !s || cam.distanceTo(s.center) - s.radius < 540; }
 }
+// a building as a real box for the hero's walls and climbing, with the roof's own profile on top (read off the mesh)
+// (x, z) is the box centre, rot its yaw; roof: a 3-sided prism mesh in the same parent, or null for a flat top at y1
+function gableOf(mesh, cx, cz, rot) {
+  mesh.updateMatrix();
+  const p = mesh.geometry.attributes.position, v = new THREE.Vector3(), cs = Math.cos(rot), sn = Math.sin(rot);
+  let ymax = -1e9, ymin = 1e9; const pts = [];
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i).applyMatrix4(mesh.matrix);
+    const dx = v.x - cx, dz = v.z - cz; pts.push([dx * cs - dz * sn, v.y, dx * sn + dz * cs]);
+    ymax = Math.max(ymax, v.y); ymin = Math.min(ymin, v.y);
+  }
+  // the ridge runs along whichever local axis the top vertices spread over
+  let sx = 0, sz = 0, ha = 0, hl = 0;
+  for (const [lx, y, lz] of pts) if (y > ymax - 0.05) { sx = Math.max(sx, Math.abs(lx)); sz = Math.max(sz, Math.abs(lz)); }
+  const ridgeZ = sz >= sx;
+  for (const [lx, , lz] of pts) { ha = Math.max(ha, Math.abs(ridgeZ ? lx : lz)); hl = Math.max(hl, Math.abs(ridgeZ ? lz : lx)); }
+  return { peak: ymax, eave: ymin, ha, hl, ridgeZ };
+}
+function boxSolid({ x, z, rot = 0, hw, hd, y0, y1, roof = null, r }) {
+  const c = { x, z, r: r ?? Math.max(hw, hd) * 1.24, rq: Math.hypot(hw, hd) + 1, y0, y1: roof ? Math.max(y1 ?? -1e9, roof.peak) : y1, bx: { hw, hd, cs: Math.cos(rot), sn: Math.sin(rot) } };
+  if (roof) {
+    const k = (roof.peak - roof.eave) / roof.ha;
+    c.top = (lx, lz) => { const a = Math.abs(roof.ridgeZ ? lx : lz), l = Math.abs(roof.ridgeZ ? lz : lx); return a > roof.ha || l > roof.hl ? -1e9 : roof.peak - k * a; };
+  } else c.top = (lx, lz) => (Math.abs(lx) > hw + 0.05 || Math.abs(lz) > hd + 0.05 ? -1e9 : y1);
+  colliders.solids.push(c);
+  return c;
+}
+
 function scatter(root, geo, material, list, { cast = true, recv = true, cell = 140 } = {}) {
   const buckets = new Map(), v = new THREE.Vector3();
   for (const it of list) {
@@ -202,6 +230,8 @@ function buildTerrain(root, Y) {
   EARTH.heightTex = tex;
 }
 
+const VIG = {}; // where each vigil stone stands, noted as its tower is built
+const CHEST = {}; // where each chest waits: [x, y, z, yaw] (its front faces along yaw)
 export function buildEarth(scene) {
   const R = mulberry(777);
   const Y = EARTH_Y;
@@ -253,7 +283,7 @@ export function buildEarth(scene) {
       const yy = fir ? g + Ht * (0.35 + j * 0.2) : g + Ht - 0.6 + (j ? (R() - 0.5) * 1.8 : 1);
       crowns.push({ m: M(x + Math.cos(a) * rr, yy, z + Math.sin(a) * rr, R() - 0.5, R() * 6, R() - 0.5, sz, sz * (fir ? 1.2 : 0.9), sz), c: c.copy(base).multiplyScalar(0.85 + R() * 0.3).clone() });
     }
-    spots.push([x, z]); colliders.solids.push({ x, z, r: 0.6, y0: g - 1, y1: g + Ht });
+    spots.push([x, z]); colliders.solids.push({ x, z, r: 0.6, sr: 1.5, y0: g - 1, y1: g + Ht });
   }
   scatter(root, trunkGeo, trunkMat, trunks, { cast: true, recv: false });
   scatter(root, W.canopyGeo, leafMat, crowns, { cast: true, recv: true });
@@ -303,12 +333,14 @@ export function buildEarth(scene) {
     const g = new THREE.Group(); g.position.set(x, base, z); g.rotation.y = rot;
     const body = shadowy(new THREE.Mesh(new THREE.BoxGeometry(w, hgt, d), wallM)); body.position.y = hgt / 2; g.add(body);
     const roofMesh = shadowy(new THREE.Mesh(new THREE.CylinderGeometry(w * 0.72, w * 0.72, d + 0.8, 3, 1), roof));
-    roofMesh.rotation.set(Math.PI / 2, 0, Math.PI / 2); roofMesh.scale.set(1, 1, 0.62); roofMesh.position.y = hgt + w * 0.2; g.add(roofMesh);
+    roofMesh.rotation.set(-Math.PI / 2, 0, 0); roofMesh.scale.set(1, 1, 0.62); roofMesh.position.y = hgt + w * 0.2; g.add(roofMesh);
     const door = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.0, 0.12), woodM); door.position.set(0, 1.0, d / 2 + 0.02); g.add(door);
     for (const sx of [-w * 0.3, w * 0.3]) { const wi = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.1), winM); wi.position.set(sx, hgt * 0.62, d / 2 + 0.03); g.add(wi); }
     const chim = new THREE.Mesh(new THREE.BoxGeometry(0.7, 2, 0.7), wallM); chim.position.set(w * 0.25, hgt + w * 0.35, -d * 0.2); g.add(chim);
     grp.add(g);
-    colliders.solids.push({ x, z, r: Math.max(w, d) * 0.62, y0: base - 1, y1: base + hgt + 2 });
+    const gb = gableOf(roofMesh, 0, 0, 0);
+    gb.peak += base; gb.eave += base;
+    boxSolid({ x, z, rot, hw: w / 2, hd: d / 2, y0: base - 1, roof: gb, r: Math.max(w, d) * 0.62 });
   };
   const watchTower = (grp, x, z, base, H = 8) => {
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { const p = shadowy(new THREE.Mesh(new THREE.BoxGeometry(0.35, H + 2.5, 0.35), woodM)); p.position.set(x + sx * 1.6, base + (H + 2.5) / 2, z + sz * 1.6); grp.add(p); }
@@ -337,13 +369,19 @@ export function buildEarth(scene) {
   { // the chapel of the morning bell
     const g = new THREE.Group(); g.position.set(T.x - 8, vg, T.z - 26);
     const b = shadowy(new THREE.Mesh(new THREE.BoxGeometry(8, 8, 13), wallM)); b.position.y = 4; g.add(b);
-    const rf = shadowy(new THREE.Mesh(new THREE.CylinderGeometry(5.2, 5.2, 13.6, 3), roofM2)); rf.rotation.set(Math.PI / 2, 0, Math.PI / 2); rf.scale.set(1, 1, 0.65); rf.position.y = 9.8; g.add(rf);
+    const rf = shadowy(new THREE.Mesh(new THREE.CylinderGeometry(5.2, 5.2, 13.6, 3), roofM2)); rf.rotation.set(-Math.PI / 2, 0, 0); rf.scale.set(1, 1, 0.65); rf.position.y = 9.8; g.add(rf);
     const tw = shadowy(new THREE.Mesh(new THREE.BoxGeometry(3.6, 16, 3.6), wallM)); tw.position.set(0, 8, -7.5); g.add(tw);
     const sp = shadowy(new THREE.Mesh(new THREE.ConeGeometry(3, 7, 4), roofM2)); sp.position.set(0, 19.5, -7.5); sp.rotation.y = Math.PI / 4; g.add(sp);
     const bell = new THREE.Mesh(new THREE.SphereGeometry(0.9, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat('#d7b468', { metalness: 0.9, roughness: 0.3 })); bell.rotation.x = Math.PI; bell.position.set(0, 14.5, -7.5); g.add(bell);
     const rose = new THREE.Mesh(new THREE.CircleGeometry(1.3, 20), winM); rose.position.set(0, 10.6, 6.52); g.add(rose);
     g.rotation.y = 0.12; town.add(g);
-    colliders.solids.push({ x: T.x - 8, z: T.z - 26, r: 7, y0: vg - 1, y1: vg + 20 });
+    { const gb = gableOf(rf, 0, 0, 0); gb.peak += vg; gb.eave += vg;
+      boxSolid({ x: T.x - 8, z: T.z - 26, rot: 0.12, hw: 4, hd: 6.5, y0: vg - 1, roof: gb, r: 7 });
+      const tx = T.x - 8 + Math.sin(0.12) * -7.5, tz = T.z - 26 + Math.cos(0.12) * -7.5;
+      // the bell tower: climb to the belfry; the spire above is too steep to stand on, so he springs off it
+      const tw2 = boxSolid({ x: tx, z: tz, rot: 0.12, hw: 1.8, hd: 1.8, y0: vg - 1, y1: vg + 16.2, r: 2.6 });
+      tw2.noStand = true;
+    }
     EARTH.feathers.push([T.x - 8 + Math.sin(0.12) * -7.5, vg + 24, T.z - 26 - 7.5]);
   }
   { // well + plaza lanterns
@@ -434,8 +472,18 @@ export function buildEarth(scene) {
     const rot = new THREE.Group(); rot.position.set(L.x, lg + 28.2, L.z); root.add(rot);
     for (const s of [0, Math.PI]) { const bm = new THREE.Mesh(beamG, beamM); bm.rotation.y = s; rot.add(noReflect(bm)); }
     const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.glow, color: new THREE.Color(2.4, 1.9, 1.1), transparent: true, depthWrite: false, fog: false })); glow.scale.setScalar(16); glow.position.set(L.x, lg + 28.2, L.z); root.add(noReflect(glow));
-    W.animated.push((t) => { rot.rotation.y = t * 0.45; });
+    W.animated.push((t) => {
+      rot.rotation.y = t * 0.45;
+      // someone up on the gallery: the lamp's halo and beams thin out so they don't blind the view
+      const cp = W.camPos; if (!cp) return;
+      const k = clamp((Math.hypot(cp.x - L.x, cp.y - (lg + 28.2), cp.z - L.z) - 6) / 18, 0, 1);
+      glow.material.opacity = 0.15 + k * 0.85; beamM.opacity = 0.35 * k; rot.visible = k > 0.02;
+    });
     EARTH.feathers.push([L.x, lg + 33, L.z]);
+    VIG.light = [L.x + 3.05, lg + 26.45, L.z];
+    CHEST.keeper = [L.x - 3.1, lg + 26.45, L.z, Math.PI / 2];
+    // the lamp room and its dome can be climbed from the gallery (the last feather waits on top)
+    colliders.solids.push({ x: L.x, z: L.z, r: 2.35, y0: lg + 26.3, y1: lg + 32.5, st: lg + 29.9, topf: (dx, dz) => { const d2 = dx * dx + dz * dz; return d2 >= 6.76 ? -1e9 : lg + 29.9 + Math.sqrt(6.76 - d2); } });
     EARTH.updrafts.push({ x: L.x - 9, z: L.z + 7, top: lg + 36, g: gA(L.x - 9, L.z + 7) });
   }
 
@@ -443,7 +491,7 @@ export function buildEarth(scene) {
   {
     const A = EP.monastery, ag = Y + 72, grp = new THREE.Group(), stone = mat('#e3dccd', { map: TEX.marble, roughness: 0.88 }), slate = mat('#59606e', { roughness: 0.7 });
     const hall = shadowy(new THREE.Mesh(new THREE.BoxGeometry(12, 9, 24), stone)); hall.position.set(A.x, ag + 4.5, A.z - 10); grp.add(hall);
-    const hr = shadowy(new THREE.Mesh(new THREE.CylinderGeometry(7.6, 7.6, 24.6, 3), slate)); hr.rotation.set(Math.PI / 2, 0, Math.PI / 2); hr.scale.set(1, 1, 0.6); hr.position.set(A.x, ag + 11.3, A.z - 10); grp.add(hr);
+    const hr = shadowy(new THREE.Mesh(new THREE.CylinderGeometry(7.6, 7.6, 24.6, 3), slate)); hr.rotation.set(-Math.PI / 2, 0, 0); hr.scale.set(1, 1, 0.6); hr.position.set(A.x, ag + 11.3, A.z - 10); grp.add(hr);
     const rose = new THREE.Mesh(new THREE.CircleGeometry(1.8, 24), winM); rose.position.set(A.x, ag + 6.5, A.z + 2.05); grp.add(rose);
     const tw = shadowy(new THREE.Mesh(new THREE.CylinderGeometry(3.8, 4.4, 24, 16), stone)); tw.position.set(A.x + 10, ag + 12, A.z - 18); grp.add(tw);
     const dome = shadowy(new THREE.Mesh(new THREE.SphereGeometry(4, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), slate)); dome.position.set(A.x + 10, ag + 24, A.z - 18); grp.add(dome);
@@ -454,14 +502,17 @@ export function buildEarth(scene) {
       for (let k = 0; k <= L; k += 4) colliders.solids.push({ x: A.x + lerp(x0, x1, k / L), z: A.z + lerp(z0, z1, k / L), r: 1.4, y0: ag - 1, y1: ag + 3.4 });
     }
     root.add(grp); bakeStatic(grp);
-    colliders.solids.push({ x: A.x, z: A.z - 4, r: 6.5, y0: ag - 1, y1: ag + 12 }, { x: A.x, z: A.z - 16, r: 6.5, y0: ag - 1, y1: ag + 12 }, { x: A.x + 10, z: A.z - 18, r: 4.6, y0: ag - 1, y1: ag + 24 });
-    colliders.pads.push({ x: A.x + 10, z: A.z - 18, r: 3.6, top: ag + 26, bot: ag + 22 });
+    { const gb = gableOf(hr, A.x, A.z - 10, 0); boxSolid({ x: A.x, z: A.z - 10, hw: 6, hd: 12, y0: ag - 1, roof: gb, r: 9 }); }
+    // the bell tower: climb its wall to the dome's rim, then walk up the dome itself
+    colliders.solids.push({ x: A.x + 10, z: A.z - 18, r: 4.5, y0: ag - 1, y1: ag + 28, st: ag + 24, topf: (dx, dz) => { const d2 = dx * dx + dz * dz; return d2 >= 20.25 ? -1e9 : ag + 24 + Math.sqrt(Math.max(0, 16 - d2)); } });
+    VIG.abbey = [A.x + 10, ag + 28, A.z - 18];
+    CHEST.bell = [A.x - 6, null, A.z + 20, Math.PI / 2];
     EARTH.feathers.push([A.x + 10, ag + 30, A.z - 18]);
     EARTH.updrafts.push({ x: A.x - 34, z: A.z + 44, top: ag + 18, g: gA(A.x - 34, A.z + 44) });
   }
 
   // ---- 麥原守望塔 · the field watch by the bridge
-  { const Wt = EP.watch, wg = gA(Wt.x, Wt.z), grp = new THREE.Group(); watchTower(grp, Wt.x - 7, Wt.z - 5, gA(Wt.x - 7, Wt.z - 5), 10); root.add(grp); bakeStatic(grp); EARTH.feathers.push([Wt.x - 7, gA(Wt.x - 7, Wt.z - 5) + 13, Wt.z - 5]); void wg; }
+  { const Wt = EP.watch, wg = gA(Wt.x, Wt.z), grp = new THREE.Group(); watchTower(grp, Wt.x - 7, Wt.z - 5, gA(Wt.x - 7, Wt.z - 5), 10); root.add(grp); bakeStatic(grp); VIG.watch = [Wt.x - 7, gA(Wt.x - 7, Wt.z - 5) + 10.15, Wt.z - 5]; EARTH.feathers.push([Wt.x - 7, gA(Wt.x - 7, Wt.z - 5) + 13, Wt.z - 5]); void wg; }
 
   // ---- 傾城遺跡 · the ruined castle on its mesa
   const C = EP.castle, cg = Y + 34;
@@ -484,12 +535,13 @@ export function buildEarth(scene) {
   for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
     const H = sx > 0 && sz > 0 ? 9 : 15 + R() * 5;
     const tw = shadowy(new THREE.Mesh(new THREE.CylinderGeometry(4, 4.6, H, 12), stoneM)); tw.position.set(C.x + sx * S2, cg + H / 2 - 0.5, C.z + sz * S2); castle.add(tw);
-    colliders.solids.push({ x: C.x + sx * S2, z: C.z + sz * S2, r: 4.6, y0: cg - 2, y1: cg + H });
+    colliders.solids.push({ x: C.x + sx * S2, z: C.z + sz * S2, r: 4.6, y0: cg - 2, y1: cg + H, st: cg + H - 0.5 });
     colliders.pads.push({ x: C.x + sx * S2, z: C.z + sz * S2, r: 4.2, top: cg + H - 0.5, bot: cg + H - 3 });
-    if (sx < 0 && sz < 0) EARTH.feathers.push([C.x + sx * S2, cg + H + 1, C.z + sz * S2]);
+    if (sx < 0 && sz < 0) { EARTH.feathers.push([C.x + sx * S2, cg + H + 1, C.z + sz * S2]); VIG.keep = [C.x + sx * S2 + 1.6, cg + H - 0.5, C.z + sz * S2 + 1.6]; }
   }
   EARTH.updrafts.push({ x: C.x - S2 + 9, z: C.z - S2 + 9, top: cg + 26, g: cg });
   const throne = shadowy(new THREE.Mesh(new THREE.BoxGeometry(6, 3, 4), stoneM)); throne.position.set(C.x, cg + 1, C.z - 18); castle.add(throne);
+  CHEST.knight = [C.x + 5, null, C.z - 16.5, 0];
   root.add(castle); bakeStatic(castle);
   EARTH.bossHome = new THREE.Vector3(C.x, cg, C.z - 4);
   EARTH.castleFloor = cg;
@@ -651,7 +703,117 @@ export function buildEarth(scene) {
     { x: EP.monastery.x, z: EP.monastery.z, r: 58, name: '霜脊修道院', en: 'FROSTRIDGE ABBEY' },
     { x: EP.watch.x, z: EP.watch.z, r: 26, name: '麥原守望塔', en: 'THE FIELD WATCH' },
     { x: COLO.x, z: COLO.z, r: 60, name: '墮天巨像', en: 'THE FALLEN COLOSSUS' },
+    { x: -318, z: 128, r: 30, name: '沉沼古塔', en: 'THE DROWNED SPIRE' },
   ];
+
+  // ---- 守望塔 · the vigil towers. Before the Fall, seraphs kept watch over the mortal world from the high places;
+  // each left a stone of light at the top. A seraph who climbs up and wakes it sees the land as they saw it (the map).
+  { // the one tower built for it: a white spire of the old watch, half drowned in the marsh
+    const x = -318, z = 128, g = gA(x, z), wm = haze(mat('#ece4d4', { map: TEX.marble, roughness: 0.82 }), 0.45), gm = haze(mat('#d7b468', { metalness: 0.8, roughness: 0.35 }), 0.45);
+    const grp = new THREE.Group();
+    const add = (geo, m, px, py, pz) => { const o = shadowy(new THREE.Mesh(geo, m)); o.position.set(px, py, pz); grp.add(o); return o; };
+    add(new THREE.CylinderGeometry(4.2, 4.8, 2.2, 12), wm, x, g + 0.2, z);
+    add(new THREE.CylinderGeometry(2.55, 3.05, 30, 12), wm, x, g + 15, z);
+    for (const y of [5, 15, 25]) { const b = add(new THREE.TorusGeometry(2.97 - y * 0.017, 0.14, 6, 36), gm, x, g + y, z); b.rotation.x = Math.PI / 2; }
+    for (const [y, r] of [[10, 4.0], [20, 3.45]]) { // stone collars: ledges to rest on, half way up
+      add(new THREE.CylinderGeometry(r, 2.9, 0.55, 12), wm, x, g + y - 0.27, z);
+      colliders.pads.push({ x, z, r, top: g + y, bot: g + y - 0.6 });
+    }
+    CHEST.watcher = [x + 3.45, g + 10, z, Math.PI / 2];
+    add(new THREE.CylinderGeometry(3.4, 2.7, 0.9, 12), wm, x, g + 30.35, z);
+    for (let i = 0; i < 5; i++) { // a broken crown of pillars round the platform
+      const a = (i / 5) * Math.PI * 2 + 0.4, hh = [2.6, 1.2, 2.2, 0.7, 1.8][i];
+      add(new THREE.CylinderGeometry(0.26, 0.3, hh, 8), wm, x + Math.cos(a) * 2.95, g + 30.8 + hh / 2, z + Math.sin(a) * 2.95);
+    }
+    root.add(grp); bakeStatic(grp);
+    colliders.solids.push({ x, z, r: 4.5, y0: g - 2, y1: g + 1.3 }, { x, z, r: 2.85, y0: g - 1, y1: g + 30 });
+    colliders.pads.push({ x, z, r: 3.4, top: g + 30.8, bot: g + 29.7 });
+    VIG.west = [x - 1.2, g + 30.8, z + 0.8];
+  }
+  VIG.colossus = [EARTH.colossusHead.x, EARTH.colossusHead.y, EARTH.colossusHead.z - 0.8];
+  CHEST.fallen = [COLO.x - 11.5, colliders.pads.find((p) => Math.abs(p.x - (COLO.x - 11.5)) < 0.1 && p.r === 4.5).top, COLO.z + 4.2, -Math.PI / 2];
+  EARTH.vigils = [
+    { id: 'watch', name: '麥原守望塔', en: 'THE FIELD WATCH', r: 320, line: '麥浪、河、橋——他們把這片田野守了幾百年。' },
+    { id: 'light', name: '守燈岬燈塔', en: "THE KEEPER'S LIGHT", r: 240, line: '海上的船一直靠這盞燈回家。' },
+    { id: 'abbey', name: '霜脊鐘樓', en: 'THE FROSTRIDGE BELFRY', r: 270, line: '修士們在這裡為天上祈禱——原來天上也有人在聽。' },
+    { id: 'keep', name: '傾城望樓', en: 'THE KEEP TOWER', r: 270, line: '騎士長最後一次站在這裡，望著同一片天。' },
+    { id: 'west', name: '沉沼古塔', en: 'THE DROWNED SPIRE', r: 280, line: '沼地吞沒了塔基，卻吞不掉守望的人留下的光。' },
+    { id: 'colossus', name: '巨像之首', en: "THE COLOSSUS' BROW", r: 250, line: '它曾是守望者之首。墮下來之後，仍然望著人間。' },
+  ].filter((v) => VIG[v.id]).map((v) => { const [x, y, z] = VIG[v.id]; return Object.assign(v, { x, y, z }); });
+  for (const v of EARTH.vigils) {
+    buildVigilStone(root, v);
+    colliders.solids.push({ x: v.x, z: v.z, r: 0.5, y0: v.y - 0.3, y1: v.y + 1.0, noClimb: true, noStand: true });
+  }
+  // ---- chests: what the fallen and the faithful left behind, each one a weapon with its story
+  EARTH.chests = Object.entries(CHEST).map(([item, [x, y, z, yaw]]) => ({ id: 'ch_' + item, item, x, y: y ?? gA(x, z), z, yaw }));
+  for (const c of EARTH.chests) {
+    buildChest(root, c);
+    colliders.solids.push({ x: c.x, z: c.z, r: 0.5, y0: c.y - 0.3, y1: c.y + 0.62, noClimb: true });
+  }
+  // what the seraph already knows of this world: where he fell, and the town he grew up in
+  EARTH.known = [{ x: K.x, z: K.z, r: 200 }, { x: T.x, z: T.z, r: 300 }];
+}
+
+// ---------------------------------------------------------------- a chest: an old reliquary box, white wood bound in gold, a feather on the lid
+function buildChest(root, c) {
+  const g = new THREE.Group(); g.position.set(c.x, c.y, c.z); g.rotation.y = c.yaw; root.add(g);
+  const wood = haze(mat('#e6dccb', { map: TEX.marble, roughness: 0.75 }), 0.45), gold = haze(mat('#cfa75a', { metalness: 0.85, roughness: 0.32 }), 0.45);
+  const W2 = 0.96, H2 = 0.46, D2 = 0.6;
+  const box = shadowy(new THREE.Mesh(new THREE.BoxGeometry(W2, H2, D2), wood)); box.position.y = H2 / 2; g.add(box);
+  for (const sx of [-1, 1]) { const b = shadowy(new THREE.Mesh(new THREE.BoxGeometry(0.07, H2 + 0.02, D2 + 0.03), gold)); b.position.set(sx * (W2 / 2 - 0.12), H2 / 2, 0); g.add(b); }
+  const plinth = shadowy(new THREE.Mesh(new THREE.BoxGeometry(W2 + 0.08, 0.06, D2 + 0.08), gold)); plinth.position.y = 0.03; g.add(plinth);
+  // the lid hinges at the back
+  const hinge = new THREE.Group(); hinge.position.set(0, H2, -D2 / 2); g.add(hinge);
+  const lidG = new THREE.CylinderGeometry(D2 / 2, D2 / 2, W2, 12, 1, false, 0, Math.PI); lidG.rotateZ(Math.PI / 2); lidG.rotateX(Math.PI / 2); lidG.scale(1, 0.55, 1); lidG.translate(0, 0, D2 / 2);
+  const lid = shadowy(new THREE.Mesh(lidG, wood)); hinge.add(lid);
+  for (const sx of [-1, 1]) { const b = new THREE.Mesh(new THREE.CylinderGeometry(D2 / 2 + 0.015, D2 / 2 + 0.015, 0.07, 12, 1, false, 0, Math.PI), gold); b.geometry.rotateZ(Math.PI / 2); b.geometry.rotateX(Math.PI / 2); b.geometry.scale(1, 0.55, 1); b.geometry.translate(0, 0, D2 / 2); b.position.x = sx * (W2 / 2 - 0.12); hinge.add(b); }
+  const emb = new THREE.Mesh(new THREE.OctahedronGeometry(0.07, 0), gold); emb.scale.set(0.7, 1.4, 0.35); emb.position.set(0, H2 - 0.1, D2 / 2 + 0.01); g.add(emb);
+  // a glint while it waits; light pours out once it's open
+  const tw = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.glow, color: new THREE.Color(2.2, 1.8, 1.1), transparent: true, opacity: 0.0, depthWrite: false, fog: false }));
+  tw.position.set(0.25, H2 + 0.25, D2 / 2); g.add(noReflect(tw));
+  const inner = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.glow, color: new THREE.Color(2.4, 2.0, 1.2), transparent: true, opacity: 0, depthWrite: false, fog: false }));
+  inner.position.set(0, H2 + 0.1, 0); g.add(noReflect(inner));
+  let open = 0, want = 0, flash = 0;
+  c.set = (o, instant) => { want = o ? 1 : 0; if (instant) open = want; else if (o) flash = 1; };
+  W.animated.push((t) => {
+    open += (want - open) * 0.07;
+    hinge.rotation.x = -open * 1.85;
+    const tk = Math.max(0, Math.sin(t * 1.7 + c.x)) ** 12; tw.material.opacity = (1 - want) * tk * 0.9; tw.scale.setScalar(0.3 + tk * 0.5);
+    flash *= 0.988; inner.material.opacity = open * flash * (0.65 + Math.sin(t * 2) * 0.1); inner.scale.setScalar(0.6 + open * 1.1);
+  });
+}
+
+// ---------------------------------------------------------------- a vigil stone: a feather of light on a pedestal, asleep until a seraph wakes it
+function buildVigilStone(root, v) {
+  const g = new THREE.Group(); g.position.set(v.x, v.y, v.z); root.add(g);
+  const sm = haze(mat('#e9e2d2', { map: TEX.marble, roughness: 0.8 }), 0.45);
+  const p1 = shadowy(new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.72, 0.26, 8), sm)); p1.position.y = 0.13; g.add(p1);
+  const p2 = shadowy(new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.44, 0.74, 8), sm)); p2.position.y = 0.63; g.add(p2);
+  const cup = shadowy(new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.3, 0.16, 8), haze(mat('#c9a35a', { metalness: 0.8, roughness: 0.35 }), 0.45))); cup.position.y = 1.08; g.add(cup);
+  const cm = haze(new THREE.MeshStandardMaterial({ color: '#8d8880', emissive: new THREE.Color('#ffd27a'), emissiveIntensity: 0.08, roughness: 0.3, metalness: 0.15 }), 0.45);
+  const cr = new THREE.Mesh(new THREE.OctahedronGeometry(1, 0), cm); cr.scale.set(0.26, 0.78, 0.26); cr.position.y = 2.0; cr.castShadow = true; g.add(cr);
+  const rm = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 1.25, 0.7), transparent: true, opacity: 0.25, fog: false });
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.025, 6, 48), rm); ring.position.y = 2.0; g.add(noReflect(ring));
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.glow, color: new THREE.Color(2.2, 1.7, 0.95), transparent: true, opacity: 0.15, depthWrite: false, fog: false }));
+  glow.position.y = 2.0; glow.scale.setScalar(2.6); g.add(noReflect(glow));
+  // once awake, a thin thread of light stands over the tower: it can be seen from far across the land
+  const shM = new THREE.MeshBasicMaterial({ map: TEX.beam, color: new THREE.Color(1.5, 1.2, 0.75), transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, fog: false });
+  const shG = new THREE.CylinderGeometry(0.22, 0.6, 70, 10, 1, true); shG.translate(0, 37, 0);
+  const shaft = new THREE.Mesh(shG, shM); shaft.visible = false; g.add(noReflect(shaft));
+  let on = 0, want = 0, flare = 0;
+  v.set = (awake, instant) => { want = awake ? 1 : 0; if (instant) on = want; else if (awake) flare = 1; };
+  v.awake = () => want > 0;
+  W.animated.push((t) => {
+    on += (want - on) * 0.03; flare = Math.max(0, flare - 0.006);
+    cr.rotation.y = t * (0.4 + on * 0.5); cr.position.y = 2.0 + Math.sin(t * 1.3 + v.x) * (0.04 + on * 0.06);
+    ring.rotation.x = 1.2 + Math.sin(t * 0.7) * 0.2; ring.rotation.z = t * 0.9; ring.position.y = cr.position.y;
+    cm.color.setRGB(0.55 + on * 0.45, 0.53 + on * 0.4, 0.5 + on * 0.3); cm.emissiveIntensity = 0.08 + on * 1.6 + flare * 2.5;
+    rm.opacity = 0.25 + on * 0.6;
+    // the thread of light is for the far view: it thins away as he comes close to it
+    const cp = W.camPos, near = cp ? clamp((Math.hypot(cp.x - v.x, cp.z - v.z) - 6) / 40, 0, 1) : 1;
+    glow.material.opacity = 0.15 + on * 0.45 + flare * 0.3; glow.scale.setScalar(2.6 + on * 1.6 + flare * 2.5);
+    shaft.visible = on > 0.02; shM.opacity = (on * 0.2 + flare * 0.25) * (0.15 + near * 0.85); shaft.scale.set(1 + flare * 1.2, 1, 1 + flare * 1.2);
+  });
 }
 
 // ---------------------------------------------------------------- a beacon brazier: dim until the people around it are safe
@@ -659,7 +821,7 @@ function buildBrazier(root, b) {
   const st = new THREE.MeshStandardMaterial({ color: '#d9cfbb', map: TEX.marble, roughness: 0.85 });
   const ped = shadowy(new THREE.Mesh(new THREE.CylinderGeometry(0.7, 1.0, 1.6, 8), st)); ped.position.set(b.x, b.y + 0.8, b.z); root.add(ped);
   const bowl = shadowy(new THREE.Mesh(new THREE.CylinderGeometry(1.25, 0.7, 0.7, 12, 1, true), new THREE.MeshStandardMaterial({ color: '#b08a4a', metalness: 0.8, roughness: 0.35, side: THREE.DoubleSide }))); bowl.position.set(b.x, b.y + 1.95, b.z); root.add(bowl);
-  colliders.solids.push({ x: b.x, z: b.z, r: 1.2, y0: b.y - 1, y1: b.y + 2.2 });
+  colliders.solids.push({ x: b.x, z: b.z, r: 1.2, y0: b.y - 1, y1: b.y + 2.2, noClimb: true, noStand: true });
   const flameM = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.7, 1.05, 0.45), transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
   const flame = new THREE.Mesh(new THREE.ConeGeometry(0.8, 2.4, 10, 1, true).translate(0, 1.2, 0), flameM); flame.position.set(b.x, b.y + 2.1, b.z); root.add(noReflect(flame));
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.glow, color: new THREE.Color(2.4, 1.5, 0.7), transparent: true, depthWrite: false, fog: false })); glow.position.set(b.x, b.y + 3, b.z); root.add(noReflect(glow));
@@ -745,9 +907,16 @@ function buildColossus(root, x, z, g0) {
     for (const fr of frags) { fr.f.position.y = fr.y + Math.sin(t * 0.5 + fr.ph) * (fr.small ? 0.3 : 0.9); fr.f.rotation.y += 0.002; }
   });
   // collision & perches: robe, torso, blade; the head, shoulders and hands can be stood on
-  colliders.solids.push({ x, z, r: 15, y0: g0 - 2, y1: g0 + 20 }, { x, z: z + 3, r: 11, y0: g0 + 18, y1: g0 + 42 }, { x, z: z + 30, r: 3, y0: g0 - 160, y1: g0 + 40 });
+  // the robe is walked like a hill (steep: he scrambles up it); the torso and head are climbed; the blade is not
+  const robe = [[16, 0], [15.6, 3], [13.4, 8], [11.2, 14], [9.6, 18.5], [9.2, 20]];
+  colliders.solids.push({ x, z, r: 16, y0: g0 - 2, y1: g0 + 20, terrain: true, noClimb: true, topf: (dx, dz) => {
+    const d = Math.hypot(dx, dz); if (d >= 16) return -1e9; if (d <= 9.2) return g0 + 20;
+    for (let i = 1; i < robe.length; i++) if (d >= robe[i][0]) { const [r0, y0] = robe[i - 1], [r1, y1] = robe[i]; return g0 + lerp(y0, y1, (r0 - d) / (r0 - r1)); }
+    return g0 + 20;
+  } });
+  colliders.solids.push({ x, z: z + 3, r: 10.2, y0: g0 + 15, y1: g0 + 42, st: g0 + 41.5 }, { x, z: z + 30, r: 3, y0: g0 - 160, y1: g0 + 40, noClimb: true, noStand: true });
   const head = new THREE.Vector3(x, g0 + 18 + 28.5 * Math.cos(0.22) + 6, z + 28.5 * Math.sin(0.22) + 3.2 * Math.cos(0.22));
-  colliders.pads.push({ x: head.x, z: head.z, r: 4.2, top: head.y, bot: head.y - 5 });
+  colliders.pads.push({ x: head.x, z: head.z, r: 4.2, top: head.y, bot: g0 + 40 });
   for (const s of [-1, 1]) colliders.pads.push({ x: x + s * 11.5, z: z + 4.2, r: 4.5, top: g0 + 40.6, bot: g0 + 36 });
   colliders.pads.push({ x, z: z + 30, r: 3.6, top: g0 + 44, bot: g0 + 39 });
   EARTH.colossusHead = head;

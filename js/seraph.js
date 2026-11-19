@@ -374,6 +374,15 @@ export class Cloth {
   }
 }
 
+// ---------------------------------------------------------------- weapons found in the world (chests): a base form in its own metal
+export const WVAR = {
+  knight: { base: 'sword', blade: '#d9dde5', trim: '#40507a', glow: '#a9c4ff', gi: 0.3, br: 0.25 },
+  fallen: { base: 'sword', blade: '#2e2a33', trim: '#5c2a22', glow: '#ff5a2a', gi: 1.4, bm: 0.6, br: 0.45, be: '#7a1c0c', len: 0.92 },
+  keeper: { base: 'spear', blade: '#c9cdd3', trim: '#8a7556', glow: '#ffd08a', gi: 0.25, spearBlade: true, len: 1.08 },
+  watcher: { base: 'spear', blade: '#f5f1e6', trim: '#e4d3a6', glow: '#fff0c4', gi: 0.9, spearBlade: true, be: '#ffe7b0' },
+  bell: { base: 'greatsword', blade: '#a77536', trim: '#5a3b22', glow: '#ffb54a', gi: 0.8, bm: 0.9, br: 0.35 },
+};
+
 // ---------------------------------------------------------------- pose animator (parameter space -> normalized bone rotations)
 const KEYS = ['thL', 'thR', 'knL', 'knR', 'hipY', 'hipX', 'tX', 'tY', 'tZ', 'hX', 'hY', 'sLx', 'sLz', 'eL', 'sRx', 'sRz', 'sRy', 'eR', 'fold', 'flap', 'wScale', 'wLift', 'hand', 'spread'];
 export class SeraphAnimator {
@@ -410,6 +419,24 @@ export class SeraphAnimator {
       T.thL = -0.7 + up * 0.2; T.thR = -0.1; T.knL = 1.1; T.knR = 0.55; T.tX = 0.08; T.hX = -0.05;
       T.sLx = -0.5; T.sLz = 0.6; T.eL = -0.5; T.sRx = -0.4; T.sRz = -0.5; T.eR = -0.4;
       T.fold = 0.45; T.wScale = 0.9; T.flap = up * 0.12; T.hand = 0.3 - up * 0.1; T.spread = 0.7;
+    }
+    if (S.climb) { // on a wall: reach and pull hand over hand, knees up, head tipped back to find the next hold
+      const K = S.climb, k = K.mv, s1 = Math.sin(ph);
+      T.hipY = 0.9; T.hipX = K.slope ? 0.42 : 0.06; T.tX = K.slope ? 0.3 : 0.14; T.tY = s1 * 0.12 * k; T.tZ = 0; T.hX = K.slope ? -0.5 : -0.42; T.hY = 0;
+      T.sLx = (K.slope ? -1.7 : -2.55) + s1 * 0.55 * k; T.sLz = 0.32; T.eL = -0.75 - Math.max(0, s1) * 0.7 * k;
+      T.sRx = (K.slope ? -1.7 : -2.55) - s1 * 0.55 * k; T.sRz = -0.32; T.sRy = 0; T.eR = -0.75 - Math.max(0, -s1) * 0.7 * k;
+      T.thL = -0.75 - s1 * 0.45 * k; T.knL = 1.15 + s1 * 0.45 * k; T.thR = -0.75 + s1 * 0.45 * k; T.knR = 1.15 - s1 * 0.45 * k;
+      if (K.slope) { T.thL += 0.35; T.thR += 0.35; T.knL -= 0.35; T.knR -= 0.35; }
+      T.fold = 1.05; T.wScale = 0.72; T.wLift = 0; T.hand = 0.6; T.spread = 0.2; T.flap = 0;
+      spMode = 'back'; rate = 14;
+      if (K.leap > 0) { T.sLx = -2.95; T.sRx = -2.95; T.eL = -0.15; T.eR = -0.15; T.thL = -0.25; T.thR = -0.15; T.knL = 0.35; T.knR = 0.25; T.hX = -0.6; rate = 22; }
+      if (K.pull >= 0) { // hauling over: arms press down, a knee comes up onto the ledge, then he stands
+        const u = clamp(K.pull, 0, 1), a = smooth(0, 0.55, u), b = smooth(0.5, 1, u);
+        T.sLx = lerp(lerp(-2.6, -0.6, a), -0.3, b); T.sRx = lerp(lerp(-2.6, -0.6, a), -0.3, b); T.eL = lerp(-0.7, -0.15, a); T.eR = lerp(-0.7, -0.15, a);
+        T.tX = lerp(lerp(0.2, 0.75, a), 0.05, b); T.hX = lerp(-0.4, 0.1, a);
+        T.thL = lerp(lerp(-0.6, -1.7, a), -0.05, b); T.knL = lerp(lerp(1.0, 2.1, a), 0.1, b);
+        T.thR = lerp(lerp(-0.4, 0.15, a), 0, b); T.knR = lerp(lerp(0.9, 0.5, a), 0.08, b); T.hipY = lerp(lerp(0.9, 0.8, a), 0.95, b); rate = 20;
+      }
     }
     if (S.lock && S.grounded && !S.atk?.kind) { T.tX += 0.06; T.sRx = -0.6; T.eR = -0.9; spMode = 'guard'; }
     if (S.charge > 0) {
@@ -649,12 +676,12 @@ export class SeraphActor {
       }
     }
   }
-  buildSpear() {
+  buildSpear(bladeM) {
     const M = this.M, g = new THREE.Group();
     const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 2.25, 8), M.gold); shaft.rotation.x = Math.PI / 2; shaft.position.z = 0.42; g.add(shaft);
     const butt = new THREE.Mesh(new THREE.OctahedronGeometry(1, 0), M.gold); butt.scale.set(0.03, 0.03, 0.07); butt.position.z = -0.72; g.add(butt);
     for (const z of [-0.09, 0.09, 1.45]) { const r = new THREE.Mesh(new THREE.TorusGeometry(0.022, 0.007, 6, 12), M.gold); r.position.z = z; g.add(r); }
-    const blade = new THREE.Mesh(new THREE.OctahedronGeometry(1, 0), M.goldGlow); blade.scale.set(0.055, 0.016, 0.42); blade.position.z = 1.96; g.add(blade);
+    const blade = new THREE.Mesh(new THREE.OctahedronGeometry(1, 0), bladeM || M.goldGlow); blade.scale.set(0.055, 0.016, 0.42); blade.position.z = 1.96; g.add(blade);
     for (const s of [1, -1]) { const pr = new THREE.Mesh(new THREE.TorusGeometry(0.13, 0.011, 6, 18, 2.1), M.gold); pr.position.set(s * 0.02, 0, 1.6); pr.rotation.set(Math.PI / 2, 0, s > 0 ? -0.35 : Math.PI + 0.35); g.add(pr); }
     const gem = new THREE.Mesh(new THREE.SphereGeometry(0.026, 10, 8), M.gem); gem.position.z = 1.56; g.add(gem);
     g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
@@ -680,9 +707,19 @@ export class SeraphActor {
     this.tipLocal = [new V3(0, 0, 2.0), new V3(0, 0, 0.5)];
     return g;
   }
-  buildWeapon(kind) { return kind === 'greatsword' ? this.buildGreatsword() : kind === 'tianshu' ? this.buildLongsword() : kind === 'sword' ? this.buildSword(this.opt.swordLit) : this.buildSpear(); }
+  buildWeapon(kind) {
+    const V = WVAR[kind];
+    if (V) { // a weapon found in the world: one of the three forms, in its own metal
+      const M0 = this.M, mk = (o) => new THREE.MeshStandardMaterial(o);
+      const ov = { gold: mk({ color: V.trim, metalness: 0.75, roughness: 0.4 }), goldGlow: mk({ color: V.glow, emissive: V.glow, emissiveIntensity: V.gi ?? 0.5, metalness: 0.6, roughness: 0.3 }),
+        skin: mk({ color: V.blade, metalness: V.bm ?? 0.8, roughness: V.br ?? 0.3, emissive: V.be || '#000000', emissiveIntensity: V.be ? 0.25 : 0 }), gem: mk({ color: V.glow, emissive: V.glow, emissiveIntensity: 0.9, roughness: 0.2 }) };
+      this.M = Object.assign(Object.create(M0), ov);
+      try { const g = V.base === 'greatsword' ? this.buildGreatsword() : V.base === 'sword' ? this.buildSword(false, ov) : this.buildSpear(V.spearBlade ? ov.skin : null); if (V.len) g.scale.multiplyScalar(V.len); return g; }
+      finally { this.M = M0; }
+    }
+    return kind === 'greatsword' ? this.buildGreatsword() : kind === 'tianshu' ? this.buildLongsword() : kind === 'sword' ? this.buildSword(this.opt.swordLit) : this.buildSpear(); }
   // the holy sword his father gave him: dull grey steel until the cradle's light polishes it
-  buildSword(lit) {
+  buildSword(lit, ov) {
     const M = this.M, g = new THREE.Group();
     const leather = new THREE.MeshStandardMaterial({ color: '#5e4330', roughness: 0.7 });
     const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.026, 0.3, 8), leather); grip.rotation.x = Math.PI / 2; grip.position.z = -0.02; g.add(grip);
@@ -692,9 +729,9 @@ export class SeraphActor {
     shape.moveTo(-0.06, 0); shape.lineTo(0.06, 0); shape.lineTo(0.052, 1.08); shape.lineTo(0, 1.24); shape.lineTo(-0.052, 1.08); shape.closePath();
     const bg = new THREE.ExtrudeGeometry(shape, { depth: 0.016, bevelEnabled: true, bevelThickness: 0.009, bevelSize: 0.009, bevelSegments: 1 });
     bg.translate(0, 0, -0.008); bg.rotateX(Math.PI / 2); bg.translate(0, 0, 0.18);
-    g.add(new THREE.Mesh(bg, lit ? new THREE.MeshStandardMaterial({ color: '#f6f2e8', metalness: 0.8, roughness: 0.2, emissive: '#ffd98c', emissiveIntensity: 0.35 })
+    g.add(new THREE.Mesh(bg, ov ? ov.skin : lit ? new THREE.MeshStandardMaterial({ color: '#f6f2e8', metalness: 0.8, roughness: 0.2, emissive: '#ffd98c', emissiveIntensity: 0.35 })
       : new THREE.MeshStandardMaterial({ color: '#8e9198', metalness: 0.55, roughness: 0.62 })));
-    const fuller = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.024, 0.95), lit ? M.goldGlow : new THREE.MeshStandardMaterial({ color: '#6f7278', roughness: 0.7 })); fuller.position.z = 0.68; g.add(fuller);
+    const fuller = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.024, 0.95), ov ? ov.goldGlow : lit ? M.goldGlow : new THREE.MeshStandardMaterial({ color: '#6f7278', roughness: 0.7 })); fuller.position.z = 0.68; g.add(fuller);
     g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     bakeStatic(g);
     g.scale.setScalar(this.scale * 0.95);
