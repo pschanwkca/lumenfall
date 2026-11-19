@@ -79,24 +79,38 @@ export function makeWarriorMats() {
   M.leather = new THREE.MeshStandardMaterial({ color: '#6e5038', roughness: 0.68, metalness: 0.08 });
   M.steel = rim(new THREE.MeshStandardMaterial({ color: '#c3c7cf', roughness: 0.32, metalness: 0.82 }), '#ffffff', 0.25);
   M.cape = new THREE.MeshStandardMaterial({ map: capeTexture(), roughness: 0.86, side: THREE.DoubleSide });
+  M.eye = new THREE.MeshStandardMaterial({ color: '#3d2c22', roughness: 0.25, metalness: 0.1 });
+  M.fur = new THREE.MeshStandardMaterial({ color: '#d8ccb4', roughness: 0.95 });
   M.sash = new THREE.MeshStandardMaterial({ map: TEX.sash, color: '#e9dcc0', transparent: true, side: THREE.DoubleSide, depthWrite: false, roughness: 0.75, emissive: '#fff6e8', emissiveIntensity: 0.05 });
   return M;
 }
 
 // the hero's half-cape: deep Belldawn blue with a gold hem, so he reads against bright ground and sky
-let _capeTex = null;
-function capeTexture() {
-  if (_capeTex) return _capeTex;
+const _capeTex = {};
+function capeTexture(col = '#2c3d6b') {
+  if (_capeTex[col]) return _capeTex[col];
   const c = document.createElement('canvas'); c.width = 64; c.height = 128;
   const g = c.getContext('2d');
-  const gr = g.createLinearGradient(0, 0, 0, 128); gr.addColorStop(0, '#2c3d6b'); gr.addColorStop(1, '#1d2a4d');
+  const dk = new THREE.Color(col).multiplyScalar(0.68);
+  const gr = g.createLinearGradient(0, 0, 0, 128); gr.addColorStop(0, col); gr.addColorStop(1, '#' + dk.getHexString());
   g.fillStyle = gr; g.fillRect(0, 0, 64, 128);
   g.globalAlpha = 0.18; g.fillStyle = '#0d1428'; for (let x = 4; x < 64; x += 9) g.fillRect(x, 0, 2, 128); // folds
   g.globalAlpha = 1; g.fillStyle = '#c9a45a'; g.fillRect(0, 114, 64, 4); g.fillRect(0, 121, 64, 2); g.fillRect(0, 0, 3, 128); g.fillRect(61, 0, 3, 128);
   g.fillStyle = '#e7cd8a'; for (let x = 6; x < 64; x += 12) { g.beginPath(); g.moveTo(x, 106); g.lineTo(x + 3, 110); g.lineTo(x, 114); g.lineTo(x - 3, 110); g.fill(); } // a row of small diamonds above the hem
-  _capeTex = new THREE.CanvasTexture(c); _capeTex.colorSpace = THREE.SRGBColorSpace; _capeTex.anisotropy = 4;
-  return _capeTex;
+  const t = _capeTex[col] = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  return t;
 }
+// ---------------------------------------------------------------- the hero's look: outfit, hair, colours, build (the reliquary's dressing room)
+export const OUTFITS = {
+  belldawn: { name: '晨鐘旅裝', en: 'BELLDAWN TRAVELLER', dress: '#ece4d2', leather: '#6e5038', white: '#7d776c', steel: '#c3c7cf' },
+  knight: { name: '騎士輕甲', en: "KNIGHT'S HALF-PLATE", dress: '#3d4b70', leather: '#4a3628', white: '#5d5f66', steel: '#d6dae2', plate: true },
+  watcher: { name: '守望白袍', en: "WATCHER'S WHITE", dress: '#f5f0e6', leather: '#b7955c', white: '#e6dfd1', steel: '#e8d6a6', robe: true, noPauldron: true },
+  hunter: { name: '獵人皮衣', en: "HUNTER'S LEATHERS", dress: '#5b6a48', leather: '#4c3a2a', white: '#4e4639', steel: '#8d8a83', fur: true },
+};
+export const HAIRS = { short: { name: '短髮', cloth: [4, 3, 0.2, 0.16] }, long: { name: '長髮', cloth: [5, 8, 0.22, 0.6] }, tied: { name: '束髮', cloth: [2, 6, 0.075, 0.42] } };
+const HAIR_CLOTH = Object.assign({ none: { cloth: null } }, HAIRS);
+export const CAPES = { half: { name: '半披風', cloth: [6, 9, 0.5, 0.86] }, long: { name: '長披風', cloth: [6, 12, 0.54, 1.3] }, none: { name: '不披', cloth: null } };
+export const LOOK_DEFAULT = { outfit: 'belldawn', cape: 'half', capeCol: '#2c3d6b', hair: 'short', hairCol: '#5b4434', skin: '#f1dccf', eye: '#3d2c22', height: 1, build: 0 };
 // ---------------------------------------------------------------- placeholder skinned body
 function capsuleBetween(a, b, r) {
   const d = new V3().subVectors(b, a), L = d.length();
@@ -146,8 +160,11 @@ function skinPart(g, cands, custom) {
   g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
   return g;
 }
-export function buildBody(M, style) {
-  const war = style === 'warrior';
+export function buildBody(M, style, look) {
+  const war = style === 'warrior', L = (war && look) || {}, O = OUTFITS[L.outfit] || OUTFITS.belldawn, bw = 1 + (L.build || 0) * 0.11, lw = 1 + (L.build || 0) * 0.08;
+  const fem = L.sex === 'f', belly = L.belly || 0;
+  // girth swells the waist, a woman's frame narrows the shoulders and widens the hips
+  const lt = (pts) => pts.map(([r, y]) => [r * bw * (1 + belly * 0.5 * Math.max(0, 1 - Math.abs(y - 1.1) / 0.22)) * (fem ? (y > 1.25 ? 0.9 : y < 1.04 ? 1.07 : 1) : 1), y]);
   const bones = {}, list = [];
   for (const n of BONES) { const b = new THREE.Bone(); b.name = 'mixamorig' + n; bones[n] = b; list.push(b); }
   for (const n of BONES) {
@@ -159,25 +176,42 @@ export function buildBody(M, style) {
   const add = (geo, mat, cands, custom) => parts.push({ g: skinPart(geo, cands, custom), m: mat });
   const BI = (n) => BONES.indexOf(n);
   // torso & dress
-  if (war) add(lathe([[0.128, 0.9], [0.126, 0.98], [0.124, 1.06], [0.132, 1.14], [0.152, 1.24], [0.162, 1.32], [0.148, 1.39], [0.1, 1.43], [0.05, 1.46], [0.04, 1.49]], 26, 0.8), 'dress', ['Hips', 'Spine', 'Spine1', 'Spine2', 'Neck', 'LeftShoulder', 'RightShoulder']);
+  if (war) add(lathe(lt([[0.128, 0.9], [0.126, 0.98], [0.124, 1.06], [0.132, 1.14], [0.152, 1.24], [0.162, 1.32], [0.148, 1.39], [0.1, 1.43], [0.05, 1.46], [0.04, 1.49]]), 26, 0.8), 'dress', ['Hips', 'Spine', 'Spine1', 'Spine2', 'Neck', 'LeftShoulder', 'RightShoulder']);
   else add(lathe([[0.122, 0.9], [0.118, 0.98], [0.11, 1.06], [0.116, 1.14], [0.133, 1.24], [0.14, 1.32], [0.128, 1.39], [0.088, 1.43], [0.048, 1.46], [0.038, 1.49]], 26, 0.74), 'dress', ['Hips', 'Spine', 'Spine1', 'Spine2', 'Neck', 'LeftShoulder', 'RightShoulder']);
   if (war) {
     // leather belt with a small gold buckle, a strap across the chest, steel pauldrons
-    add(lathe([[0.134, 0.975], [0.131, 1.0], [0.131, 1.03], [0.134, 1.05]], 26, 0.82), 'leather', ['Hips', 'Spine']);
+    add(lathe(lt([[0.134, 0.975], [0.131, 1.0], [0.131, 1.03], [0.134, 1.05]]), 26, 0.82), O.robe ? 'gold' : 'leather', ['Hips', 'Spine']);
     { const g = new THREE.BoxGeometry(0.05, 0.05, 0.012); g.translate(0, 1.012, 0.108); add(g, 'gold', ['Hips', 'Spine']); }
-    { const g = new THREE.TorusGeometry(0.15, 0.011, 6, 36); g.scale(1, 1.25, 0.72); g.rotateZ(0.62); g.translate(0, 1.2, 0); add(g, 'leather', ['Spine1', 'Spine2']); }
-    for (const sx of [1, -1]) { const g = new THREE.SphereGeometry(0.075, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.55); g.scale(1.1, 0.75, 1.0); g.rotateZ(-sx * 0.35); g.translate(sx * 0.17, 1.415, 0); add(g, 'steel', [sx > 0 ? 'LeftShoulder' : 'RightShoulder', sx > 0 ? 'LeftArm' : 'RightArm', 'Spine2']); }
+    if (!O.plate && !O.robe) { const g = new THREE.TorusGeometry(0.15 * bw, 0.011, 6, 36); g.scale(1, 1.25, 0.72); g.rotateZ(0.62); g.translate(0, 1.2, 0); add(g, 'leather', ['Spine1', 'Spine2']); }
+    if (O.plate) { // a breastplate over the surcoat
+      add(lathe(lt([[0.146, 1.1], [0.165, 1.2], [0.176, 1.29], [0.163, 1.37], [0.12, 1.425], [0.07, 1.45]]), 26, 0.86), 'steel', ['Spine', 'Spine1', 'Spine2']);
+      const g = new THREE.TorusGeometry(0.168 * bw, 0.007, 6, 36); g.rotateX(Math.PI / 2); g.scale(1, 0.86, 1); g.translate(0, 1.1, 0); add(g, 'gold', ['Spine']);
+    }
+    if (O.fur) { const g = new THREE.TorusGeometry(0.13 * bw, 0.045, 8, 28); g.rotateX(Math.PI / 2); g.scale(1.05, 0.82, 0.9); g.translate(0, 1.43, -0.005); add(g, 'fur', ['Spine2', 'Neck']); }
+    if (O.robe) { const g = new THREE.TorusGeometry(0.11 * bw, 0.016, 6, 30); g.rotateX(Math.PI / 2); g.scale(1, 0.8, 1); g.translate(0, 1.42, 0); add(g, 'gold', ['Spine2']); }
+    if (!O.noPauldron) for (const sx of [1, -1]) { const k = O.plate ? 1.3 : 1, g = new THREE.SphereGeometry(0.075 * k, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.55); g.scale(1.1, 0.75, 1.0); g.rotateZ(-sx * 0.35); g.translate(sx * 0.17 * bw, 1.415, 0); add(g, O.fur ? 'leather' : 'steel', [sx > 0 ? 'LeftShoulder' : 'RightShoulder', sx > 0 ? 'LeftArm' : 'RightArm', 'Spine2']); }
   } else add(lathe([[0.121, 1.055], [0.117, 1.09], [0.119, 1.13], [0.126, 1.16]], 26, 0.77), 'gold', ['Spine', 'Spine1', 'Spine2']);
   if (!war) { const g = new THREE.TorusGeometry(0.128, 0.006, 6, 40); g.rotateX(Math.PI / 2); g.scale(1, 1, 0.76); g.translate(0, 1.245, 0); add(g, 'gold', ['Spine2']); }
   if (!war) { const g = new THREE.OctahedronGeometry(1, 0); g.scale(0.058, 0.11, 0.016); g.translate(0, 1.31, 0.103); add(g, 'gold', ['Spine2']); }
-  { const g = new THREE.SphereGeometry(war ? 0.014 : 0.018, 10, 8); g.translate(0, war ? 1.34 : 1.335, war ? 0.13 : 0.112); add(g, 'gem', ['Spine2']); } // the warrior wears his father's light as a small pendant
+  if (war && fem) for (const sx of [1, -1]) { const g = new THREE.SphereGeometry(0.052 * bw, 12, 8); g.scale(1, 0.85, 0.75); g.translate(sx * 0.055, 1.285, 0.088 * bw); add(g, 'dress', ['Spine1', 'Spine2']); }
+  if (!war || !L.noPendant) { const g = new THREE.SphereGeometry(war ? 0.014 : 0.018, 10, 8); g.translate(0, war ? 1.34 : 1.335, war ? 0.13 : 0.112); add(g, 'gem', ['Spine2']); } // the warrior wears his father's light as a small pendant
   { const g = new THREE.TorusGeometry(0.045, 0.011, 6, 20); g.rotateX(Math.PI / 2); g.translate(0, 1.47, 0); add(g, 'gold', ['Neck']); }
   // neck + head
   add(capsuleBetween(new V3(0, 1.43, 0), new V3(0, 1.55, 0.005), 0.033), 'skin', ['Spine2', 'Neck', 'Head']);
   { const g = new THREE.SphereGeometry(0.1, 26, 20); g.scale(0.95, 1.07, 1.0); g.translate(0, 1.625, 0.01); add(g, 'skin', ['Head']); }
-  if (war) { const g = new THREE.SphereGeometry(0.108, 26, 16, Math.PI / 2 + 1.2, Math.PI * 2 - 2.4, 0, Math.PI * 0.62); g.scale(1.04, 1.04, 1.08); g.translate(0, 1.645, -0.006); add(g, 'hair', ['Head']); }
+  if (war) { // a face: eyes and brows, so he reads as someone up close
+    for (const sx of [1, -1]) {
+      { const g = new THREE.SphereGeometry(0.0125, 12, 8); g.scale(1.25, 0.9, 0.5); g.translate(sx * 0.034, 1.633, 0.1); add(g, 'eye', ['Head']); }
+      { const g = new THREE.BoxGeometry(0.032, 0.0055, 0.008); g.rotateZ(sx * -0.12); g.translate(sx * 0.035, 1.656, 0.1); add(g, 'hair', ['Head']); }
+    }
+  }
+  if (war && L.beard) { const g = new THREE.SphereGeometry(0.085, 16, 10, Math.PI / 2 - 1.1, 2.2, Math.PI * 0.52, Math.PI * 0.38); g.scale(0.95, 1.15, 1.05); g.translate(0, 1.6, 0.012); add(g, 'hair', ['Head']); }
+  if (war && L.hair === 'none') { /* a shaven head */ }
+  else if (war && L.hair === 'long') { const g = new THREE.SphereGeometry(0.112, 26, 18, Math.PI / 2 + 1.0, Math.PI * 2 - 2.0, 0, Math.PI * 0.78); g.scale(1.05, 1.06, 1.1); g.translate(0, 1.642, -0.006); add(g, 'hair', ['Head']); }
+  else if (war) { const g = new THREE.SphereGeometry(0.108, 26, 16, Math.PI / 2 + 1.2, Math.PI * 2 - 2.4, 0, Math.PI * 0.62); g.scale(1.04, 1.04, 1.08); g.translate(0, 1.645, -0.006); add(g, 'hair', ['Head']); }
+  if (war && L.hair === 'tied') { const g = new THREE.SphereGeometry(0.036, 12, 10); g.scale(1, 0.9, 0.85); g.translate(0, 1.7, -0.098); add(g, 'hair', ['Head']); }
   else { const g = new THREE.SphereGeometry(0.112, 26, 18, Math.PI / 2 + 0.95, Math.PI * 2 - 1.9, 0, Math.PI * 0.8); g.scale(1.03, 1.06, 1.1); g.translate(0, 1.64, -0.004); add(g, 'hair', ['Head']); }
-  { const g = new THREE.SphereGeometry(0.113, 26, 10, 0, Math.PI * 2, 0, 0.95); g.rotateX(0.28); g.translate(0, 1.637, 0.008); add(g, 'hair', ['Head']); }
+  if (!(war && L.hair === 'none')) { const g = new THREE.SphereGeometry(0.113, 26, 10, 0, Math.PI * 2, 0, 0.95); g.rotateX(0.28); g.translate(0, 1.637, 0.008); add(g, 'hair', ['Head']); }
   if (!war) { const g = new THREE.CylinderGeometry(0.103, 0.099, 0.028, 28, 1, true, -1.35, 2.7); g.translate(0, 1.628, 0.012); add(g, 'gold', ['Head']); }
   for (const sx of war ? [] : [1, -1]) { // side locks framing the face
     const g = new THREE.CylinderGeometry(0.03, 0.006, 0.3, 8, 4); const p = g.attributes.position;
@@ -193,14 +227,14 @@ export function buildBody(M, style) {
   for (const s of ['Left', 'Right']) {
     const sx = s === 'Left' ? 1 : -1;
     { const g = new THREE.SphereGeometry(0.047, 14, 10); g.translate(sx * 0.163, 1.4, 0); add(g, 'skin', [s + 'Shoulder', s + 'Arm', 'Spine2']); }
-    add(capsuleBetween(tp(s + 'Arm'), tp(s + 'ForeArm'), 0.039), 'skin', [s + 'Shoulder', s + 'Arm', s + 'ForeArm']);
+    add(capsuleBetween(tp(s + 'Arm'), tp(s + 'ForeArm'), 0.039 * (war ? lw : 1)), war && (O.plate || O.robe) ? 'dress' : 'skin', [s + 'Shoulder', s + 'Arm', s + 'ForeArm']);
     { const g = new THREE.TorusGeometry(0.044, 0.008, 6, 16); g.rotateY(Math.PI / 2); g.translate(sx * 0.23, 1.4, 0); add(g, 'gold', [s + 'Arm']); }
     add(capsuleBetween(tp(s + 'ForeArm'), tp(s + 'Hand'), 0.032), 'skin', [s + 'Arm', s + 'ForeArm', s + 'Hand']);
     if (war) { const g = new THREE.CylinderGeometry(0.043, 0.04, 0.16, 12); g.rotateZ(-sx * Math.PI / 2); g.translate(sx * 0.6, 1.4, 0); add(g, 'leather', [s + 'ForeArm']); }
     else { const g = new THREE.CylinderGeometry(0.048, 0.115, 0.27, 16, 1, true); g.rotateZ(-sx * Math.PI / 2); g.translate(sx * 0.56, 1.4, 0); add(g, 'sheer', [s + 'ForeArm']); }
     { const g = new THREE.SphereGeometry(0.036, 10, 8); g.scale(1.45, 0.8, 0.95); g.translate(sx * 0.705, 1.4, 0); add(g, 'skin', [s + 'ForeArm', s + 'Hand']); }
-    add(capsuleBetween(tp(s + 'UpLeg'), tp(s + 'Leg'), 0.062), 'white', ['Hips', s + 'UpLeg', s + 'Leg']);
-    add(capsuleBetween(tp(s + 'Leg'), tp(s + 'Foot'), war ? 0.054 : 0.046), war ? 'leather' : 'white', [s + 'UpLeg', s + 'Leg', s + 'Foot']);
+    add(capsuleBetween(tp(s + 'UpLeg'), tp(s + 'Leg'), 0.062 * (war ? lw : 1)), 'white', ['Hips', s + 'UpLeg', s + 'Leg']);
+    add(capsuleBetween(tp(s + 'Leg'), tp(s + 'Foot'), (war ? 0.054 : 0.046) * (war ? lw : 1)), war ? (O.plate ? 'steel' : 'leather') : 'white', [s + 'UpLeg', s + 'Leg', s + 'Foot']);
     { const g = new THREE.OctahedronGeometry(1, 0); g.scale(0.05, 0.035, 0.012); g.translate(sx * 0.09, 0.54, 0.055); add(g, 'gold', [s + 'Leg']); }
     { const g = new THREE.CylinderGeometry(0.008, 0.044, 0.22, 10); g.rotateX(Math.PI / 2 + 0.2); g.translate(sx * 0.09, 0.055, 0.05); add(g, 'gold', [s + 'Foot', s + 'ToeBase']); }
   }
@@ -210,9 +244,10 @@ export function buildBody(M, style) {
     return [[BI('Hips'), 1 - side], [BI(p.x >= 0 ? 'LeftUpLeg' : 'RightUpLeg'), side]];
   };
   if (war) {
-    // a short tunic skirt over the trousers, split at the sides
-    add(pleat(lathe([[0.132, 1.0], [0.16, 0.94], [0.2, 0.86], [0.225, 0.8]], 40), 8, 0.05, 1.0, 0.8), 'dress', null, skirtW);
-    { const g = new THREE.TorusGeometry(0.225, 0.006, 6, 40); g.rotateX(Math.PI / 2); g.translate(0, 0.8, 0); add(g, 'gold', null, skirtW); }
+    // a short tunic skirt over the trousers, split at the sides (the watcher's robe falls to the knee)
+    const sk = O.robe ? [[0.132, 1.0], [0.17, 0.92], [0.22, 0.79], [0.255, 0.66], [0.27, 0.58]] : [[0.132, 1.0], [0.16, 0.94], [0.2, 0.86], [0.225, 0.8]], hem = sk[sk.length - 1];
+    add(pleat(lathe(lt(sk), 40), O.robe ? 12 : 8, O.robe ? 0.06 : 0.05, 1.0, hem[1]), 'dress', null, skirtW);
+    { const g = new THREE.TorusGeometry(hem[0] * bw, 0.006, 6, 40); g.rotateX(Math.PI / 2); g.translate(0, hem[1], 0); add(g, 'gold', null, skirtW); }
   } else {
   add(pleat(lathe([[0.122, 1.0], [0.163, 0.92], [0.24, 0.79], [0.305, 0.67], [0.33, 0.62]], 56), 14, 0.07, 0.98, 0.62), 'dress', null, skirtW);
   { const g = new THREE.TorusGeometry(0.33, 0.009, 6, 48); g.rotateX(Math.PI / 2); g.translate(0, 0.62, 0); add(g, 'gold', null, skirtW); }
@@ -380,7 +415,7 @@ export const WVAR = {
   fallen: { base: 'sword', blade: '#2e2a33', trim: '#5c2a22', glow: '#ff5a2a', gi: 1.4, bm: 0.6, br: 0.45, be: '#7a1c0c', len: 0.92 },
   keeper: { base: 'spear', blade: '#c9cdd3', trim: '#8a7556', glow: '#ffd08a', gi: 0.25, spearBlade: true, len: 1.08 },
   watcher: { base: 'spear', blade: '#f5f1e6', trim: '#e4d3a6', glow: '#fff0c4', gi: 0.9, spearBlade: true, be: '#ffe7b0' },
-  bell: { base: 'greatsword', blade: '#a77536', trim: '#5a3b22', glow: '#ffb54a', gi: 0.8, bm: 0.9, br: 0.35 },
+  bell: { base: 'hammer', blade: '#a77536', trim: '#5a3b22', glow: '#ffb54a', gi: 0.8, bm: 0.9, br: 0.35 },
 };
 
 // ---------------------------------------------------------------- pose animator (parameter space -> normalized bone rotations)
@@ -469,7 +504,7 @@ export class SeraphAnimator {
     }
     const A = S.atk;
     if (A && A.kind) {
-      const wp = S.wpn || 'spear', gs = wp === 'greatsword';
+      const wp = S.wpn || 'spear', gs = wp === 'greatsword' || wp === 'hammer';
       // wind-up coils slowly into the pose, the swing snaps through on the hit, the recovery drifts back
       const k = A.kind, hitT = A.hit ?? 0.1, sw = A.sw ?? 0.1, s0 = Math.max(0, hitT - sw);
       const a = easeOut(clamp((A.t - s0) / (sw * 1.35), 0, 1)), wind = s0 > 0 ? clamp(A.t / s0, 0, 1) : 1;
@@ -508,6 +543,29 @@ export class SeraphAnimator {
         const up = clamp(A.t / Math.max(0.08, hitT - 0.08), 0, 1), dn = clamp((A.t - (hitT - 0.04)) / 0.12, 0, 1);
         T.sRx = lerp(lerp(-1.2, -2.9, up), -0.9, dn); T.sRz = -0.2; T.eR = -0.1; T.sLx = lerp(-2.4, -0.6, dn); T.sLz = 0.4; T.eL = -0.3;
         T.tX = lerp(-0.25, 0.42, dn); T.hX = lerp(-0.4, 0.2, dn); T.hipY = lerp(0.98, 0.84, dn); T.fold = -0.1; T.wScale = 1.2; T.wLift = 0.3; T.hand = 0.05; T.spread = 1.15;
+      }
+      if (wp === 'bow' && k !== 'focus') { // side-on to the target, bow arm out, the string drawn to the cheek; it snaps on release
+        const draw = clamp(A.t / Math.max(0.08, hitT), 0, 1), rel = clamp((A.t - hitT) / 0.12, 0, 1);
+        T.tY = -0.75; T.tX = 0.05; T.hY = 0.7; T.hX = -0.05; T.thL = -0.25; T.thR = 0.35; T.knL = 0.2; T.knR = 0.15;
+        T.sRx = -1.45; T.sRz = -0.15; T.sRy = 0.25; T.eR = -0.05;
+        T.sLx = lerp(-1.2, -1.5, draw); T.sLz = lerp(0.6, 0.15, draw); T.eL = lerp(-1.2, -2.3, draw) + rel * 0.9;
+        if (k === 'heavy' || k === 'l3') { T.tX = -0.12; T.hX = -0.2; T.sRx = -1.7; }
+        spMode = 'bow'; rate = A.t < hitT ? 16 : 30;
+      } else if (wp === 'dual' && k !== 'focus') { // two short blades: alternating cuts, both arms crossing on the flurries
+        const f = k === 'l0' || k === 'counter', g = k === 'l1', ph2 = A.t * 22;
+        T.tX = 0.22; T.thL = -0.55; T.knL = 0.5; T.thR = 0.45; T.knR = 0.4; T.hipY = 0.88;
+        if (f) { T.tY = W(-0.7, 0.6); T.sRx = W(-1.0, -1.3); T.sRz = W(-1.1, 0.3); T.eR = W(-1.2, -0.2); T.sLx = -0.6; T.sLz = 0.6; T.eL = -1.2; }
+        else if (g) { T.tY = W(0.7, -0.6); T.sLx = W(-1.0, -1.3); T.sLz = W(1.1, -0.3); T.eL = W(-1.2, -0.2); T.sRx = -0.6; T.sRz = -0.6; T.eR = -1.2; }
+        else { // flurries: both blades churning
+          T.tY = Math.sin(ph2) * 0.5; T.sRx = -1.2 + Math.sin(ph2) * 0.5; T.sRz = -0.4 + Math.cos(ph2) * 0.6; T.eR = -0.6;
+          T.sLx = -1.2 - Math.sin(ph2) * 0.5; T.sLz = 0.4 - Math.cos(ph2) * 0.6; T.eL = -0.6; T.tX = 0.32;
+        }
+        spMode = 'arm'; rate = 40;
+      } else if (wp === 'censer' && k !== 'focus') { // the censer staff: two-handed sweeps, and raised high to pour out its light
+        if (k === 'heavy' || k === 'l3') { const up = clamp(A.t / Math.max(0.1, hitT), 0, 1);
+          T.sRx = lerp(-1.4, -2.95, up); T.sLx = lerp(-1.2, -2.6, up); T.sRz = -0.2; T.sLz = 0.25; T.eR = -0.15; T.eL = -0.3; T.hX = -0.35 * up; T.tX = -0.1 * up; spMode = 'up'; }
+        else { const f = k !== 'l1'; T.tY = f ? W(-0.8, 0.7) : W(0.8, -0.7); T.sRx = W(-1.3, -1.0); T.sRz = f ? W(-0.9, 0.2) : W(0.3, -0.9); T.eR = -0.5; T.sLx = W(-1.1, -0.9); T.sLz = 0.5; T.eL = -1.3; spMode = 'arm'; }
+        rate = 26;
       }
       if (rec > 0) for (const key of ['tY', 'sRx', 'sRz', 'eR']) T[key] = lerp(T[key], key === 'sRx' ? -0.5 : key === 'eR' ? -0.4 : key === 'sRz' ? -0.4 : 0, rec * 0.6);
     }
@@ -574,8 +632,9 @@ export class SeraphActor {
   }
   useDefaultBody() {
     if (this.model) this.root.remove(this.model);
-    const { mesh, bones } = buildBody(this.M, this.opt.style);
-    this.model = new THREE.Group(); this.model.add(mesh); this.model.scale.setScalar(this.scale);
+    const { mesh, bones } = buildBody(this.M, this.opt.style, this.opt.look);
+    if (this.body && this.body.geometry) this.body.geometry.dispose();
+    this.model = new THREE.Group(); this.model.add(mesh); this.model.scale.setScalar(this.scale * ((this.opt.look && this.opt.look.height) || 1));
     this.root.add(this.model);
     this.rig = new HumanoidRig(this.model, bones);
     this.body = mesh; this.custom = false;
@@ -661,6 +720,9 @@ export class SeraphActor {
     this.weapon = this.buildWeapon(this.opt.weapon);
     this.weaponHolder = new THREE.Group(); this.weaponHolder.add(this.weapon);
     this.root.add(this.weaponHolder);
+    this.offHolder = new THREE.Group(); this.root.add(this.offHolder); this.offQ = new Q(); // the second of the twin blades
+    this.form = (WVAR[this.opt.weapon] && WVAR[this.opt.weapon].base) || this.opt.weapon;
+    if (this.form === 'dual') { const t = this.tipLocal; this.offHolder.add(this.buildWeapon(this.opt.weapon)); this.tipLocal = t; }
     // cloth: long hair + two sashes
     this.cloths = [];
     if (!this.opt.noCloth) {
@@ -714,10 +776,53 @@ export class SeraphActor {
       const ov = { gold: mk({ color: V.trim, metalness: 0.75, roughness: 0.4 }), goldGlow: mk({ color: V.glow, emissive: V.glow, emissiveIntensity: V.gi ?? 0.5, metalness: 0.6, roughness: 0.3 }),
         skin: mk({ color: V.blade, metalness: V.bm ?? 0.8, roughness: V.br ?? 0.3, emissive: V.be || '#000000', emissiveIntensity: V.be ? 0.25 : 0 }), gem: mk({ color: V.glow, emissive: V.glow, emissiveIntensity: 0.9, roughness: 0.2 }) };
       this.M = Object.assign(Object.create(M0), ov);
-      try { const g = V.base === 'greatsword' ? this.buildGreatsword() : V.base === 'sword' ? this.buildSword(false, ov) : this.buildSpear(V.spearBlade ? ov.skin : null); if (V.len) g.scale.multiplyScalar(V.len); return g; }
+      try { const g = ['bow', 'hammer', 'dual', 'censer', 'pick', 'lantern'].includes(V.base) ? this.buildForm(V.base) : V.base === 'greatsword' ? this.buildGreatsword() : V.base === 'sword' ? this.buildSword(false, ov) : this.buildSpear(V.spearBlade ? ov.skin : null); if (V.len) g.scale.multiplyScalar(V.len); return g; }
       finally { this.M = M0; }
     }
+    if (kind === 'bow' || kind === 'hammer' || kind === 'dual' || kind === 'censer' || kind === 'pick' || kind === 'lantern') return this.buildForm(kind);
     return kind === 'greatsword' ? this.buildGreatsword() : kind === 'tianshu' ? this.buildLongsword() : kind === 'sword' ? this.buildSword(this.opt.swordLit) : this.buildSpear(); }
+  // the companions' weapons, each its own way of fighting
+  buildForm(kind) {
+    const M = this.M, g = new THREE.Group(), mk = (c, o = {}) => new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.5 }, o));
+    const wood = mk('#6b4c34', { roughness: 0.8 }), add = (geo, m, x = 0, y = 0, z = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); g.add(o); return o; };
+    if (kind === 'bow') { // the watcher's longbow: white wood and gold, the limbs sweeping back
+      const lm = mk('#efe8d8', { roughness: 0.45 });
+      for (const sgn of [1, -1]) { const t = new THREE.TorusGeometry(0.62, 0.016, 6, 24, 1.15); t.rotateZ(sgn > 0 ? -0.05 : Math.PI + 0.05 - 1.15); t.rotateY(Math.PI / 2); t.translate(0, 0, 0); const o = add(t, lm); o.position.y = -0.58; o.rotation.x = 0; }
+      add(new THREE.CylinderGeometry(0.024, 0.024, 0.2, 8).rotateX(Math.PI / 2), M.gold);
+      const str = add(new THREE.CylinderGeometry(0.003, 0.003, 1.18, 4).rotateX(Math.PI / 2), mk('#fff6dc', { emissive: '#ffe6a8', emissiveIntensity: 0.6 })); str.position.y = -0.2;
+      this.tipLocal = [new V3(0, 0, 0.6), new V3(0, 0, 0)];
+    } else if (kind === 'hammer') { // the bell-maul: a long haft and a head cast from a temple bell
+      add(new THREE.CylinderGeometry(0.03, 0.034, 1.25, 8).rotateX(Math.PI / 2), wood, 0, 0, 0.42);
+      const hd = add(new THREE.CylinderGeometry(0.17, 0.24, 0.4, 14), mk('#a67434', { metalness: 0.85, roughness: 0.38 }), 0, 0, 1.08); hd.rotation.z = Math.PI / 2;
+      add(new THREE.TorusGeometry(0.2, 0.025, 6, 18).rotateY(Math.PI / 2), M.gold, 0.2, 0, 1.08); add(new THREE.TorusGeometry(0.2, 0.025, 6, 18).rotateY(Math.PI / 2), M.gold, -0.2, 0, 1.08);
+      this.tipLocal = [new V3(0, 0, 1.25), new V3(0, 0, 0.9)];
+    } else if (kind === 'dual') { // a hunter's short blade (one per hand)
+      add(new THREE.CylinderGeometry(0.018, 0.02, 0.14, 6).rotateX(Math.PI / 2), wood, 0, 0, -0.02);
+      add(new THREE.BoxGeometry(0.12, 0.02, 0.03), M.gold, 0, 0, 0.06);
+      const sh = new THREE.Shape(); sh.moveTo(-0.032, 0); sh.lineTo(0.03, 0); sh.quadraticCurveTo(0.05, 0.3, 0.0, 0.56); sh.quadraticCurveTo(-0.01, 0.3, -0.032, 0);
+      const bg = new THREE.ExtrudeGeometry(sh, { depth: 0.01, bevelEnabled: true, bevelThickness: 0.004, bevelSize: 0.004, bevelSegments: 1 }); bg.translate(0, 0, -0.005); bg.rotateX(Math.PI / 2); bg.translate(0, 0, 0.07);
+      add(bg, mk('#d8dbe0', { metalness: 0.85, roughness: 0.25 }));
+      this.tipLocal = [new V3(0, 0, 0.62), new V3(0, 0, 0.2)];
+    } else if (kind === 'censer') { // a herbalist's staff with a censer of smouldering herbs hung from the crook
+      add(new THREE.CylinderGeometry(0.02, 0.026, 1.5, 8).rotateX(Math.PI / 2), wood, 0, 0, 0.5);
+      const crook = add(new THREE.TorusGeometry(0.09, 0.016, 6, 14, Math.PI * 1.2), wood, 0, 0.06, 1.25); crook.rotation.y = Math.PI / 2;
+      add(new THREE.SphereGeometry(0.075, 10, 8), mk('#b98a45', { metalness: 0.8, roughness: 0.35 }), 0, -0.07, 1.33);
+      add(new THREE.SphereGeometry(0.045, 8, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 1.9, 1.2) }), 0, -0.07, 1.33);
+      this.tipLocal = [new V3(0, -0.07, 1.33), new V3(0, 0, 0.8)];
+    } else if (kind === 'pick') { // a miner's blasting pick
+      add(new THREE.CylinderGeometry(0.026, 0.03, 0.95, 8).rotateX(Math.PI / 2), wood, 0, 0, 0.3);
+      const hd = add(new THREE.ConeGeometry(0.05, 0.55, 6), mk('#5c5a58', { metalness: 0.7, roughness: 0.4 }), 0, 0.12, 0.8); hd.rotation.x = 0;
+      this.tipLocal = [new V3(0, 0.35, 0.8), new V3(0, 0, 0.5)];
+    } else { // lantern on a pole
+      add(new THREE.CylinderGeometry(0.018, 0.022, 1.3, 8).rotateX(Math.PI / 2), wood, 0, 0, 0.45);
+      add(new THREE.BoxGeometry(0.16, 0.2, 0.16), mk('#2f2b28', { metalness: 0.6 }), 0, -0.12, 1.1);
+      add(new THREE.BoxGeometry(0.12, 0.15, 0.12), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 1.7, 0.9) }), 0, -0.12, 1.1);
+      this.tipLocal = [new V3(0, -0.12, 1.1), new V3(0, 0, 0.6)];
+    }
+    g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    g.scale.setScalar(this.scale * 0.95);
+    return g;
+  }
   // the holy sword his father gave him: dull grey steel until the cradle's light polishes it
   buildSword(lit, ov) {
     const M = this.M, g = new THREE.Group();
@@ -756,7 +861,11 @@ export class SeraphActor {
     this.tipLocal = [new V3(0, 0, 1.68), new V3(0, 0, 0.45)];
     return g;
   }
-  setWeapon(kind) { this.weaponHolder.remove(this.weapon); this.opt.weapon = kind; this.weapon = this.buildWeapon(kind); this.weaponHolder.add(this.weapon); }
+  setWeapon(kind) {
+    this.weaponHolder.remove(this.weapon); this.opt.weapon = kind; this.weapon = this.buildWeapon(kind); this.weaponHolder.add(this.weapon);
+    this.offHolder.clear(); this.form = (WVAR[kind] && WVAR[kind].base) || kind;
+    if (this.form === 'dual') { const t = this.tipLocal; this.offHolder.add(this.buildWeapon(kind)); this.tipLocal = t; }
+  }
   tipWorld(i, out) { return out.copy(this.tipLocal[i]).applyMatrix4(this.weapon.matrixWorld); }
   update(dt, S, params) {
     const c = params || this.anim.update(dt, S);
@@ -866,13 +975,25 @@ export class SeraphActor {
     else if (mode === 'guard') dir = new V3(-0.15, 0.25, 1).normalize();
     else if (mode === 'down') dir = new V3(0, -1, 0.3).normalize();
     else if (mode === 'roll') dir = new V3(-0.35, -0.75, -0.55).normalize().applyAxisAngle(_X, this.anim.c.roll || 0); // blade laid along his flank, turning with him
+    else if (mode === 'bow') dir = new V3(0.12, 1, 0.15).normalize();
     else dir = new V3(0, Math.cos(sp.tilt), Math.sin(sp.tilt));
+    if (this.form === 'bow' && mode !== 'bow') dir = mode === 'back' ? new V3(0.3, 1, -0.3).normalize() : new V3(0.15, 1, 0.35).normalize(); // a bow is carried upright, never like a blade
     const tq = _q2.setFromUnitVectors(new V3(0, 0, 1), dir);
     const twist = new Q().setFromAxisAngle(dir, mode === 'arm' ? Math.PI / 2 : 0);
     tq.premultiply(twist);
     this.spearQ.slerp(tq, 1 - Math.exp(-(mode === 'arm' ? 40 : mode === 'roll' ? 60 : 14) * dt));
     this.weaponHolder.position.copy(hand);
     this.weaponHolder.quaternion.copy(this.spearQ);
+    this.offHolder.visible = this.form === 'dual' && this.weaponHolder.visible;
+    if (this.offHolder.visible) { // the left blade mirrors the right
+      this.rig.socket('LeftHand', _p, _q); const lh = _p.applyMatrix4(rootInv);
+      let ld;
+      if (mode === 'arm') { const fa = new V3(); this.rig.d.LeftForeArm.bone.getWorldPosition(fa); fa.applyMatrix4(rootInv); ld = lh.clone().sub(fa).normalize(); }
+      else if (mode === 'back') ld = new V3(0, -0.35, -1).normalize(); else ld = new V3(0.2, -0.85, 0.4).normalize();
+      const oq = new Q().setFromUnitVectors(new V3(0, 0, 1), ld); if (mode === 'arm') oq.premultiply(new Q().setFromAxisAngle(ld, -Math.PI / 2));
+      this.offQ.slerp(oq, 1 - Math.exp(-(mode === 'arm' ? 40 : 14) * dt));
+      this.offHolder.position.copy(lh); this.offHolder.quaternion.copy(this.offQ);
+    }
   }
   updateCloth(dt, S) {
     if (!this.cloths.length) return;
@@ -882,7 +1003,8 @@ export class SeraphActor {
     this.rig.d.Hips.bone.getWorldPosition(hips);
     const down = new V3(0, -1, -0.15).applyQuaternion(cq).normalize();
     const vis = this.root.visible;
-    this.hair.setPins((f, out) => out.set((f - 0.5) * 0.17 * s, 0.04 * s - Math.abs(f - 0.5) * 0.06 * s, -0.08 * s).applyQuaternion(hq).add(head).add(_v.set(0, 0.1 * s, 0).applyQuaternion(hq)));
+    if (this.hair) { if (this.hairStyle === 'tied') this.hair.setPins((f, out) => out.set((f - 0.5) * 0.04 * s, 0.07 * s, -0.12 * s).applyQuaternion(hq).add(head).add(_v.set(0, 0.1 * s, 0).applyQuaternion(hq)));
+      else this.hair.setPins((f, out) => out.set((f - 0.5) * (this.hairStyle === 'long' ? 0.19 : 0.17) * s, 0.04 * s - Math.abs(f - 0.5) * 0.06 * s, -0.08 * s).applyQuaternion(hq).add(head).add(_v.set(0, 0.1 * s, 0).applyQuaternion(hq))); }
     if (this.sashL) {
       this.sashL.setPins((f, out) => out.set((0.1 + f * 0.07) * s, 0.13 * s, -0.08 * s).applyQuaternion(cq).add(chest));
       this.sashR.setPins((f, out) => out.set((-0.17 + f * 0.07) * s, 0.13 * s, -0.08 * s).applyQuaternion(cq).add(chest));
@@ -903,5 +1025,27 @@ export class SeraphActor {
     for (const c of this.cloths) { c.step(dt, wind, spheres, down); c.mesh.visible = vis && (c !== this.cape || this.angel < 0.3); }
   }
   resetCloth() { for (const c of this.cloths) c.ready = false; }
-  setVisible(v) { this.root.visible = v; this.weaponHolder.visible = v; for (const c of this.cloths) c.mesh.visible = v; }
+  setVisible(v) { this.root.visible = v; this.weaponHolder.visible = v; this.offHolder.visible = v && this.form === 'dual'; for (const c of this.cloths) c.mesh.visible = v; }
+  // dress the hero: colours change at once; outfit, hair and build rebuild the body; hair and cape are fresh cloth
+  setLook(look) {
+    if (this.opt.style !== 'warrior') return;
+    const L = Object.assign({}, LOOK_DEFAULT, look), M = this.M, O = Object.assign({}, OUTFITS[L.outfit] || OUTFITS.belldawn, L.cols || {});
+    M.dress.color.set(O.dress); M.leather.color.set(O.leather); M.white.color.set(O.white); M.steel.color.set(O.steel);
+    M.hair.color.set(L.hairCol); M.skin.color.set(L.skin); M.eye.color.set(L.eye);
+    if (M.cape.map !== capeTexture(L.capeCol)) { M.cape.map = capeTexture(L.capeCol); M.cape.needsUpdate = true; }
+    const key = [L.outfit, L.hair, L.build.toFixed(2), L.height.toFixed(3), L.sex, L.belly, L.beard, L.noPendant].join('|');
+    this.opt.look = L;
+    if (key !== this.lookKey) { const first = this.lookKey === undefined; this.lookKey = key; this.useDefaultBody(); if (!first || L.hair !== 'short') this.remakeCloth('hair', L.hair); }
+    if (L.cape !== this.capeStyle) { this.capeStyle = L.cape; this.remakeCloth('cape', L.cape); }
+  }
+  remakeCloth(which, style) {
+    if (this.opt.noCloth) return;
+    const s = this.scale, old = this[which];
+    if (old) { this.scene.remove(old.mesh); old.mesh.geometry.dispose(); this.cloths = this.cloths.filter((c) => c !== old); this[which] = null; }
+    const P = which === 'hair' ? (HAIR_CLOTH[style] || HAIRS.short).cloth : (CAPES[style] || CAPES.half).cloth;
+    if (!P) return;
+    const c = which === 'hair' ? new Cloth(P[0], P[1], P[2] * s, P[3] * s, this.M.hair, { taper: style === 'tied' ? 0.3 : 0.55, grav: -8 })
+      : new Cloth(P[0], P[1], P[2] * s, P[3] * s, this.M.cape, { grav: -7, drag: 0.975, shadow: true });
+    this[which] = c; this.hairStyle = which === 'hair' ? style : this.hairStyle; this.scene.add(c.mesh); this.cloths.push(c);
+  }
 }

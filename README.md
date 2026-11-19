@@ -83,6 +83,32 @@ Sized after Monster Hunter's hunt HUD so the scene stays the subject:
 - The crater's pillar sleeps (a faint thread of light) until Camael's echo has spoken, so the sky cannot be reached early;
   arriving in the sky early (old saves) points you back down
 
+## The party (v2.0, after Monster Hunter Outlanders) · phase 1
+
+- **Party of four**: one under your hand (主控) and up to three companions fighting on their own. 黎恩 is always in the
+  party; anyone in it can take control (from the reliquary's 隊伍 tab, out of combat and on the ground): the two
+  bodies trade places and each keeps its own weapon. Only 黎恩 and Isera have wings
+- **Recruiting**: no gacha. People you meet on the road (the rescued, the keepers of the lights, the watchers) can be
+  hired with bounty money (賞金), earned from every beast, boss, rescue, beacon and vigil tower. UR/SSR/SR mark the
+  ceiling of their kit, and the price
+- **The cast** (every one a different frame, job and way of fighting): 黎恩 (sword, glides) · 伊瑟拉 Isera, UR, tall
+  watcher angel, longbow (ranged, wound sniping) · 加雷斯 Gareth, SSR, huge last knight, greatsword (front line) · 布蘭
+  Bran, SSR, big bald monk, bell-maul (stun and topple) · 卡莎 Kasha, SSR, short sturdy lamp-keeper's daughter, harpoon
+  lance (reach; pull and pin in phase 2) · 米菈 Mira, SR, small hunter, twin blades (fastest flurries) · 蘿絲 Rosa,
+  SR, plump herbalist, censer staff (heals the party) · 達克 Dak and 歐文 Owen, SR, arrive in phase 2 (blasting pick,
+  lantern)
+- **New weapon forms**, each its own move set, pose and feel for the player and for the AI: longbow (arrows that fly,
+  drop and pierce; a three-arrow spread; a charged shot that hits wounds ×1.6), bell-maul (the heaviest stagger;
+  slams), twin blades (two cuts a press; a ten-hit dance), censer staff (sweeps; a light pulse; a charged party heal)
+- **Weapons belong to forms**: chest weapons are swapped between people of the same form (the harpoon and the
+  watcher's lance for lance users, the bell-bronze maul for Bran); 黎恩 keeps swords
+- **AI companions** follow beside the main (never between him and the camera), pick the locked target or the nearest
+  beast, hold their form's range (archers stand off, maul and blades close in), chain combos, roll out of a boss's
+  telegraphed blows, and the censer bearer heals the main when they fall under half
+- **Dressing room (外觀)** for 黎恩: four outfits (Belldawn traveller, knight's half-plate, watcher's white, hunter's
+  leathers), cape style and colour, three hair styles and colours, skin, eyes, height and build, with a live, turnable
+  full-body and close-up view. He has a face now (eyes and brows)
+
 ## Forage, cooking and fire (v1.9, after Breath of the Wild)
 
 - **Forage**: dawnleaf (meadows), golden wheat (by the town and the mill), wild honey (on top of tall rocks and in tree

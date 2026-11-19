@@ -13,7 +13,8 @@ import { buildEarthGrid, buildEarth, EARTH, earthRegion, earthCull, inRift, SEA_
 import { createFolk, FOLK_PAL } from './folk.js';
 import { buildHellGrid, buildHell, HELL, hellRegion, inLava, HELL_MAP } from './hell.js';
 import { getFeatherGeo } from './hero.js';
-import { SeraphActor } from './seraph.js';
+import { SeraphActor, OUTFITS, HAIRS, CAPES, LOOK_DEFAULT } from './seraph.js';
+import { createParty, CHARS, CHAR_ORDER, FORMS, FORM_ATK, RAR_COL, avatarSVG } from './party.js';
 import { createBoss, BOSS_HOME } from './boss.js';
 
 const { clamp, lerp, smooth, damp, dampAngle, angDiff, easeOut, easeInOut, mulberry, groundAt, LAKE, TEMPLE, WINGP, SHRINES, SPAWN, edgeR, TEX, grid, GN } = C;
@@ -37,7 +38,10 @@ const settings = Object.assign({ quality: isTouch ? 'mid' : 'high', sound: true,
 const TEST = Object.assign({ on: false, god: false, oneHit: false, powers: false, coords: false }, store.get('lumenfall_test', {}));
 const progKey = () => (TEST.on ? 'lumenfall_progress_test' : 'lumenfall_progress');
 let prog = Object.assign({ f: [], s: [false, false, false, false], end: false, boss: false, boss2: false, boss3: false, realm: false, earth: false, weapon: 'sword', kills: {}, seen: {}, broken: {}, rescued: {}, beacons: {} }, store.get(progKey(), {}));
-if (!prog.rescued) prog.rescued = {}; if (!prog.beacons) prog.beacons = {}; if (!prog.vigil) prog.vigil = {}; if (!prog.tips) prog.tips = {}; if (!prog.chests) prog.chests = {}; if (!prog.ingr) prog.ingr = {}; if (!prog.dishes) prog.dishes = {};
+if (!prog.rescued) prog.rescued = {}; if (!prog.beacons) prog.beacons = {}; if (!prog.vigil) prog.vigil = {}; if (!prog.tips) prog.tips = {}; if (!prog.chests) prog.chests = {}; if (!prog.ingr) prog.ingr = {}; if (!prog.dishes) prog.dishes = {}; if (!prog.look) prog.look = {};
+// the party: who has been hired, who travels, who is under your hand, and what each one carries
+if (!prog.party) prog.party = { owned: { lian: true }, members: ['lian'], main: 'lian', eq: {} };
+if (!prog.coin) prog.coin = 0;
 // weapons are found in the world now; a journey that already beat Ophiel keeps the greatsword it was given
 if (!prog.weapons) prog.weapons = prog.end || prog.earth || prog.f.length ? { spear: true, greatsword: !!prog.boss } : {}; // older journeys keep the lance they woke with
 prog.weapons.sword = true; // the father's sword: everyone sets out with it
@@ -47,7 +51,7 @@ const veteran = !!(prog.end || prog.earth || prog.f.length);
 if (prog.wings === undefined) prog.wings = !!prog.end;
 if (prog.swordLit === undefined) prog.swordLit = !!prog.end;
 if (prog.reliquary === undefined) prog.reliquary = veteran;
-const canWing = () => !!prog.wings || TEST.powers;
+const canWing = () => (!!prog.wings || TEST.powers) && !!(CHARS[prog.party ? prog.party.main : 'lian'] || {}).wings;
 if (!prog.talk) prog.talk = {}; if (!prog.clues) prog.clues = {};
 const holyBlade = () => !!prog.hellBlade && prog.weapon === 'tianshu';
 const nRescued = () => Object.keys(prog.rescued).length, nBeacons = () => Object.keys(prog.beacons).length;
@@ -176,11 +180,16 @@ const ATK_SW = {
 };
 const ATK_SW_DULL = Object.fromEntries(Object.entries(ATK_SW).map(([k, a]) => [k, { ...a, dmg: a.dmg.map((d) => d * 0.8) }]));
 // how long the swing itself takes (the rest of the time before `hits` is the wind-up)
-const SWING = { sword: 0.09, spear: 0.08, tianshu: 0.08, greatsword: 0.15 };
+const SWING = { sword: 0.09, spear: 0.08, tianshu: 0.08, greatsword: 0.15, bow: 0.06, hammer: 0.17, dual: 0.06, censer: 0.1, pick: 0.12, lantern: 0.1 };
 // a weapon found in a chest fights in one of the three forms (sword, lance, greatsword), with its own edge
 const wbase = (w = prog.weapon) => (WEAPON_INFO[w] && WEAPON_INFO[w].base) || w;
 const wperk = () => WEAPON_INFO[prog.weapon] || {};
-const atkT = () => { const b = wbase(); return b === 'greatsword' ? ATK_GS : b === 'tianshu' ? ATK_TS : b === 'sword' ? (prog.swordLit || prog.weapon !== 'sword' ? ATK_SW : ATK_SW_DULL) : ATK; };
+const atkT = () => tableOf(wbase(), prog.weapon);
+function tableOf(b, w) { return b === 'greatsword' ? ATK_GS : b === 'tianshu' ? ATK_TS : b === 'sword' ? (prog.swordLit || w !== 'sword' ? ATK_SW : ATK_SW_DULL) : b === 'spear' ? ATK : FORM_ATK[b] || ATK; }
+const formOfW = (w) => { const b = (WEAPON_INFO[w] && WEAPON_INFO[w].base) || w; return b === 'tianshu' ? 'sword' : b; };
+const mainId = () => prog.party.main;
+const eqOf = (id) => (id === mainId() ? prog.weapon : prog.party.eq[id]) || CHARS[id].weapon;
+const fits = (id, w) => formOfW(w) === CHARS[id].form;
 // how each weapon looks and lands: slash light, trail, thrust streak, impact sparks, hit-stop
 const WLOOK = {
   spear: { a: [0.95, 0.66, 0.26], b: [2.2, 1.9, 1.35], lance: [2.2, 1.7, 0.95], spark: [1.9, 1.6, 1.0], stop: 0.035, shake: 0.06 },
@@ -194,6 +203,12 @@ WLOOK.fallen = { a: [1.2, 0.25, 0.08], b: [2.6, 0.9, 0.4], lance: [2.4, 0.8, 0.3
 WLOOK.keeper = { a: [0.85, 0.7, 0.45], b: [2.0, 1.85, 1.5], lance: [2.0, 1.8, 1.3], spark: [1.9, 1.7, 1.2], stop: 0.035, shake: 0.06 };
 WLOOK.watcher = { a: [1.0, 0.9, 0.7], b: [2.5, 2.35, 2.0], lance: [2.4, 2.2, 1.8], spark: [2.3, 2.1, 1.7], stop: 0.04, shake: 0.07 };
 WLOOK.bell = { a: [1.25, 0.6, 0.15], b: [2.7, 1.8, 0.7], lance: [2.5, 1.5, 0.55], spark: [2.6, 1.6, 0.6], stop: 0.08, shake: 0.26 };
+WLOOK.hammer = WLOOK.bell;
+WLOOK.bow = { a: [1.0, 0.95, 0.8], b: [2.4, 2.3, 2.0], lance: [2.4, 2.2, 1.8], spark: [2.3, 2.1, 1.6], stop: 0.03, shake: 0.05 };
+WLOOK.dual = { a: [0.6, 0.85, 1.0], b: [1.9, 2.3, 2.5], lance: [1.8, 2.2, 2.4], spark: [1.8, 2.2, 2.4], stop: 0.025, shake: 0.04 };
+WLOOK.censer = { a: [0.6, 1.0, 0.55], b: [1.7, 2.4, 1.5], lance: [1.6, 2.3, 1.4], spark: [1.6, 2.3, 1.4], stop: 0.04, shake: 0.07 };
+WLOOK.pick = { a: [1.2, 0.5, 0.2], b: [2.4, 1.3, 0.6], lance: [2.4, 1.2, 0.5], spark: [2.5, 1.3, 0.5], stop: 0.06, shake: 0.18 };
+WLOOK.lantern = { a: [1.2, 1.0, 0.6], b: [2.6, 2.3, 1.5], lance: [2.6, 2.2, 1.4], spark: [2.6, 2.2, 1.4], stop: 0.03, shake: 0.05 };
 const wlook = () => (prog.weapon === 'sword' ? (prog.swordLit ? WLOOK.holysword : WLOOK.sword) : WLOOK[prog.weapon] || WLOOK[wbase()] || WLOOK.spear);
 function applyWeaponLook() {
   const L = wlook();
@@ -319,9 +334,33 @@ const Audio = {
 };
 
 // ------------------------------------------------------------------ hero
-let hero, blob;
+let hero, blob, party;
+function buildParty() {
+  // 黎恩 fights with a sword (the spear, the greatsword and their kin belong to other hands now)
+  if (mainId() === 'lian' && !fits('lian', prog.weapon)) { prog.weapon = 'sword'; hero.setWeapon('sword'); }
+  if (!prog.party.members.includes(mainId())) prog.party.members.unshift(mainId());
+  party = createParty({
+    scene, P, prog, FX, emit, burst, impact, support, pushOut,
+    enemies: () => enemyList(),
+    strike: (e, dmg, poise, kind, from) => hitEnemy(e, dmg, poise, kind, {}, from),
+    sfx: (n) => Audio.sfx(n), say: (id, t) => say(`${CHARS[id].name}：${t}`),
+    ring: (at, r, col) => { for (let i = 0; i < 30; i++) { const a = (i / 30) * 6.283; emit(FX.sparks, { x: at.x + Math.cos(a) * r, y: at.y + 0.3, z: at.z + Math.sin(a) * r, vy: 1.4, life: 0.6, s: 0.9, c: col }); } },
+    look: (f) => WLOOK[f] || WLOOK.sword, allyK: () => 0.6 * P.atkMul,
+    atkTable: (f) => tableOf(f, f), formOf: (id) => formOfW(eqOf(id)), weaponOf: (id) => eqOf(id),
+    shake: (k) => { CAM.shake = Math.max(CAM.shake, k); }, camPos: () => camera.position,
+  });
+  if (mainId() !== 'lian') { // a journey saved with someone else in control: put that body under the player's hand
+    const id = mainId(), mw = prog.weapon, lw = prog.party.eq.lian || 'sword';
+    prog.party.eq[id] = mw; prog.party.main = 'lian'; prog.weapon = lw; hero.setWeapon(lw); syncParty();
+    const a = party.allies.find((x) => x.id === id);
+    if (a) { prog.party.eq.lian = lw; prog.party.main = id; prog.weapon = mw; const b = a.actor; a.actor = hero; hero = b; a.id = 'lian'; }
+    else { prog.party.main = 'lian'; prog.weapon = lw; }
+  }
+  syncParty(); newlyMet();
+}
 function buildPlayer() {
   hero = new SeraphActor(scene, { style: 'warrior', weapon: 'sword', swordLit: prog.swordLit });
+  hero.setLook(prog.look);
   blob = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.6), new THREE.MeshBasicMaterial({ map: TEX.shadow, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
   blob.rotation.x = -Math.PI / 2;
   scene.add(blob);
@@ -772,7 +811,7 @@ function updateProjectiles(dt) {
 }
 function killShade(s, silent) {
   s.dead = true; s.st = 'dead'; s.t = silent ? 9 : 0;
-  if (!silent) { const k = s.kill || 'shade'; prog.kills[k] = (prog.kills[k] || 0) + 1; save(); }
+  if (!silent) { const k = s.kill || 'shade'; prog.kills[k] = (prog.kills[k] || 0) + 1; addCoin(s.hell ? 22 : s.earth ? 15 : s.realm ? 12 : 8); save(); }
   if (s.warn) s.warn.visible = false;
   if (silent) { s.g.visible = false; s.sh.visible = false; }
 }
@@ -1192,7 +1231,7 @@ function buildBoss() {
     onPartBreak: (b, part) => { P.flasks = Math.min(P.maxFlasks, P.flasks + 1); toast(`<i class="dia"></i>破壞了${part.cn} · 光露 +1`, true); },
     ui: { bar: $('bossBar'), hp: $('bossHp'), hpD: $('bossHpD') },
     onBossDefeated: () => {
-      prog.boss = true; save();
+      prog.boss = true; save(); addCoin(500);
       applyStats(true);
       document.body.classList.remove('boss');
       setTimeout(() => toast('<i class="dia"></i>獲得「光之結晶」· 生命上限 +25', true), 1200);
@@ -1208,7 +1247,7 @@ function buildBoss() {
     moves: ['pillars'], line: '罪人之子……前來受審。',
     home: REALM.bossHome, floor: REALM.bossHome.y, arenaR: 14, leash: 38,
     onDefeated: () => {
-      prog.boss2 = true; save(); applyStats(true);
+      prog.boss2 = true; save(); applyStats(true); addCoin(500);
       document.body.classList.remove('boss');
       setTimeout(() => toast('<i class="dia"></i>獲得「審判之羽」· 生命上限 +25 · 聖瓶 +1', true), 1200);
       setTimeout(() => regionCard('審判者已淨化', 'THE SERAPH RESTS'), 2600);
@@ -1221,7 +1260,7 @@ function buildBoss() {
     moves: ['combo'], line: '……你身上，有那個人的光。',
     home: EARTH.bossHome, floor: EARTH.castleFloor, arenaR: 18, leash: 40,
     onDefeated: () => {
-      prog.boss3 = true; save(); applyStats(true);
+      prog.boss3 = true; save(); applyStats(true); addCoin(500);
       document.body.classList.remove('boss');
       setTimeout(() => toast('<i class="dia"></i>獲得「騎士之誓」· 生命上限 +25 · 攻擊 +10%', true), 1200);
       setTimeout(() => regionCard('墮天騎士已淨化', 'THE KNIGHT RESTS'), 2600);
@@ -1234,7 +1273,7 @@ function buildBoss() {
     moves: ['combo'], line: '一千年了……門終於等到了它的鑰匙。',
     home: HELL.bossHome, floor: HELL.arenaFloor, arenaR: 30, leash: 44,
     onDefeated: () => {
-      prog.boss4 = true; save(); applyStats(true);
+      prog.boss4 = true; save(); applyStats(true); addCoin(500);
       document.body.classList.remove('boss');
       setTimeout(() => toast('<i class="dia"></i>冥門守衛倒下了 · 但冥門依然緊閉', true), 1400);
       setTimeout(() => regionCard('冥門守衛已淨化', 'THE KEEPER RESTS'), 2800);
@@ -1605,7 +1644,11 @@ function showPower(k) {
   clearTimeout(lvUpT); lvUpT = setTimeout(() => el.classList.add('hidden'), window.__lvHold || 6200);
   Audio.sfx('lvup'); flashScreen(0.5); featherBurst(P.pos.x, P.pos.y + 1.2, P.pos.z, 20, 4);
 }
-function equipWeapon(w) { if (!prog.weapons[w]) return; prog.weapon = w; save(); hero.setWeapon(w); applyWeaponLook(); updateQuest(); }
+function equipWeapon(w) {
+  if (!prog.weapons[w]) return;
+  if (!fits(mainId(), w)) { const who = CHAR_ORDER.filter((id) => CHARS[id].form === formOfW(w)).map((id) => CHARS[id].name).join('、'); toast(`<i class="dia"></i>${WEAPON_INFO[w].name}是${FORMS[formOfW(w)].name} · 只有${who || '其他同伴'}能用`); return; }
+  prog.weapon = w; save(); hero.setWeapon(w); applyWeaponLook(); updateQuest();
+}
 function perfectDodge() {
   slowT = 0.8; P.inv = Math.max(P.inv, 0.95); P.counterT = 1.8; P.perfectCd = 1.1;
   bigText('完美閃避', 'PERFECT DODGE');
@@ -1634,12 +1677,12 @@ function nearestEnemy(maxD, cone, camPref) {
   }
   return best;
 }
-function hitEnemy(e, dmg, poise, kind, info) {
+function hitEnemy(e, dmg, poise, kind, info, from = P.pos) {
   // nothing of hell is harmed by mortal light until the seraph carries the Empyrean lord's weapon
   if ((e.hell || (e.isBoss && e.cfg.hell)) && !holyBlade()) { dmg *= 0.08; poise *= 0.15; kind = 'resist'; resistHint(); }
   if (TEST.oneHit) { dmg *= e.isBoss ? 12 : 60; poise *= 4; }
-  if (e.isBoss) return e.damage(dmg, poise, P.pos, kind, info || {});
-  damageShade(e, dmg, P.pos, kind);
+  if (e.isBoss) return e.damage(dmg, poise, from, kind, info || {});
+  damageShade(e, dmg, from, kind);
   return null;
 }
 // a heavy blow on a boss: pop the aimed wound, or meet its attack head-on
@@ -1666,9 +1709,25 @@ function impact(x, y, z, power, ang, col) {
   put(1.7 + power * 2.3, 0.09 + power * 0.07, ang, 0.13 + power * 0.06, c2);
   if (power > 0.6) put(1.2 + power * 1.4, 0.06 + power * 0.04, ang + 1.25, 0.12, c2);
 }
+// the bow: arrows fly at the locked target (or a focused wound), else where the camera looks
+function playerShoot(A) {
+  const S = A.shoot, from = new THREE.Vector3(P.pos.x + Math.sin(P.yaw) * 0.5, P.pos.y + 1.45, P.pos.z + Math.cos(P.yaw) * 0.5);
+  const t = P.aim ? P.aim.e : P.lock && !P.lock.dead ? P.lock : nearestEnemy(30, 0.2, true);
+  let d;
+  if (P.aim && P.atk.aim) { P.aim.e.anchor(P.aim.part, _v); d = _v.clone().sub(from); }
+  else if (t) d = new THREE.Vector3(t.pos.x - from.x, t.pos.y + (t.isBoss ? 3 : (t.hy || 2) * 0.5) - from.y, t.pos.z - from.z);
+  else { camera.getWorldDirection(_v); d = _v.clone(); if (P.grounded) d.y = Math.max(d.y, -0.05); }
+  d.y += d.length() * 0.035;
+  const k = P.atk.mult * P.atkMul * (wperk().dmg || 1) * (P.buff && P.buff.fx === 'attack' ? 1.15 : 1);
+  for (let i = 0; i < S.n; i++) party.shoot(from, d.clone().applyAxisAngle(THREE.Object3D.DEFAULT_UP, (i - (S.n - 1) / 2) * (S.spread || 0)), { spd: S.spd, dmg: (A.dmg[0] + Math.random() * (A.dmg[1] - A.dmg[0])) * k, poise: A.poise * P.atk.mult, pierce: S.pierce, big: S.big, wound: S.wound, from: 'p' });
+  CAM.shake = Math.max(CAM.shake, S.big ? 0.1 : 0.03); Audio.sfx('thrust');
+}
 const IMP_ANG = { l0: 0.62, l1: -0.62, l2: 0.06, l3: 0.18, heavy: 0.12, counter: 1.1, focus: 1.1 };
 const OFFSET_KINDS = new Set(['heavy', 'l3', 'counter', 'focus']);
 function doHit(A) {
+  if (A.shoot) { playerShoot(A); return; }
+  if (A.heal) { party.heal(P.pos, A.heal); Audio.sfx('purify'); return; }
+  if (A.pulse) party.heal(P.pos, A.pulse);
   if (P.inEarth) propsHit(A, Math.sin(P.yaw + P.spin), Math.cos(P.yaw + P.spin));
   if (A.slam) { slam(A); return; }
   const fx = Math.sin(P.yaw + P.spin), fz = Math.cos(P.yaw + P.spin), L = wlook();
@@ -2264,7 +2323,7 @@ function endSiege(b, st) {
   for (const p of b.keepers) p.set(st === 'fallen' ? 'cower' : 'guard');
 }
 function kindle(b) {
-  b.st = 'lit'; prog.beacons[b.id] = true; save();
+  b.st = 'lit'; prog.beacons[b.id] = true; addCoin(150); save(); newlyMet();
   applyStats(false); P.hp = Math.min(P.maxHp, P.hp + 10);
   P.checkpoint.set(b.x, b.y + 0.5, b.z + 5);
   b.keepers.forEach((p, i) => { p.line = i === 0 ? b.line : null; p.set('cheer'); });
@@ -2278,7 +2337,7 @@ function kindle(b) {
 // ---- vigil towers: wake the stone at the top and the land around it is drawn onto the map (and it becomes a camp)
 let mapReveal = null; // { id, t0 } while a newly seen region inks itself onto the map
 function awakenVigil(v) {
-  prog.vigil[v.id] = true; save();
+  prog.vigil[v.id] = true; addCoin(100); save(); newlyMet();
   v.set(true);
   burst(FX.sparks, v.x, v.y + 2, v.z, 70, { speed: 6, up: 6, life: 1.5, size: 1.2, c: [2.2, 1.7, 0.9] });
   featherBurst(v.x, v.y + 2, v.z, 14, 3.2);
@@ -2577,6 +2636,58 @@ function updateProps(dt) {
     }
   }
 }
+// ---- bounty money (賞金) and the people who can be hired with it
+let coinPend = 0, coinT = 0;
+function addCoin(n) {
+  prog.coin = (prog.coin || 0) + n; coinPend += n;
+  clearTimeout(coinT); coinT = setTimeout(() => { if (coinPend) pickFeed(`賞金 <b>+${coinPend}</b> <small>${prog.coin}</small>`); coinPend = 0; }, 900);
+}
+function metChar(id) {
+  const m = CHARS[id].meet; if (!m || (prog.met && prog.met[id] && TEST.on)) return true;
+  if (m.captive) return !!prog.rescued[m.captive];
+  if (m.beacon) return !!prog.beacons[m.beacon];
+  if (m.vigils) return Object.values(prog.vigil).filter(Boolean).length >= m.vigils;
+  return false;
+}
+function newlyMet() { // a toast the first time someone can be hired
+  prog.met ||= {};
+  for (const id of CHAR_ORDER) if (!prog.met[id] && metChar(id)) {
+    prog.met[id] = true; const c = CHARS[id];
+    if (id !== 'lian') setTimeout(() => toast(`<i class="dia"></i>${c.name}（${c.rar} · ${c.job}）願意同行 · ${c.soon ? '第二期加入' : `聖匣 → 隊伍，用 ${c.cost} 賞金聘請`}`, true), 3000);
+  }
+  save();
+}
+function hire(id) {
+  const c = CHARS[id]; if (!c || c.soon || prog.party.owned[id] || !metChar(id) || prog.coin < c.cost) return;
+  prog.coin -= c.cost; prog.party.owned[id] = true; prog.weapons[c.weapon] = true; prog.party.eq[id] = c.weapon;
+  if (prog.party.members.length < 4) prog.party.members.push(id);
+  save(); syncParty(); Audio.sfx('lvup');
+  pickFeed(`${c.name} 加入了 · ${c.rar}`);
+  if (c.line) setTimeout(() => say(`${c.name}：${c.line}`), 500);
+}
+function toggleMember(id) {
+  const M = prog.party.members;
+  if (M.includes(id)) { if (id === 'lian' || id === mainId()) return; M.splice(M.indexOf(id), 1); }
+  else { if (!prog.party.owned[id] || M.length >= 4) return; M.push(id); }
+  save(); syncParty(); Audio.sfx('ui');
+}
+function syncParty() { party.sync(prog.party.members, mainId()); }
+// take control of someone else: the bodies trade places, each keeps its own weapon
+function setMain(id) {
+  const old = mainId(); if (id === old || !prog.party.members.includes(id)) return false;
+  if (!P.calm || !P.grounded || P.climb || state !== 'play') { toast('<i class="dia"></i>戰鬥中或半空中不能換主控'); return false; }
+  const a = party.allies.find((x) => x.id === id); if (!a) return false;
+  const nw = prog.party.eq[id] || CHARS[id].weapon;
+  prog.party.eq[old] = prog.weapon; prog.party.main = id; prog.weapon = nw;
+  const body = a.actor; a.actor = hero; hero = body; a.id = old;
+  const tp = P.pos.clone(), ty = P.yaw; P.pos.copy(a.pos); P.yaw = a.yaw; a.pos.copy(tp); a.yaw = ty;
+  P.vel.set(0, 0, 0); P.atk.kind = null; P.lock = null; P.glide = false; P.safe.copy(P.pos);
+  CAM.yaw = P.yaw + Math.PI;
+  applyWeaponLook(); save(); syncParty(); updateQuest();
+  featherBurst(P.pos.x, P.pos.y + 1.2, P.pos.z, 6, 1.6); Audio.sfx('ui');
+  pickFeed(`主控 · ${CHARS[id].name}`);
+  return true;
+}
 // ---- chests: kneel, lift the lid, light pours out, and the weapon inside is his (it goes into the reliquary)
 function openChest(c) {
   if (prog.chests[c.id]) return;
@@ -2645,7 +2756,7 @@ function drawVigils(g, toS, size, labels) {
   }
 }
 function rescue(c) {
-  c.done = true; prog.rescued[c.id] = true; save();
+  c.done = true; prog.rescued[c.id] = true; addCoin(80); save(); newlyMet();
   c.crystal.visible = false;
   burst(FX.sparks, c.x, c.y + 1.5, c.z, 90, { speed: 7, up: 4, life: 1.3, size: 1.2, c: [1.9, 1.4, 0.8] });
   burst(FX.smoke, c.x, c.y + 1, c.z, 30, { speed: 5, up: 2, life: 1.2, size: 2.2, c: [0.45, 0.32, 0.4] });
@@ -2967,6 +3078,7 @@ function updateCamera(dt) {
     CAM.fov = lerp(VIEW.h > VIEW.w ? 62 : 46, 58, k);
     if (transT > 2.4) { state = 'play'; onEnterPlay(); }
   } else if (state === 'ending') { cameraEnding(out, look); CAM.fov = damp(CAM.fov, 52, 2, dt); }
+  else if (LOOK.open) lookCamera(out, look);
   else {
     playCamera(dt, out, look, false); CAM.fov = damp(CAM.fov, P.glide ? 64 : P.dashT > 0 ? 63 : P.sprinting ? 62 : P.focus ? 50 : 58, 4, dt);
     const fk = P.focusK || 0;
@@ -3054,7 +3166,7 @@ function questState() {
     if (!prog.boss4) {
       main = { id: 'abaddon', t: '擊倒冥門守衛 · 亞巴頓', tag: holyBlade() ? '' : '極度危險', tgt: at(HELL.bossHome, 'boss') };
       rows.push(step('取得神域之主的武器', prog.hellBlade, '未取得'));
-      if (prog.hellBlade) rows.push(step('在聖匣裡換上天樞之劍', prog.weapon === 'tianshu'));
+      if (prog.hellBlade) rows.push(step('在聖匣裡換上天樞之劍', eqOf('lian') === 'tianshu'));
     } else if (!prog.talk.abaddon) main = { id: 'abaddonEcho', t: '聆聽亞巴頓的殘響', tgt: at(HELL.bossHome) };
     else if (!prog.talk.gate) main = { id: 'gate', t: '前往冥門', tgt: at(HELL.gate) };
     else main = { id: 'gateWait', t: '冥門依然緊閉 · 待續' };
@@ -3532,8 +3644,72 @@ function travelTo(id) {
   featherBurst(P.pos.x, P.pos.y + 1.2, P.pos.z, 10, 2.4);
   updateQuest();
 }
+// ------------------------------------------------------------------ the dressing room (外觀): outfit, cape, hair, colours, build
+const LOOK = { open: false, yaw: 0, yaw0: 0, zoom: 0, z: 0, dt: 0, cam: null, tgt: null };
+const SW = {
+  capeCol: [['#2c3d6b', '晨鐘藍'], ['#7a2430', '緋紅'], ['#2f4a34', '森綠'], ['#d9d2c0', '象牙'], ['#25242b', '夜黑'], ['#4b3d68', '霜紫']],
+  hairCol: [['#5b4434', '深棕'], ['#24201f', '烏黑'], ['#c9a25a', '麥金'], ['#d8d6d0', '銀白'], ['#7a3a24', '赤棕'], ['#4d5a70', '灰藍']],
+  skin: [['#f6e2d4', '白皙'], ['#f1dccf', '淺'], ['#e2b896', '暖'], ['#c99572', '小麥'], ['#9a6a4a', '深'], ['#6e4a35', '黝黑']],
+  eye: [['#3d2c22', '褐'], ['#1e1c22', '黑'], ['#3b5a7a', '藍'], ['#3f6a48', '綠'], ['#b48a3a', '琥珀'], ['#7a6aa0', '紫']],
+};
+function lookNow() { return Object.assign({}, LOOK_DEFAULT, prog.look); }
+function setLook(k, v) { prog.look = Object.assign(lookNow(), { [k]: v }); hero.setLook(prog.look); globalThis.__lfLook = prog.look; renderLook(); save(); }
+function renderLook() {
+  const L = lookNow();
+  const opt = (k, list) => `<div class="lkOpts">${list.map(([v, n, extra]) => `<button data-k="${k}" data-v="${v}" class="${L[k] === v ? 'on' : ''}">${extra || ''}<span>${n}</span></button>`).join('')}</div>`;
+  const sw = (k) => `<div class="lkSw">${SW[k].map(([c, n]) => `<button data-k="${k}" data-v="${c}" class="${L[k] === c ? 'on' : ''}" style="--c:${c}" title="${n}" aria-label="${n}"></button>`).join('')}</div>`;
+  const sl = (k, a, b, n) => `<label class="lkSl"><span>${n}</span><input type="range" min="${a}" max="${b}" step="0.01" value="${L[k]}" data-k="${k}"></label>`;
+  $('lookBody').innerHTML =
+    `<h4>服裝<small>OUTFIT</small></h4>` + opt('outfit', Object.entries(OUTFITS).map(([k, o]) => [k, o.name, `<i class="dot2" style="--a:${o.dress};--b:${o.leather}"></i>`])) +
+    `<h4>披風<small>CAPE</small></h4>` + opt('cape', Object.entries(CAPES).map(([k, o]) => [k, o.name])) + (L.cape !== 'none' ? sw('capeCol') : '') +
+    `<h4>髮型<small>HAIR</small></h4>` + opt('hair', Object.entries(HAIRS).map(([k, o]) => [k, o.name])) + sw('hairCol') +
+    `<h4>膚色<small>SKIN</small></h4>` + sw('skin') +
+    `<h4>瞳色<small>EYES</small></h4>` + sw('eye') +
+    `<h4>身形<small>BUILD</small></h4>` + sl('height', 0.94, 1.06, '身高') + sl('build', -1, 1, '體格');
+  document.querySelectorAll('#lookBody button[data-k]').forEach((b) => b.addEventListener('click', () => { Audio.sfx('ui'); setLook(b.dataset.k, b.dataset.v); }));
+  document.querySelectorAll('#lookBody input[data-k]').forEach((r) => {
+    r.addEventListener('input', () => { prog.look = Object.assign(lookNow(), { [r.dataset.k]: +r.value }); hero.setLook(prog.look); });
+    r.addEventListener('change', () => save());
+  });
+}
+function openLook() {
+  if (state !== 'play') return;
+  if (mainId() !== 'lian') { toast('<i class="dia"></i>外觀只可以改黎恩 · 先在「隊伍」把黎恩設為主控'); return; }
+  closeOverlays(); paused = true; freeMouse();
+  LOOK.open = true; LOOK.yaw0 = P.yaw; LOOK.yaw = P.yaw; LOOK.zoom = 0; LOOK.z = 0; LOOK.cam = null;
+  document.body.classList.add('looking');
+  $('lookOv').classList.remove('hidden'); renderLook();
+  document.querySelectorAll('#lookOv .lkView button').forEach((b) => b.classList.toggle('on', +b.dataset.z === 0));
+  Audio.sfx('ui');
+}
+function closeLook() {
+  if (!LOOK.open) return;
+  LOOK.open = false; document.body.classList.remove('looking'); $('lookOv').classList.add('hidden');
+  P.yaw = LOOK.yaw; save();
+}
+function lookCamera(out, look) {
+  LOOK.z = damp(LOOK.z, LOOK.zoom, 5, LOOK.dt);
+  const z = LOOK.z, dx = Math.sin(LOOK.yaw0), dz = Math.cos(LOOK.yaw0), wide = VIEW.w / VIEW.h;
+  const H = (prog.look.height || 1), dist = lerp(3.5, 1.15, z), h = lerp(1.25, 1.66, z) * H, th = lerp(0.98, 1.6, z) * H;
+  const off = lerp(0.62, 0.2, z) * clamp(wide / 1.8, 0.7, 1.4); // keep him left of the panel
+  const rx = dz, rz = -dx;
+  out.set(P.pos.x + dx * dist + rx * off, P.pos.y + h, P.pos.z + dz * dist + rz * off);
+  look.set(P.pos.x + rx * off, P.pos.y + th, P.pos.z + rz * off);
+  CAM.fov = 38;
+}
+function initLook() {
+  $('lookClose').addEventListener('click', (e) => { e.stopPropagation(); closeLook(); openBag(); });
+  $('lookDone').addEventListener('click', (e) => { e.stopPropagation(); closeLook(); Audio.sfx('pickup'); });
+  $('lookReset').addEventListener('click', (e) => { e.stopPropagation(); prog.look = {}; hero.setLook(prog.look); renderLook(); save(); Audio.sfx('ui'); });
+  document.querySelectorAll('#lookOv .lkView button').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); LOOK.zoom = +b.dataset.z; document.querySelectorAll('#lookOv .lkView button').forEach((x) => x.classList.toggle('on', x === b)); Audio.sfx('ui'); }));
+  const dr = $('lookDrag'); let px = null;
+  dr.addEventListener('pointerdown', (e) => { px = e.clientX; dr.setPointerCapture(e.pointerId); e.stopPropagation(); });
+  dr.addEventListener('pointermove', (e) => { if (px === null) return; LOOK.yaw += (e.clientX - px) * 0.012; px = e.clientX; e.stopPropagation(); });
+  const up = (e) => { px = null; e.stopPropagation(); }; dr.addEventListener('pointerup', up); dr.addEventListener('pointercancel', up);
+  dr.addEventListener('wheel', (e) => { LOOK.zoom = e.deltaY < 0 ? 1 : 0; document.querySelectorAll('#lookOv .lkView button').forEach((x) => x.classList.toggle('on', +x.dataset.z === LOOK.zoom)); }, { passive: true });
+}
 function closeOverlays() {
-  cookAt = null; POT.length = 0;
+  cookAt = null; POT.length = 0; if (LOOK.open) closeLook();
   for (const id of ['mapOv', 'setOv', 'howOv', 'codexOv', 'testOv', 'bagOv', 'questOv']) $(id).classList.add('hidden');
   paused = false;
 }
@@ -4044,9 +4220,19 @@ const WEAPON_INFO = {
   watcher: { base: 'spear', glyph: '望', name: '守望者之槍', en: "THE WATCHER'S LANCE", stats: [3, 4, 4], how: '沉沼古塔 · 半途的石台', focus: 1.35,
     moves: '突刺 · 突刺 · 旋身橫掃 · 衝刺突擊', short: '集中一擊傷害 +35%', perk: '集中一擊 +35%',
     desc: '墮落之前，守望塔上的天使用的白槍。它被設計成看得很遠、刺得很準——對準傷口的那一下，特別痛。' },
-  bell: { base: 'greatsword', glyph: '鐘', name: '鐘銅巨劍', en: 'THE BELL-BRONZE GREATSWORD', stats: [5, 1, 4], how: '霜脊修道院 · 迴廊裡的供奉匣', poise: 1.4,
-    moves: '斜劈 · 回劈 · 迴旋斬 · 砸地', short: '更容易打倒首領', perk: '削韌 +40% · 更易打出倒地',
+  bell: { base: 'hammer', glyph: '鐘', name: '鐘銅巨錘', en: 'THE BELL-BRONZE MAUL', stats: [5, 1, 4], how: '霜脊修道院 · 迴廊裡的供奉匣', poise: 1.4,
+    moves: '橫掄 · 回掄 · 迴旋 · 砸地', short: '更容易打倒首領', perk: '削韌 +40% · 更易打出倒地',
     desc: '修士們把崩落的舊鐘熔掉，鑄成一把巨劍，供在迴廊裡等「天上來的人」。每一下砸下去，都像鐘聲一樣嗡嗡作響。' },
+  bow: { base: 'bow', glyph: '弓', name: '守望長弓', en: "THE WATCHER'S LONGBOW", stats: [3, 3, 5], how: '伊瑟拉 · 她自己的弓', moves: '射擊 · 射擊 · 三連散射 · 穿透箭', short: '遠距離射擊', perk: '蓄力一箭專射傷口',
+    desc: '守望塔上的天使用的白弓。弦是光做的，射出去的箭不會偏，只會遲到。' },
+  hammer: { base: 'hammer', glyph: '錘', name: '鐘守之錘', en: "THE BELLKEEPER'S MAUL", stats: [5, 1, 3], how: '布蘭修士 · 他自己的錘', moves: '橫掄 · 回掄 · 迴旋 · 砸地', short: '打暈、打倒地',
+    desc: '修道院用來敲大鐘的木錘，後來包上了銅。打在瘴獸頭上，聲音和鐘聲一樣。' },
+  dual: { base: 'dual', glyph: '刃', name: '獵人雙刃', en: "THE HUNTER'S TWIN BLADES", stats: [2, 5, 2], how: '米菈 · 她自己的刀', moves: '雙斬 · 三斬 · 旋舞 · 突進亂斬', short: '最快的連斬',
+    desc: '米菈用來剝皮、割繩、也割瘴獸喉嚨的兩把短刀。輕得像羽毛，快得像她。' },
+  censer: { base: 'censer', glyph: '爐', name: '採藥香爐杖', en: "THE HERBALIST'S CENSER", stats: [2, 3, 3], how: '蘿絲 · 她自己的杖', moves: '揮杖 · 揮杖 · 迴旋 · 療光', short: '揮擊與回復', perk: '蓄力為全隊回復',
+    desc: '吊著一爐悶燒的晨光草。煙飄到哪裡，傷口就在哪裡合上。' },
+  pick: { base: 'pick', glyph: '鎬', name: '爆破鎬', en: 'THE BLASTING PICK', stats: [4, 2, 3], how: '達克 · 他自己的鎬', moves: '（第二期）', short: '埋炸藥、點火', desc: '裂谷礦工的鎬，柄裡藏著火藥。' },
+  lantern: { base: 'lantern', glyph: '燈', name: '提燈人之燈', en: "THE LAMPLIGHTER'S LANTERN", stats: [2, 3, 4], how: '歐文 · 他自己的燈', moves: '（第二期）', short: '閃盲、淨化', desc: '沼澤裡唯一沒有熄過的燈。' },
   tianshu: { glyph: '樞', name: '天樞之劍', en: 'TIANSHU · PIVOT OF HEAVEN', stats: [4, 4, 3], how: '墮天巨像 · 集齊盾、翼、誓三道紋章',
     moves: '斬擊 · 斬擊 · 迴旋斬 · 突擊', short: '唯一能真正傷及地獄之物',
     desc: '神域之主交給你的劍。「天樞」——天的樞紐。只有它能真正傷及地獄之物；在地獄裡不拿著它，敵人幾乎打不動，你也會受到三倍傷害。' },
@@ -4073,16 +4259,22 @@ const ICON = {
 };
 const glyphIcon = (g) => `<circle cx="60" cy="60" r="34" class="f"/><text x="60" y="72" text-anchor="middle">${g}</text>`;
 function bagItems() {
-  if (BAG.tab === 'weapons') return ['sword', 'greatsword', 'spear', 'tianshu', 'knight', 'fallen', 'keeper', 'watcher', 'bell'].map((w) => {
+  if (BAG.tab === 'weapons') return ['sword', 'tianshu', 'knight', 'fallen', 'greatsword', 'spear', 'keeper', 'watcher', 'bell', 'bow', 'hammer', 'dual', 'censer'].filter((w) => prog.weapons[w] || !['bow', 'hammer', 'dual', 'censer'].includes(w))
+    .sort((x, y) => (fits(mainId(), y) && prog.weapons[y] ? 1 : 0) - (fits(mainId(), x) && prog.weapons[x] ? 1 : 0)).map((w) => {
     const I = w === 'sword' && prog.swordLit ? WEAPON_INFO.holysword : WEAPON_INFO[w], own = !!prog.weapons[w];
     return { own, icon: ICON[w] || ICON[I.base] || glyphIcon(I.glyph), tag: I.base ? I.glyph : '', name: own ? I.name : '？？？', en: own ? I.en : 'UNKNOWN', badge: prog.weapon === w ? '裝備中' : '', w,
-      body: own ? `<p>${I.desc}</p><dl><dt>招式</dt><dd>${I.moves}</dd>${I.perk ? `<dt>特性</dt><dd>${I.perk}</dd>` : ''}<dt>取得</dt><dd>${I.how}</dd></dl>${statBars(I.stats)}` : `<p class="hint">線索：${I.how}</p>` };
+      body: own ? `<p>${I.desc}</p><dl><dt>類型</dt><dd>${FORMS[formOfW(w)].name} · ${CHAR_ORDER.filter((id) => CHARS[id].form === formOfW(w)).map((id) => CHARS[id].name).join('、')}</dd><dt>招式</dt><dd>${I.moves}</dd>${I.perk ? `<dt>特性</dt><dd>${I.perk}</dd>` : ''}<dt>取得</dt><dd>${I.how}</dd></dl>${statBars(I.stats)}` : `<p class="hint">線索：${I.how}</p>` };
   });
   if (BAG.tab === 'powers') return ['oath', 'wingsOfFather', 'shield', 'wings'].map((k) => {
     if (k === 'wingsOfFather') { const own = canWing(), I = WING_INFO; return { own, icon: glyphIcon(I.glyph), name: own ? I.name : '？？？', en: own ? I.en : 'UNKNOWN', body: own ? `<p>${I.desc}</p><dl><dt>來自</dt><dd>${I.how}</dd></dl>` : `<p class="hint">線索：${I.how}</p>` }; }
     const pw = POWERS[k], own = !!prog[pw.key] || TEST.powers;
     return { own, icon: glyphIcon(pw.glyph), name: own ? pw.name : '？？？', en: own ? pw.en : 'UNKNOWN',
       body: own ? `<p>${pw.desc}</p><dl><dt>信物</dt><dd>${POWER_GIFT[k]}</dd><dt>來自</dt><dd>${POWER_HOW[k]}</dd></dl>` : `<p class="hint">線索：${POWER_HOW[k]}</p>` };
+  });
+  if (BAG.tab === 'party') return CHAR_ORDER.map((id) => {
+    const c = CHARS[id], own = !!prog.party.owned[id], met = metChar(id), inP = prog.party.members.includes(id), main = mainId() === id;
+    return { own: own || met, party: id, rc: RAR_COL[c.rar], html: `<div class="av${met || own ? '' : ' unk'}">${avatarSVG(id, 84)}</div><span class="cn">${met || own ? c.name : '？？？'}</span><i class="rr">${c.rar}</i>`,
+      badge: main ? '主控' : inP ? '隊伍' : '', n: !own && met ? (c.soon ? '即將' : `${c.cost}`) : '', name: met || own ? c.name : '？？？', en: met || own ? `${c.en} · ${c.rar}` : 'UNKNOWN' };
   });
   if (BAG.tab === 'food') {
     const dishes = Object.entries(prog.dishes).filter(([, d]) => d.c > 0).map(([key, d]) => ({ own: true, icon: ICON.dish, name: d.n, en: d.fx ? `${FX_INFO[d.fx].name} · ${d.h >= 999 ? '全回復' : '+' + d.h + ' HP'}` : `+${d.h} HP`, n: `×${d.c}`, dish: key,
@@ -4107,15 +4299,40 @@ function bagItems() {
   if (!ids.length) return [{ own: false, icon: ICON.scroll, name: '還沒有線索', en: 'NO CLUES YET', body: '<p class="hint">石刻、殘響和人們說的話，會記在這裡。</p>' }];
   return ids.map((id) => ({ own: true, icon: ICON.scroll, name: STORY[id].clue[0], en: STORY[id].who[1], body: `<p>${STORY[id].clue[1]}</p><dl><dt>來自</dt><dd>${STORY[id].who[0]}</dd></dl>` }));
 }
+const MEET_HINT = { cField: '救出麥原邊被困的人', cRuins: '救出傾城外被困的人', cWood: '救出低語森林裡被困的人', cSwampB: '救出沉沼裡被困的人', cRift: '救出裂谷邊被困的人', bHarbor: '守住燈塔港的燈火', bAbbey: '守住霜脊修道院的燈火', v3: '喚醒三座守望塔' };
+function partyDetail(id) {
+  const c = CHARS[id], own = !!prog.party.owned[id], met = metChar(id), M = prog.party.members, inP = M.includes(id), main = mainId() === id, F = FORMS[c.form];
+  const line = `<div class="pline">${[0, 1, 2, 3].map((k) => M[k] ? `<div class="pm${M[k] === mainId() ? ' main' : ''}" style="--rc:${RAR_COL[CHARS[M[k]].rar]}">${avatarSVG(M[k], 44)}<span>${M[k] === mainId() ? '主控' : CHARS[M[k]].name}</span></div>` : '<div class="pm empty"><span>空位</span></div>').join('')}</div>`;
+  const coin = `<div class="coin">賞金 <b>${prog.coin || 0}</b></div>`;
+  if (!met && !own) {
+    const m = c.meet || {}, where = MEET_HINT[m.captive || m.beacon || (m.vigils ? 'v3' : '')] || '';
+    return line + coin + `<div class="bigi lock"><div class="av unk">${avatarSVG(id, 100)}</div></div><h3>？？？</h3><small>${c.rar}</small><p class="hint">線索：${where}之後，就會認識這個人。</p>`;
+  }
+  let act = '';
+  if (!own) act = c.soon ? '<p class="hint">第二期加入</p>' : `<button class="lbtn" id="pHire"${(prog.coin || 0) >= c.cost ? '' : ' disabled'}><span>聘請 · ${c.cost} 賞金</span><small>HIRE</small></button>${(prog.coin || 0) < c.cost ? `<p class="hint">還差 ${c.cost - (prog.coin || 0)} 賞金 · 打倒瘴獸、救人、守燈都會得到賞金</p>` : ''}`;
+  else {
+    if (!main && id !== 'lian') act += `<button class="lbtn" id="pToggle"${!inP && M.length >= 4 ? ' disabled' : ''}><span>${inP ? '離隊' : '加入隊伍'}</span><small>${inP ? 'LEAVE' : 'JOIN'}</small></button>`;
+    if (inP && !main) act += `<button class="lbtn" id="pMain"><span>設為主控</span><small>TAKE CONTROL</small></button>`;
+  }
+  return line + coin + `<div class="bigi" style="--rc:${RAR_COL[c.rar]}"><div class="av">${avatarSVG(id, 100)}</div></div><h3>${c.name}</h3><small>${c.en} · ${c.rar}</small>` +
+    (c.line ? `<p>「${c.line}」</p>` : '') +
+    `<dl><dt>職業</dt><dd>${c.job}</dd><dt>武器</dt><dd>${F.name} · ${WEAPON_INFO[eqOf(id)] ? WEAPON_INFO[eqOf(id)].name : ''}</dd><dt>定位</dt><dd>${c.role}</dd><dt>打法</dt><dd>${F.play}</dd><dt>特長</dt><dd>${c.perk}</dd></dl><div class="pacts">${act}</div>`;
+}
+function bindPartyDetail(id) {
+  const h = $('pHire'); if (h) h.addEventListener('click', () => { hire(id); renderBag(); });
+  const t = $('pToggle'); if (t) t.addEventListener('click', () => { toggleMember(id); renderBag(); });
+  const m = $('pMain'); if (m) m.addEventListener('click', () => { if (setMain(id)) { closeOverlays(); } else renderBag(); });
+}
 const meter = (a, b) => `<div class="meter"><i style="width:${b ? (a / b) * 100 : 0}%"></i></div>`;
 const statBars = (s) => `<div class="stats">${['攻擊', '速度', '範圍'].map((k, i) => `<div><span>${k}</span><b>${'<i class="on"></i>'.repeat(s[i])}${'<i></i>'.repeat(5 - s[i])}</b></div>`).join('')}</div>`;
 function renderBag() {
   document.querySelectorAll('#bagTabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === BAG.tab));
   const items = bagItems(); BAG.sel = Math.min(BAG.sel, items.length - 1);
-  $('bagGrid').innerHTML = items.map((it, i) => `<button class="slot${it.own ? '' : ' lock'}${i === BAG.sel ? ' sel' : ''}" data-i="${i}">
-      <svg viewBox="0 0 120 120">${it.icon}</svg>${it.tag && it.own ? `<s>${it.tag}</s>` : ''}${it.badge ? `<em>${it.badge}</em>` : ''}${it.n ? `<b>${it.n}</b>` : ''}${it.k !== undefined ? `<i class="bar" style="--k:${it.k}"></i>` : ''}</button>`).join('') + '<i class="slot empty"></i>'.repeat(Math.max(8, Math.ceil(items.length / 4) * 4) - items.length);
+  $('bagGrid').classList.toggle('pg', BAG.tab === 'party');
+  $('bagGrid').innerHTML = items.map((it, i) => `<button class="slot${it.own ? '' : ' lock'}${i === BAG.sel ? ' sel' : ''}${it.party ? ' pc' : ''}" data-i="${i}"${it.rc ? ` style="--rc:${it.rc}"` : ''}>
+      ${it.html || `<svg viewBox="0 0 120 120">${it.icon}</svg>`}${it.tag && it.own ? `<s>${it.tag}</s>` : ''}${it.badge ? `<em>${it.badge}</em>` : ''}${it.n ? `<b>${it.n}</b>` : ''}${it.k !== undefined ? `<i class="bar" style="--k:${it.k}"></i>` : ''}</button>`).join('') + '<i class="slot empty"></i>'.repeat(Math.max(8, Math.ceil(items.length / 4) * 4) - items.length);
   const it = items[BAG.sel];
-  let act = BAG.tab === 'weapons' && it.own ? (prog.weapon === it.w ? '<button class="lbtn on" disabled><span>裝備中</span><small>EQUIPPED</small></button>' : '<button class="lbtn" id="bagEquip"><span>裝備</span><small>EQUIP</small></button>') : '';
+  let act = BAG.tab === 'weapons' && it.own ? (prog.weapon === it.w ? '<button class="lbtn on" disabled><span>裝備中</span><small>EQUIPPED</small></button>' : fits(mainId(), it.w) ? '<button class="lbtn" id="bagEquip"><span>裝備</span><small>EQUIP</small></button>' : `<p class="hint">${CHARS[mainId()].name}用不了${FORMS[formOfW(it.w)].name}</p>`) : '';
   if (BAG.tab === 'food' && it.dish) act = '<button class="lbtn" id="bagEat"><span>食用</span><small>EAT</small></button>';
   if (BAG.tab === 'food' && it.ingr && cookAt) { const left = (prog.ingr[it.ingr] || 0) - POT.filter((k) => k === it.ingr).length; act = `<button class="lbtn" id="bagAdd"${left > 0 && POT.length < POT_MAX ? '' : ' disabled'}><span>放入鍋中</span><small>ADD TO THE POT</small></button>`; }
   let pot = '';
@@ -4125,7 +4342,8 @@ function renderBag() {
       `<div class="pr">${r ? `<b>${r.n}</b><span>${r.h >= 999 ? '生命全回復' : '生命 +' + r.h}${r.fx ? ' · ' + FX_INFO[r.fx].name + ' ' + Math.round(r.d / 6) / 10 + ' 分' : ''}</span>` : '<span>點食材放入鍋中（最多三樣）</span>'}</div>` +
       `<div class="pb"><button class="lbtn" id="potCook"${r ? '' : ' disabled'}><span>烹調</span><small>COOK</small></button>${POT.length ? '<button class="lbtn" id="potClear"><span>清空</span></button>' : ''}</div></div>`;
   }
-  $('bagDetail').innerHTML = pot + `<div class="bigi${it.own ? '' : ' lock'}"><svg viewBox="0 0 120 120">${it.icon}</svg></div><h3>${it.name}</h3><small>${it.en}</small>${it.body}${act}`;
+  if (BAG.tab === 'party') { $('bagDetail').innerHTML = partyDetail(it.party); bindPartyDetail(it.party); }
+  else $('bagDetail').innerHTML = pot + `<div class="bigi${it.own ? '' : ' lock'}"><svg viewBox="0 0 120 120">${it.icon}</svg></div><h3>${it.name}</h3><small>${it.en}</small>${it.body}${act}`;
   const ea = $('bagEat'); if (ea) ea.addEventListener('click', () => eatDish(it.dish));
   const ad = $('bagAdd'); if (ad) ad.addEventListener('click', () => { if (POT.length < POT_MAX) { POT.push(it.ingr); Audio.sfx('ui'); renderBag(); } });
   const pc = $('potCook'); if (pc) pc.addEventListener('click', cook);
@@ -4149,7 +4367,8 @@ function openBag(tab) {
 function initBag() {
   $('bBag').addEventListener('click', (e) => { e.stopPropagation(); openBag(); });
   $('bBag').classList.toggle('hidden', !prog.reliquary);
-  document.querySelectorAll('#bagTabs button').forEach((b) => b.addEventListener('click', () => { BAG.tab = b.dataset.tab; BAG.sel = 0; Audio.sfx('ui'); renderBag(); }));
+  document.querySelectorAll('#bagTabs button').forEach((b) => b.addEventListener('click', () => { if (b.dataset.tab === 'look') { openLook(); return; } BAG.tab = b.dataset.tab; BAG.sel = 0; Audio.sfx('ui'); renderBag(); }));
+  initLook();
   $('dlg').addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); dlgNext(); });
 }
 
@@ -4215,6 +4434,7 @@ const CHEATS = {
   heal: () => { applyStats(true); toast('<i class="dia"></i>生命與聖瓶已補滿'); },
   clear: () => { let n = 0; for (const s of shades) if (!s.dead && s.g.position.distanceTo(P.pos) < 45) { killShade(s); n++; } toast(`<i class="dia"></i>附近敵人已清除 · ${n}`); },
   codex: () => { for (const k of new Set(Object.values(KILL_KEY))) prog.kills[k] = Math.max(prog.kills[k] || 0, 8); for (const b of bosses) prog.seen[b.cfg.key] = true; save(); toast('<i class="dia"></i>圖鑑已全部解鎖'); },
+  party: () => { for (const id of CHAR_ORDER) { (prog.met ||= {})[id] = true; if (!CHARS[id].soon) { prog.party.owned[id] = true; prog.weapons[CHARS[id].weapon] = true; prog.party.eq[id] ||= CHARS[id].weapon; } } prog.coin = (prog.coin || 0) + 5000; save(); toast('<i class="dia"></i>同伴全部可用 · 賞金 +5000'); },
   gs: () => { const order = ['sword', 'greatsword', 'spear', 'tianshu'], w = order[(order.indexOf(prog.weapon) + 1) % 4]; prog.weapons[w] = true; if (w === 'tianshu') prog.hellBlade = true; equipWeapon(w); toast(`<i class="dia"></i>${WEAPON_INFO[w].name}`); },
 };
 function syncTestUI() {
@@ -4424,7 +4644,7 @@ function frame() {
   requestAnimationFrame(frame);
   sampleDyn();
   let dt = Math.min(clock.getDelta(), DT_MAX);
-  const realDt = paused ? 0 : dt;
+  const realDt = paused ? 0 : dt; LOOK.dt = Math.min(dt, 0.05);
   if (hitstop > 0) { hitstop -= dt; dt *= 0.15; }
   if (paused) dt = 0;
   if (slowT > 0) { slowT -= realDt; enemyScale = damp(enemyScale, 0.2, 25, realDt); } else enemyScale = damp(enemyScale, 1, 5, realDt);
@@ -4445,12 +4665,13 @@ function frame() {
   if (state === 'play') updateQuestDist(realDt);
   updateTestInfo(realDt);
   updateStory();
+  party.update(dt, state === 'play' || state === 'trans' || state === 'dead');
   updateFeathers(dt); if (state === 'play' && P.inEarth) { updateForage(dt); updateFire(dt); updateProps(dt); } placeFlames(); updateBuff(dt); updateEmber(dt);
   updateFX(dt);
   // seraph pose
   const mode = state === 'landing' || state === 'loading' ? 'title' : 'play';
   hero.root.position.copy(P.pos);
-  hero.root.rotation.y = P.yaw + P.spin;
+  hero.root.rotation.y = LOOK.open ? LOOK.yaw : P.yaw + P.spin;
   hero.setVisible(!(P.inv > 0 && P.hurtT < 0 && state === 'play' && Math.floor(time * 20) % 2 === 0 && P.inv < 0.85 && P.lastHurt > time - 1));
   {
     const want = canWing() && (time < (P.wingShow || 0) || P.glide || P.flapT > 0 || (P.dashT > 0 && !P.grounded) || P.castT >= 0 || state === 'ascend' || state === 'ending') ? 1 : 0;
@@ -4466,7 +4687,8 @@ function frame() {
     const dy = Math.atan2(Math.sin(P.yaw - (P.prevYaw ?? P.yaw)), Math.cos(P.yaw - (P.prevYaw ?? P.yaw))); P.prevYaw = P.yaw;
     P.bank = P.glide && dt > 0 ? clamp(dy / dt / 1.6, -1, 1) : 0;
   }
-  hero.update(dt, { wpn: wbase(), mode, speed: P.speed, phase: P.phase, grounded: P.grounded, vy: P.vel.y, glide: P.glide, dash: P.dashT, atk: P.atk, cast: P.castT, hurt: P.hurtT, charge: P.clash ? 0.6 : P.charge, lock: !!P.lock || !!P.focus, heal: P.healT >= 0 ? 1 : 0,
+  if (LOOK.open) hero.update(LOOK.dt, { wpn: wbase(), mode: 'play', speed: 0, phase: 0, grounded: true, vy: 0, glide: false, dash: 0, atk: {}, cast: -1, hurt: -1, charge: -1, lock: false, heal: 0, roll: -1, rollKind: 'roll', flap: 0, bank: 0, display: 1 });
+  else hero.update(dt, { wpn: wbase(), mode, speed: P.speed, phase: P.phase, grounded: P.grounded, vy: P.vel.y, glide: P.glide, dash: P.dashT, atk: P.atk, cast: P.castT, hurt: P.hurtT, charge: P.clash ? 0.6 : P.charge, lock: !!P.lock || !!P.focus, heal: P.healT >= 0 ? 1 : 0,
     roll: P.rollT >= 0 ? clamp(P.rollT / P.rollDur, 0, 1) : -1, rollKind: P.rollKind, flap: Math.max(0, P.flapT || 0), bank: P.bank, display: 1,
     climb: P.climb ? { mv: P.climb.mv, pull: P.climb.pull, leap: P.climb.leap } : P.scramble ? { mv: clamp(P.speed / 1.6, 0, 1), slope: 1, pull: -1, leap: 0 } : null });
   if (hero.angel > 0.6 && P.glide && !P.grounded) { // light streams off the wingtips in flight
@@ -4520,6 +4742,7 @@ async function init() {
   await wait();
   buildPlayer();
   buildFX();
+  buildParty();
   EARTH.root.visible = false;
   buildShades();
   buildFolk();

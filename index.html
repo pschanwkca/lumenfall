@@ -920,6 +920,62 @@ html.desk #buffChip{left:calc(var(--sl) + 68px);top:calc(var(--st) + 39px)}
 #bagDetail .pot .pr b{display:block;font:600 14px var(--serif);letter-spacing:.16em;color:var(--ink)}
 #bagDetail .pot .pb{display:flex;gap:8px}
 #bagDetail .lbtn[disabled]{opacity:.45}
+
+/* ---- v2.0 · the dressing room (外觀) */
+body.looking #hud,body.looking #pickFeed,body.looking #buffChip{opacity:0;pointer-events:none;transition:opacity .3s}
+#lookOv{position:fixed;inset:0;z-index:40}
+#lookDrag{position:absolute;left:0;top:0;bottom:0;right:min(370px,46vw);cursor:grab;touch-action:none}
+#lookDrag:active{cursor:grabbing}
+#lookOv .lkView{position:absolute;left:calc(var(--sl) + 18px);bottom:calc(var(--sb) + 16px);display:flex;gap:6px}
+#lookOv .lkView button{border:0;padding:7px 16px;font:500 12.5px var(--serif);letter-spacing:.2em;color:var(--ink-s);background:rgba(255,251,240,.72);box-shadow:inset 0 0 0 1px rgba(198,162,90,.45);cursor:pointer}
+#lookOv .lkView button.on{color:var(--ink);background:rgba(255,248,230,.95);box-shadow:inset 0 0 0 1.5px var(--gold)}
+#lookOv .lkPanel{position:absolute;right:0;top:0;bottom:0;width:min(370px,46vw);display:flex;flex-direction:column;padding:calc(var(--st) + 14px) calc(var(--sr) + 18px) calc(var(--sb) + 12px) 20px;
+  background:linear-gradient(90deg,rgba(252,248,238,.78),rgba(252,248,238,.94) 18%);box-shadow:-1px 0 0 rgba(198,162,90,.35);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+#lookOv .lkHead{display:flex;align-items:center;justify-content:space-between}
+#lookOv .lkHead h2{margin:0;font:600 18px var(--serif);letter-spacing:.3em;color:var(--ink)}
+#lookOv .lkHead h2 small{margin-left:10px;font:500 9px var(--cin);letter-spacing:.28em;color:var(--gold-d)}
+#lookOv .lkHead .x{position:static}
+#lookBody{flex:1;min-height:0;overflow:auto;padding:4px 4px 10px 0;margin-top:6px}
+#lookBody h4{margin:14px 0 7px;font:600 12.5px var(--serif);letter-spacing:.24em;color:var(--ink)}
+#lookBody h4 small{margin-left:8px;font:500 8.5px var(--cin);letter-spacing:.24em;color:var(--gold-d)}
+#lookBody .lkOpts{display:flex;flex-wrap:wrap;gap:6px}
+#lookBody .lkOpts button{display:flex;align-items:center;gap:7px;border:0;padding:7px 12px;font:500 12px var(--serif);letter-spacing:.14em;color:var(--ink-s);background:rgba(255,253,246,.85);box-shadow:inset 0 0 0 1px rgba(198,162,90,.4);cursor:pointer}
+#lookBody .lkOpts button.on{color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--gold),0 0 10px rgba(232,196,120,.4)}
+#lookBody .dot2{width:14px;height:14px;border-radius:50%;background:linear-gradient(135deg,var(--a) 50%,var(--b) 50%);box-shadow:0 0 0 1px rgba(120,95,50,.35)}
+#lookBody .lkSw{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+#lookBody .lkSw button{width:28px;height:28px;border:0;border-radius:50%;background:var(--c);box-shadow:inset 0 0 0 1px rgba(0,0,0,.15),0 0 0 1px rgba(198,162,90,.35);cursor:pointer;padding:0}
+#lookBody .lkSw button.on{box-shadow:inset 0 0 0 1px rgba(0,0,0,.15),0 0 0 2px #fffaf0,0 0 0 3.5px var(--gold)}
+#lookBody .lkSl{display:flex;align-items:center;gap:12px;margin:8px 0;font:500 12px var(--serif);letter-spacing:.16em;color:var(--ink-s)}
+#lookBody .lkSl span{width:34px}
+#lookBody .lkSl input{flex:1;accent-color:#c39a48}
+#lookOv .lkFoot{display:flex;gap:8px;justify-content:flex-end;padding-top:10px;border-top:1px solid rgba(198,162,90,.25)}
+#lookOv .lkFoot .lbtn{cursor:pointer}
+#lookOv .lkFoot .lbtn.on{background:linear-gradient(90deg,#efd394,#d6ae5e);color:#3a2a10}
+@media (max-height:440px){#lookBody h4{margin:9px 0 5px} #lookBody .lkOpts button{padding:5px 9px} #lookBody .lkSw button{width:24px;height:24px} #lookOv .lkPanel{padding-top:calc(var(--st) + 8px)}}
+
+/* ---- v2.0 · the party tab */
+#bagGrid.pg{grid-template-columns:repeat(auto-fill,minmax(96px,1fr))}
+#bagGrid .slot.pc{overflow:hidden;box-shadow:inset 0 0 0 1.5px var(--rc),0 2px 6px rgba(80,60,25,.08)}
+#bagGrid .slot.pc.sel{box-shadow:inset 0 0 0 2.5px var(--rc),inset 0 0 18px rgba(232,196,120,.45),0 0 14px rgba(232,196,120,.55)}
+#bagGrid .slot.pc .av{position:absolute;inset:4px 4px 18px;display:grid;place-items:end center}
+#bagGrid .slot.pc .av svg{width:84%;height:auto}
+#bagGrid .slot.pc .cn{position:absolute;left:0;right:0;bottom:3px;font:600 11px var(--serif);letter-spacing:.12em;color:var(--ink);text-align:center}
+#bagGrid .slot.pc .rr{position:absolute;left:5px;top:4px;font:700 9px var(--cin);font-style:normal;letter-spacing:.06em;color:var(--rc)}
+#bagGrid .slot.pc b{right:5px;top:4px;bottom:auto}
+.av.unk svg{filter:brightness(0) opacity(.18)}
+#bagDetail .bigi .av svg{width:96px;height:96px}
+#bagDetail .bigi[style]{box-shadow:inset 0 0 0 2px var(--rc)}
+#bagDetail .pline{display:flex;gap:6px;margin:0 0 8px}
+#bagDetail .pm{flex:1;display:flex;flex-direction:column;align-items:center;padding:3px 0 4px;background:rgba(255,253,246,.8);box-shadow:inset 0 0 0 1px var(--rc,rgba(198,162,90,.4))}
+#bagDetail .pm svg{width:38px;height:38px}
+#bagDetail .pm span{font:500 9.5px var(--serif);letter-spacing:.1em;color:var(--ink-s)}
+#bagDetail .pm.main{background:linear-gradient(180deg,rgba(255,240,200,.95),rgba(255,250,236,.85))}
+#bagDetail .pm.main span{color:var(--gold-d);font-weight:700}
+#bagDetail .pm.empty{justify-content:center;min-height:50px;background:rgba(255,252,244,.35)}
+#bagDetail .coin{font:500 11.5px var(--serif);letter-spacing:.14em;color:var(--ink-s);margin-bottom:6px}
+#bagDetail .coin b{font:600 13px var(--cin);color:var(--gold-d)}
+#bagDetail .pacts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+#bagDetail .pacts .lbtn{cursor:pointer}
 </style>
 <script>
 (() => {
@@ -1061,7 +1117,7 @@ html.desk #buffChip{left:calc(var(--sl) + 68px);top:calc(var(--st) + 39px)}
     </nav>
   </div>
   <div id="tapHint"><span class="c t-only">觸碰開始</span><span class="e t-only">TAP TO BEGIN</span><span class="c d-only">點擊或按任意鍵開始</span><span class="e d-only">PRESS ANY KEY</span></div>
-  <div class="corner bl">PROTOTYPE · v1.9 · 黎恩</div>
+  <div class="corner bl">PROTOTYPE · v2.0 · 黎恩</div>
   <div class="corner br t-only">MOBILE · LANDSCAPE</div><div class="corner br d-only">DESKTOP · KEYBOARD &amp; MOUSE</div>
 </div>
 
@@ -1111,11 +1167,20 @@ html.desk #buffChip{left:calc(var(--sl) + 68px);top:calc(var(--st) + 39px)}
 <div id="bagOv" class="ov hidden">
   <div class="panel">
     <div class="bhead"><h2>聖匣<small>THE RELIQUARY</small></h2>
-      <div id="bagTabs"><button data-tab="weapons"><svg viewBox="0 0 24 24"><path d="M5 19 17 7M17 7l2-2 .5 2.5L17 7M7 15l2 2"/></svg><span>武器</span></button><button data-tab="powers"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3 8-7 10c-4-2-7-5-7-10V6z"/></svg><span>力量</span></button><button data-tab="food"><svg viewBox="0 0 24 24"><path d="M4 12h16c0 4.5-3.6 7-8 7s-8-2.5-8-7zM9 9c-1-1.5 1-2.5 0-4M12 8.5c-1-1.5 1-2.5 0-4M15 9c-1-1.5 1-2.5 0-4"/></svg><span>糧食</span></button><button data-tab="collect"><svg viewBox="0 0 24 24"><path d="M6 19c2-8 6-12 13-14c-1 7-5 11-13 14zM6 19l9-9"/></svg><span>收集</span></button><button data-tab="clues"><svg viewBox="0 0 24 24"><path d="M7 4h11v14a2 2 0 0 1-2 2H7M7 4a2 2 0 0 0-2 2v1h4V6a2 2 0 0 0-2-2zM10 9h5M10 12h5M10 15h3"/></svg><span>線索</span></button></div>
+      <div id="bagTabs"><button data-tab="weapons"><svg viewBox="0 0 24 24"><path d="M5 19 17 7M17 7l2-2 .5 2.5L17 7M7 15l2 2"/></svg><span>武器</span></button><button data-tab="powers"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3 8-7 10c-4-2-7-5-7-10V6z"/></svg><span>力量</span></button><button data-tab="party"><svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="2.6"/><circle cx="16" cy="8" r="2.6"/><path d="M3 19c.5-3.6 2.4-5.6 5-5.6s4.5 2 5 5.6M11 19c.5-3.6 2.4-5.6 5-5.6s4.5 2 5 5.6"/></svg><span>隊伍</span></button><button data-tab="look"><svg viewBox="0 0 24 24"><circle cx="12" cy="7" r="3.2"/><path d="M5.5 20c.6-4.4 3.2-7 6.5-7s5.9 2.6 6.5 7"/></svg><span>外觀</span></button><button data-tab="food"><svg viewBox="0 0 24 24"><path d="M4 12h16c0 4.5-3.6 7-8 7s-8-2.5-8-7zM9 9c-1-1.5 1-2.5 0-4M12 8.5c-1-1.5 1-2.5 0-4M15 9c-1-1.5 1-2.5 0-4"/></svg><span>糧食</span></button><button data-tab="collect"><svg viewBox="0 0 24 24"><path d="M6 19c2-8 6-12 13-14c-1 7-5 11-13 14zM6 19l9-9"/></svg><span>收集</span></button><button data-tab="clues"><svg viewBox="0 0 24 24"><path d="M7 4h11v14a2 2 0 0 1-2 2H7M7 4a2 2 0 0 0-2 2v1h4V6a2 2 0 0 0-2-2zM10 9h5M10 12h5M10 15h3"/></svg><span>線索</span></button></div>
     </div>
     <div class="sep"></div>
     <div class="bbody"><div id="bagGrid"></div><div id="bagDetail"></div></div>
     <button class="ic x" data-close aria-label="關閉"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+</div>
+<div id="lookOv" class="hidden">
+  <div id="lookDrag" aria-label="拖曳轉動角色"></div>
+  <div class="lkView"><button data-z="0" class="on">全身</button><button data-z="1">近看</button></div>
+  <div class="lkPanel">
+    <div class="lkHead"><h2>外觀<small>APPEARANCE</small></h2><button class="ic x" id="lookClose" aria-label="返回聖匣"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <div id="lookBody"></div>
+    <div class="lkFoot"><button class="lbtn" id="lookReset"><span>還原</span><small>RESET</small></button><button class="lbtn on" id="lookDone"><span>完成</span><small>DONE</small></button></div>
   </div>
 </div>
 <div id="questOv" class="ov hidden">
@@ -1151,7 +1216,7 @@ html.desk #buffChip{left:calc(var(--sl) + 68px);top:calc(var(--st) + 39px)}
     <div class="tch"><div class="tk">第四章<small>THE COLOSSUS · THE ABYSS</small></div><div class="tg"><button data-warp="rift">墮天巨像</button><button data-warp="hell">墜落之地</button><button data-warp="bridge">熔河橋</button><button class="bo" data-warp="boss4" data-boss="boss4">亞巴頓</button><button data-warp="gate">冥門</button></div></div>
     <div class="th">能力與作弊<small>CHEATS</small></div>
     <div class="tg"><button class="tt" data-tog="god"><i></i>無敵</button><button class="tt" data-tog="oneHit"><i></i>一擊必殺</button><button class="tt" data-tog="powers"><i></i>全部能力</button><button class="tt" data-tog="hellBlade"><i></i>神域之主的武器</button><button class="tt" data-tog="coords"><i></i>顯示座標</button></div>
-    <div class="tg" style="margin-top:8px"><button data-cheat="feather">光羽 +3</button><button data-cheat="lv">升到 Lv 8</button><button data-cheat="heal">補滿生命</button><button data-cheat="clear">清除附近敵人</button><button data-cheat="codex">圖鑑全開</button><button data-cheat="gs">切換武器</button></div>
+    <div class="tg" style="margin-top:8px"><button data-cheat="party">同伴全開</button><button data-cheat="feather">光羽 +3</button><button data-cheat="lv">升到 Lv 8</button><button data-cheat="heal">補滿生命</button><button data-cheat="clear">清除附近敵人</button><button data-cheat="codex">圖鑑全開</button><button data-cheat="gs">切換武器</button></div>
     <div class="tfoot"><button class="lbtn" id="testFresh"><span>全新進度重新開始</span><small>FRESH START</small></button><button class="lbtn" id="testExit"><span>離開測試模式</span><small>BACK TO MY SAVE</small></button></div>
     <button class="ic x" data-close aria-label="關閉"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
   </div>
